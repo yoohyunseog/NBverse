@@ -9,6 +9,7 @@
         .row { margin-bottom: 16px; }
         label { display: block; margin-bottom: 8px; font-weight: bold; }
         input[type="text"] { width: 100%; padding: 10px; font-size: 16px; }
+        textarea { width: 100%; padding: 10px; font-size: 16px; min-height: 150px; resize: vertical; font-family: inherit; border: 1px solid #ccc; border-radius: 4px; }
         .result { display: flex; gap: 16px; flex-wrap: wrap; }
         .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; min-width: 220px; }
         .value { font-size: 24px; font-weight: bold; margin-top: 8px; }
@@ -27,7 +28,7 @@
 <body>
     <div class="row">
         <label for="textInput">문자를 입력하세요 (입력 시 실시간 계산)</label>
-        <input id="textInput" type="text" placeholder="예) 안녕하세요 Hello 123" autocomplete="off" />
+        <textarea id="textInput" placeholder="예) 안녕하세요 Hello 123&#10;긴 문장이나 소설도 입력할 수 있습니다." autocomplete="off"></textarea>
         <div class="controls">
             <label><input type="checkbox" id="autoSaveToggle" checked /> 자동 저장</label>
             <button id="exportBtn">내보내기(JSON)</button>
@@ -59,11 +60,16 @@
         </div>
     </div>
 
-    
+    <div style="margin-top: 16px;">
+        <h3 style="margin:8px 0">예측 입력값</h3>
+        <div id="inputPredictions" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
+            <!-- 동적으로 생성됨 -->
+        </div>
+    </div>
 
     <div class="history">
-        <details>
-            <summary>기록 보기</summary>
+        <div>
+            <h3 style="margin:8px 0">기록 보기</h3>
             <div style="margin-top:8px">
                 <table>
                     <thead>
@@ -74,15 +80,26 @@
                             <th>ASCII_CODES</th>
                             <th>BIT_MAX</th>
                             <th>BIT_MIN</th>
+                            <th>출처</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody"></tbody>
                 </table>
             </div>
-        </details>
+        </div>
     </div>
 
     <script>
+    // ===== 서버 URL 헬퍼 함수 =====
+    function getServerUrl(path) {
+      // file:// 프로토콜에서 열린 경우 localhost:8123 사용
+      if (window.location.protocol === 'file:') {
+        return `http://localhost:8123${path}`;
+      }
+      // http/https 프로토콜에서는 상대 경로 사용
+      return path;
+    }
+    
     // ===== 외부 스크립트 우선 사용, 없으면 로컬 구현으로 폴백 =====
     (function(){
       if (typeof window.BIT_MAX_NB === 'undefined') {
@@ -297,6 +314,7 @@
     const $clearBtn = document.getElementById('clearBtn');
     const $historyInfo = document.getElementById('historyInfo');
     const $historyBody = document.getElementById('historyBody');
+    const $inputPredictions = document.getElementById('inputPredictions');
     
 
     // LocalStorage 제거: 세션 히스토리만 유지, 영속 저장은 파일에만 수행
@@ -343,7 +361,7 @@
 
     function renderHistoryTable(history) {
       $historyBody.innerHTML = '';
-      const count = Math.min(history.length, 200); // 최근 200개만 표시
+      const count = Math.min(history.length, 25); // 최근 25개만 표시
       for (let r = 0; r < count; r++) {
         const h = history[history.length - 1 - r]; // 최신부터 역순
         const tr = document.createElement('tr');
@@ -358,13 +376,18 @@
         asciiTd.title = fullAscii;
         const maxTd = document.createElement('td'); maxTd.textContent = fmt(h.max);
         const minTd = document.createElement('td'); minTd.textContent = fmt(h.min);
-        tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd);
+        const sourceTd = document.createElement('td');
+        const source = h.source || '저장';
+        sourceTd.textContent = source === 'saved' ? '저장' : source === 'fetched' ? '조회' : source;
+        sourceTd.style.color = source === 'saved' ? '#28a745' : source === 'fetched' ? '#007bff' : '#666';
+        tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd); tr.appendChild(sourceTd);
         $historyBody.appendChild(tr);
       }
     }
 
     function appendHistoryRow(h, indexOneBased) {
       const tr = document.createElement('tr');
+      tr.dataset.recordId = h.t; // 레코드 ID로 식별
       const idxTd = document.createElement('td'); idxTd.textContent = String(indexOneBased);
       const tTd = document.createElement('td'); tTd.textContent = new Date(h.t).toLocaleString();
       const sTd = document.createElement('td'); sTd.textContent = h.s;
@@ -376,17 +399,23 @@
       asciiTd.title = fullAscii;
       const maxTd = document.createElement('td'); maxTd.textContent = fmt(h.max);
       const minTd = document.createElement('td'); minTd.textContent = fmt(h.min);
-      tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd);
+      const sourceTd = document.createElement('td');
+      sourceTd.className = 'source-cell';
+      const source = h.source || 'checking';
+      sourceTd.textContent = source === 'saved' ? '저장' : source === 'fetched' ? '조회' : source === 'checking' ? '확인중...' : source;
+      sourceTd.style.color = source === 'saved' ? '#28a745' : source === 'fetched' ? '#007bff' : '#666';
+      tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd); tr.appendChild(sourceTd);
       // 최신이 1번이므로 위에 붙이기
       if ($historyBody.firstChild) {
         $historyBody.insertBefore(tr, $historyBody.firstChild);
       } else {
         $historyBody.appendChild(tr);
       }
-      // 200개 초과 시 마지막 행 제거
-      if ($historyBody.children.length > 200) {
+      // 25개 초과 시 마지막 행 제거
+      if ($historyBody.children.length > 25) {
         $historyBody.removeChild($historyBody.lastChild);
       }
+      return tr; // 행 참조 반환
     }
 
     function linearPredict(values, useCount) {
@@ -410,6 +439,7 @@
 
     let lastTimer = null;
     let lastPredictAt = 0;
+    let predictionTimer = null; // 예측 입력값 계산용 별도 타이머
     const PREDICT_THROTTLE_MS = 250;
     function update() {
       const text = $input.value || '';
@@ -421,6 +451,8 @@
         $bitMinMeta.textContent = '';
         $predMax.textContent = '-';
         $predMin.textContent = '-';
+        if (predictionTimer) clearTimeout(predictionTimer);
+        $inputPredictions.innerHTML = '';
         return;
       }
       try {
@@ -430,23 +462,182 @@
         $bitMin.textContent = fmt(minVal);
         $bitMaxMeta.textContent = `len=${arr.length}`;
         $bitMinMeta.textContent = `len=${arr.length}`;
+        
+        // 예측 입력값 계산 (부분 문자열들의 BIT 값) - 디바운싱 및 최적화
+        if (predictionTimer) clearTimeout(predictionTimer);
+        predictionTimer = setTimeout(() => {
+          $inputPredictions.innerHTML = '';
+          const currentText = $input.value || '';
+          if (currentText.length > 0) {
+            const chars = Array.from(currentText); // 유니코드 안전 분할
+            const totalLen = chars.length;
+            
+            // 표시할 인덱스 계산: 처음 15개, 중간 15개, 마지막 15개
+            const indicesToProcess = new Set();
+            
+            if (totalLen <= 45) {
+              // 45개 이하면 모두 표시
+              for (let i = 1; i <= totalLen; i++) {
+                indicesToProcess.add(i);
+              }
+            } else {
+              // 처음 15개
+              for (let i = 1; i <= 15; i++) {
+                indicesToProcess.add(i);
+              }
+              
+              // 중간 15개 (중간 지점 기준)
+              const midPoint = Math.floor(totalLen / 2);
+              const midStart = Math.max(16, midPoint - 7);
+              const midEnd = Math.min(totalLen - 15, midStart + 14);
+              for (let i = midStart; i <= midEnd; i++) {
+                indicesToProcess.add(i);
+              }
+              
+              // 마지막 15개
+              for (let i = Math.max(1, totalLen - 14); i <= totalLen; i++) {
+                indicesToProcess.add(i);
+              }
+            }
+            
+            // 인덱스를 정렬하여 순서대로 처리
+            const sortedIndices = Array.from(indicesToProcess).sort((a, b) => a - b);
+            
+            // 비동기 처리로 UI 블로킹 방지
+            const processBatch = (indexArray, startIdx) => {
+              requestAnimationFrame(() => {
+                const batchSize = 10; // 한 번에 10개씩 처리
+                const endIdx = Math.min(startIdx + batchSize, indexArray.length);
+                
+                for (let j = startIdx; j < endIdx; j++) {
+                  const i = indexArray[j];
+                  const partialText = chars.slice(0, i).join('');
+                  const partialArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(partialText);
+                  if (partialArr.length > 0) {
+                    try {
+                      const partialMax = (window.BIT_MAX_NB || (()=>0))(partialArr);
+                      const partialMin = (window.BIT_MIN_NB || (()=>0))(partialArr);
+                      const card = document.createElement('div');
+                      card.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;';
+                      card.innerHTML = `
+                        <div style="flex: 1;">
+                          <strong style="font-size: 14px;">"${partialText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</strong>
+                          <span style="color: #666; font-size: 12px; margin-left: 8px;">(길이 ${i})</span>
+                        </div>
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                          <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #666;">MAX</div>
+                            <div style="font-size: 13px; font-weight: bold;">${fmt(partialMax)}</div>
+                          </div>
+                          <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #666;">MIN</div>
+                            <div style="font-size: 13px; font-weight: bold;">${fmt(partialMin)}</div>
+                          </div>
+                        </div>
+                      `;
+                      $inputPredictions.appendChild(card);
+                    } catch (e) {
+                      // 계산 실패 시 무시
+                    }
+                  }
+                }
+                
+                // 다음 배치 처리
+                if (endIdx < indexArray.length) {
+                  processBatch(indexArray, endIdx);
+                }
+              });
+            };
+            
+            // 첫 배치부터 시작
+            if (sortedIndices.length > 0) {
+              processBatch(sortedIndices, 0);
+            }
+          }
+        }, 300); // 300ms 디바운싱
 
         if ($autoSave.checked) {
           const ascii = asciiCodesFromString(text);
-          const rec = { t: Date.now(), s: text, ascii, max: maxVal, min: minVal };
+          const rec = { t: Date.now(), s: text, ascii, max: maxVal, min: minVal, source: 'checking' }; // 조회 중으로 초기 설정
           sessionHistory.push(rec);
           renderHistoryInfo(sessionHistory);
-          appendHistoryRow(rec, 1);
+          const row = appendHistoryRow(rec, 1);
           // save to IndexedDB (auto-save without file)
           idbHistAdd(rec);
-          // also POST to server API so database/index.html can fetch it immediately
-          try {
-            fetch('/api/log', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ t: rec.t, s: rec.s, max: rec.max, min: rec.min })
-            }).catch(()=>{});
-          } catch (e) { /* ignore network error */ }
+          
+          // 먼저 서버에서 조회 시도
+          (async () => {
+            try {
+              // 조회: 같은 max, min 값을 가진 데이터 확인
+              const queryUrl = getServerUrl(`/api/log/by-max?nb_max=${encodeURIComponent(maxVal)}&n=100`);
+              const queryRes = await fetch(queryUrl);
+              const queryData = await queryRes.json();
+              
+              // 조회 결과에서 정확히 일치하는 데이터 찾기
+              let found = false;
+              if (queryData && queryData.items && Array.isArray(queryData.items)) {
+                for (const item of queryData.items) {
+                  if ((item.s ?? '') === (rec.s ?? '') &&
+                      Math.abs(Number(item.max || 0) - maxVal) < 1e-10 &&
+                      Math.abs(Number(item.min || 0) - minVal) < 1e-10) {
+                    found = true;
+                    break;
+                  }
+                }
+              }
+              
+              if (found) {
+                // 조회 결과가 있으면 "조회"로 표시하고 저장하지 않음
+                rec.source = 'fetched';
+                if (row) {
+                  const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                  if (sourceTd) {
+                    sourceTd.textContent = '조회';
+                    sourceTd.style.color = '#007bff';
+                  }
+                }
+              } else {
+                // 조회 결과가 없으면 저장하고 "저장"으로 표시
+                rec.source = 'saved';
+                if (row) {
+                  const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                  if (sourceTd) {
+                    sourceTd.textContent = '저장';
+                    sourceTd.style.color = '#28a745';
+                  }
+                }
+                // 서버에 저장
+                try {
+                  await fetch(getServerUrl('/api/log'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ t: rec.t, s: rec.s, max: rec.max, min: rec.min })
+                  });
+                } catch (e) {
+                  // 저장 실패 무시
+                }
+              }
+            } catch (e) {
+              // 조회 실패 시 기본값 "저장"으로 처리하고 저장 시도
+              rec.source = 'saved';
+              if (row) {
+                const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                if (sourceTd) {
+                  sourceTd.textContent = '저장';
+                  sourceTd.style.color = '#28a745';
+                }
+              }
+              try {
+                await fetch(getServerUrl('/api/log'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ t: rec.t, s: rec.s, max: rec.max, min: rec.min })
+                });
+              } catch (err) {
+                // 저장 실패 무시
+              }
+            }
+          })();
           const now = performance.now();
           if (now - lastPredictAt >= PREDICT_THROTTLE_MS) {
             lastPredictAt = now;

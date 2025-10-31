@@ -147,6 +147,7 @@ app.post('/api/log', (req, res) => {
     }
     if (isDuplicate) {
       app.__recentKeys.add(dedupKey);
+      console.log('[LOG] duplicate detected:', dedupKey);
       return res.json({ ok: true, deduped: true });
     }
     
