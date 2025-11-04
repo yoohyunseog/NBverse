@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '8080', 10);
+const PORT = parseInt(process.env.PORT || '8123', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 // Root to serve: project root one level up from server/
@@ -526,14 +526,55 @@ app.post('/api/gpt/chat', async (req, res) => {
     
     messages.push({ role: 'user', content: prompt });
 
-    const completion = await openai.chat.completions.create({
+    // 새로운 모델(gpt-5-*)은 max_completion_tokens 사용, temperature는 기본값(1)만 지원
+    const isNewModel = model && model.startsWith('gpt-5');
+    const requestOptions = {
       model,
       messages,
-      temperature: Number(temperature) || 0.7,
-      max_tokens: Number(maxTokens) || 2000,
-    });
+    };
+    
+    if (isNewModel) {
+      // gpt-5-* 모델은 temperature를 지원하지 않거나 기본값(1)만 지원
+      // temperature 파라미터를 설정하지 않음 (기본값 사용)
+      requestOptions.max_completion_tokens = Number(maxTokens) || 2000;
+    } else {
+      requestOptions.temperature = Number(temperature) || 0.7;
+      requestOptions.max_tokens = Number(maxTokens) || 2000;
+    }
 
-    const response = completion.choices[0]?.message?.content || '';
+    let completion;
+    try {
+      completion = await openai.chat.completions.create(requestOptions);
+    } catch (err) {
+      const msg = String(err?.message || err || '');
+      if (msg.includes('not in v1/chat/completions') || msg.includes('not supported')) {
+        const fb = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages,
+          temperature: Number(temperature) || 0.7,
+          max_tokens: Number(maxTokens) || 2000,
+        });
+        const fbResponse = fb.choices[0]?.message?.content || '';
+        return res.json({ ok: true, response: fbResponse, model: fb.model, usage: fb.usage, fallback: true });
+      }
+      throw err;
+    }
+
+    let response = completion.choices[0]?.message?.content || '';
+    if (!response || !String(response).trim()) {
+      try {
+        const fb = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages,
+          temperature: Number(temperature) || 0.7,
+          max_tokens: Number(maxTokens) || 2000,
+        });
+        response = fb.choices[0]?.message?.content || '';
+        return res.json({ ok: true, response, model: fb.model, usage: fb.usage, fallback: true });
+      } catch (_) {
+        // 폴백 실패 시 그대로 진행 (빈 응답 처리)
+      }
+    }
     
     return res.json({ 
       ok: true, 
@@ -543,6 +584,110 @@ app.post('/api/gpt/chat', async (req, res) => {
     });
   } catch (e) {
     console.error('[GPT] error:', e);
+    console.error('[GPT] error details:', {
+      message: e.message,
+      name: e.name,
+      stack: e.stack,
+      model: req.body?.model,
+      promptLength: req.body?.prompt?.length
+    });
+    return res.status(500).json({ 
+      ok: false, 
+      error: String(e.message || e),
+      details: process.env.NODE_ENV === 'development' ? {
+        name: e.name,
+        stack: e.stack
+      } : undefined
+    });
+  }
+});
+
+// GPT Responses API (for models that require v1/responses, e.g., gpt-5-*, gpt-4.1-mini)
+app.post('/api/gpt/responses', async (req, res) => {
+  try {
+    const { input, systemMessage, model = 'gpt-4.1-mini', temperature = 1, maxTokens = 1500, context, truncate = true } = req.body || {};
+
+    if (!input || typeof input !== 'string') {
+      return res.status(400).json({ ok: false, error: 'input required' });
+    }
+
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      return res.status(400).json({ ok: false, error: 'OpenAI API key not configured. Please set it via /api/gpt/key' });
+    }
+
+    const openai = new OpenAI({ apiKey });
+
+    // Optional truncation to stabilize long prompts
+    let finalInput = input;
+    if (truncate && finalInput.length > 20000) {
+      // Prefer keeping header and last 6000 chars of the story section
+      const marker = '[이전 이야기]';
+      const idx = finalInput.indexOf(marker);
+      if (idx !== -1) {
+        const head = finalInput.slice(0, idx + marker.length);
+        const tail = finalInput.slice(-6000);
+        finalInput = `${head}\n${tail}`;
+      } else {
+        finalInput = finalInput.slice(-8000);
+      }
+    }
+
+    // Build Responses API request
+    const request = {
+      model,
+      // For Responses API, use input instead of messages
+      input: finalInput,
+    };
+
+    // Attach system/context via prefix when available
+    if (systemMessage || context) {
+      const headerParts = [];
+      if (systemMessage) headerParts.push(`[시스템]\n${systemMessage}`);
+      if (context) headerParts.push(`[세계관 컨텍스트]\n${context}`);
+      const headerText = headerParts.join('\n\n');
+      request.input = headerText ? `${headerText}\n\n${finalInput}` : finalInput;
+    }
+
+    // Parameter compatibility for Responses API
+    // Newer models expect max_output_tokens (not max_tokens/max_completion_tokens)
+    request.max_output_tokens = Number(maxTokens) || 1500;
+    // Some 5-series models only accept default temperature; omit when model startsWith gpt-5
+    if (!(model && String(model).startsWith('gpt-5'))) {
+      request.temperature = Number(temperature) || 1;
+    }
+
+    const response = await openai.responses.create(request);
+
+    // Extract text safely from Responses API
+    let text = '';
+    if (response.output_text) {
+      text = response.output_text;
+    } else if (Array.isArray(response.output)) {
+      // Aggregate text from content blocks
+      try {
+        const parts = [];
+        for (const item of response.output) {
+          if (Array.isArray(item.content)) {
+            for (const c of item.content) if (c.type === 'output_text' && c.text) parts.push(c.text);
+          }
+        }
+        text = parts.join('\n');
+      } catch {
+        text = '';
+      }
+    } else if (response.content && Array.isArray(response.content)) {
+      // Legacy shape
+      text = response.content.map(c => (c.text?.value || c.text || '')).join('\n');
+    }
+
+    if (!text || !String(text).trim()) {
+      return res.status(200).json({ ok: true, response: '', model: response.model || model, usage: response.usage || null });
+    }
+
+    return res.json({ ok: true, response: text, model: response.model || model, usage: response.usage || null });
+  } catch (e) {
+    console.error('[GPT][responses] error:', e);
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });
@@ -1631,10 +1776,51 @@ app.post('/api/attributes/data/delete', (req, res) => {
         
         // 파일이 변경된 경우에만 쓰기
         if (fileDeletedCount > 0) {
-          const newContent = remainingLines.length > 0 
-            ? remainingLines.join('\n') + '\n' 
-            : '';
-          fs.writeFileSync(filePath, newContent, 'utf8');
+          if (remainingLines.length > 0) {
+            // 남은 레코드가 있으면 업데이트
+            const newContent = remainingLines.join('\n') + '\n';
+            fs.writeFileSync(filePath, newContent, 'utf8');
+          } else {
+            // 남은 레코드가 없으면 파일 삭제
+            try {
+              fs.unlinkSync(filePath);
+              console.log(`[Delete] 파일 삭제: ${filePath}`);
+              
+              // 빈 폴더도 삭제
+              const dirPath = path.dirname(filePath);
+              try {
+                // max_bit 또는 min_bit 폴더 삭제
+                if (fs.existsSync(dirPath)) {
+                  const dirContents = fs.readdirSync(dirPath);
+                  if (dirContents.length === 0) {
+                    fs.rmdirSync(dirPath);
+                    console.log(`[Delete] 빈 폴더 삭제: ${dirPath}`);
+                    
+                    // 상위 폴더들도 재귀적으로 삭제
+                    let currentDir = path.dirname(dirPath);
+                    while (currentDir && currentDir !== DATA_DIR && currentDir.startsWith(DATA_DIR)) {
+                      try {
+                        const contents = fs.readdirSync(currentDir);
+                        if (contents.length === 0) {
+                          fs.rmdirSync(currentDir);
+                          console.log(`[Delete] 빈 상위 폴더 삭제: ${currentDir}`);
+                          currentDir = path.dirname(currentDir);
+                        } else {
+                          break;
+                        }
+                      } catch (e) {
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn(`[Delete] 폴더 삭제 오류: ${dirPath}`, e);
+              }
+            } catch (e) {
+              console.warn(`[Delete] 파일 삭제 오류: ${filePath}`, e);
+            }
+          }
           filesProcessed.push({ file: filePath, deleted: fileDeletedCount });
           console.log(`[Delete] ${filePath}: ${fileDeletedCount} record(s) deleted`);
         }
@@ -1654,6 +1840,162 @@ app.post('/api/attributes/data/delete', (req, res) => {
     });
   } catch (e) {
     console.error('[Attribute] Delete error:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// 속성 전체 삭제 (속성의 모든 데이터와 관련 폴더 삭제)
+app.post('/api/attributes/delete', (req, res) => {
+  try {
+    const { attributeBitMax, attributeBitMin } = req.body || {};
+    
+    if (attributeBitMax === undefined || attributeBitMin === undefined) {
+      return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
+    }
+    
+    let deletedCount = 0;
+    const filesProcessed = [];
+    const foldersDeleted = [];
+    
+    // 삭제할 파일 목록: 속성 BIT 값으로 저장된 모든 파일
+    const filesToCheck = [];
+    
+    // 1. 속성 MAX 폴더
+    if (Number.isFinite(attributeBitMax)) {
+      const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attributeBitMax);
+      if (fs.existsSync(nestedFile)) {
+        filesToCheck.push(nestedFile);
+      } else {
+        const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
+        filesToCheck.push(...allLogFiles);
+      }
+    }
+    
+    // 2. 속성 MIN 폴더
+    if (Number.isFinite(attributeBitMin)) {
+      const { nestedFile, baseDir, digits } = nestedPathFromNumber('min', attributeBitMin);
+      if (fs.existsSync(nestedFile)) {
+        filesToCheck.push(nestedFile);
+      } else {
+        const allLogFiles = findAllLogFiles(baseDir, 'min', digits);
+        filesToCheck.push(...allLogFiles);
+      }
+    }
+    
+    // 중복 제거
+    let uniqueFiles = [...new Set(filesToCheck)];
+    
+    // 파일이 없거나 비어있어도 속성 삭제를 위해 더 광범위하게 검색
+    // max/min 폴더 전체에서 해당 속성을 가진 모든 파일 찾기
+    if (uniqueFiles.length === 0) {
+      console.log(`[Delete Attribute] 직접 파일을 찾지 못함, 전체 검색 시도...`);
+      // max 폴더 전체 탐색
+      const maxDir = path.join(DATA_DIR, 'max');
+      if (fs.existsSync(maxDir)) {
+        const allMaxFiles = findAllLogFilesInDir(maxDir);
+        uniqueFiles.push(...allMaxFiles);
+      }
+      // min 폴더 전체 탐색
+      const minDir = path.join(DATA_DIR, 'min');
+      if (fs.existsSync(minDir)) {
+        const allMinFiles = findAllLogFilesInDir(minDir);
+        uniqueFiles.push(...allMinFiles);
+      }
+      uniqueFiles = [...new Set(uniqueFiles)];
+      console.log(`[Delete Attribute] 전체 검색 결과: ${uniqueFiles.length}개 파일 발견`);
+    }
+    
+    // 각 파일에서 해당 속성의 모든 레코드 삭제
+    for (const filePath of uniqueFiles) {
+      if (!fs.existsSync(filePath)) continue;
+      
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split(/\r?\n/).filter(Boolean);
+        const remainingLines = [];
+        let fileDeletedCount = 0;
+        
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            
+            // 삭제 조건: attribute BIT가 일치하는 모든 레코드
+            const attributeMatch = parsed.attribute && 
+              parsed.attribute.bitMax === attributeBitMax && 
+              parsed.attribute.bitMin === attributeBitMin;
+            
+            if (attributeMatch) {
+              fileDeletedCount++;
+              deletedCount++;
+            } else {
+              remainingLines.push(line);
+            }
+          } catch (e) {
+            remainingLines.push(line);
+          }
+        }
+        
+        // 파일이 변경된 경우에만 쓰기
+        if (fileDeletedCount > 0) {
+          if (remainingLines.length > 0) {
+            const newContent = remainingLines.join('\n') + '\n';
+            fs.writeFileSync(filePath, newContent, 'utf8');
+          } else {
+            // 파일 삭제
+            try {
+              fs.unlinkSync(filePath);
+              console.log(`[Delete Attribute] 파일 삭제: ${filePath}`);
+              
+              // 빈 폴더 삭제
+              const dirPath = path.dirname(filePath);
+              if (fs.existsSync(dirPath)) {
+                const dirContents = fs.readdirSync(dirPath);
+                if (dirContents.length === 0) {
+                  fs.rmdirSync(dirPath);
+                  foldersDeleted.push(dirPath);
+                  console.log(`[Delete Attribute] 빈 폴더 삭제: ${dirPath}`);
+                  
+                  // 상위 폴더들도 재귀적으로 삭제
+                  let currentDir = path.dirname(dirPath);
+                  while (currentDir && currentDir !== DATA_DIR && currentDir.startsWith(DATA_DIR)) {
+                    try {
+                      const contents = fs.readdirSync(currentDir);
+                      if (contents.length === 0) {
+                        fs.rmdirSync(currentDir);
+                        foldersDeleted.push(currentDir);
+                        console.log(`[Delete Attribute] 빈 상위 폴더 삭제: ${currentDir}`);
+                        currentDir = path.dirname(currentDir);
+                      } else {
+                        break;
+                      }
+                    } catch (e) {
+                      break;
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn(`[Delete Attribute] 파일 삭제 오류: ${filePath}`, e);
+            }
+          }
+          filesProcessed.push({ file: filePath, deleted: fileDeletedCount });
+        }
+      } catch (e) {
+        console.warn(`[Delete Attribute] Error processing ${filePath}:`, e);
+      }
+    }
+    
+    console.log(`[Delete Attribute] Total ${deletedCount} record(s) deleted, ${foldersDeleted.length} folder(s) deleted`);
+    
+    return res.json({ 
+      ok: true, 
+      deletedCount, 
+      filesProcessed: filesProcessed.length,
+      foldersDeleted: foldersDeleted.length,
+      details: { filesProcessed, foldersDeleted }
+    });
+  } catch (e) {
+    console.error('[Attribute] Delete attribute error:', e);
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });
@@ -1757,6 +2099,157 @@ app.get('/api/attributes/all', async (req, res) => {
     return res.json({ ok: true, count: attributes.length, attributes });
       } catch (e) {
     console.error('[Attributes] Get all error:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// 필터링된 속성 목록 조회 (API에서 필터링)
+app.get('/api/attributes/filtered', async (req, res) => {
+  try {
+    const novelTitle = req.query.novelTitle || '';
+    const chapterNumber = req.query.chapterNumber || '';
+    const attributeFilterBitMax = req.query.attributeFilterBitMax !== undefined ? Number(req.query.attributeFilterBitMax) : undefined;
+    const attributeFilterBitMin = req.query.attributeFilterBitMin !== undefined ? Number(req.query.attributeFilterBitMin) : undefined;
+    const searchKeyword = req.query.searchKeyword || '';
+    const limit = Math.min(parseInt(req.query.limit || '100', 10) || 100, 1000);
+    const similarityThreshold = Number(req.query.similarityThreshold || '0.1');
+    
+    // 모든 속성 조회
+    let attributes = await collectAllAttributes();
+    
+    // 속성 필터링 (BIT 값 유사도 검색)
+    if (attributeFilterBitMax !== undefined && attributeFilterBitMin !== undefined && 
+        Number.isFinite(attributeFilterBitMax) && Number.isFinite(attributeFilterBitMin)) {
+      // 유사도 기반 필터링
+      const filteredAttrs = [];
+      for (const attr of attributes) {
+        const bitMaxDiff = Math.abs((attributeFilterBitMax || 0) - (attr.bitMax || 0));
+        const bitMinDiff = Math.abs((attributeFilterBitMin || 0) - (attr.bitMin || 0));
+        const distance = Math.sqrt(bitMaxDiff * bitMaxDiff + bitMinDiff * bitMinDiff);
+        
+        if (distance <= similarityThreshold) {
+          const similarity = Math.max(0, 1 / (1 + distance));
+          filteredAttrs.push({ ...attr, similarity });
+        }
+      }
+      filteredAttrs.sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
+      attributes = filteredAttrs;
+    }
+    
+    // 각 속성의 데이터 조회 및 필터링
+    const attributesWithData = [];
+    for (const attr of attributes.slice(0, limit)) {
+      try {
+        // 속성 데이터 조회
+        const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attr.bitMax);
+        let allItems = [];
+        
+        if (fs.existsSync(nestedFile)) {
+          try {
+            const text = fs.readFileSync(nestedFile, 'utf8');
+            const lines = text.split(/\r?\n/).filter(Boolean);
+            const items = lines.map(l => {
+              try {
+                const parsed = JSON.parse(l);
+                if (!parsed.attribute) return null;
+                // 속성 일치 확인
+                if (parsed.attribute.bitMax === attr.bitMax && parsed.attribute.bitMin === attr.bitMin) {
+                  return parsed;
+                }
+                return null;
+              } catch { return null; }
+            }).filter(Boolean);
+            allItems.push(...items);
+          } catch (e) {
+            console.warn('[Attribute] max read error:', nestedFile, e);
+          }
+        } else {
+          // 하위 폴더 재귀 탐색
+          const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
+          for (const logFile of allLogFiles) {
+            try {
+              const text = fs.readFileSync(logFile, 'utf8');
+              const lines = text.split(/\r?\n/).filter(Boolean);
+              const items = lines.map(l => {
+                try {
+                  const parsed = JSON.parse(l);
+                  if (!parsed.attribute) return null;
+                  if (parsed.attribute.bitMax === attr.bitMax && parsed.attribute.bitMin === attr.bitMin) {
+                    return parsed;
+                  }
+                  return null;
+                } catch { return null; }
+              }).filter(Boolean);
+              allItems.push(...items);
+            } catch (e) {
+              // 파일 읽기 실패 시 무시
+            }
+          }
+        }
+        
+        // 속성 자체를 데이터로 저장한 경우 제외
+        let dataList = allItems.filter(item => {
+          if (!item.data || !item.data.text) return false;
+          if (item.data.text === attr.text) return false;
+          return true;
+        });
+        
+        // 소설 제목과 챕터로 필터링
+        if (novelTitle) {
+          if (chapterNumber) {
+            // 소설 제목과 챕터 번호 모두 일치
+            dataList = dataList.filter(item => {
+              const itemNovel = item.novel?.title || '';
+              const itemChapter = item.chapter?.number || '';
+              return itemNovel === novelTitle && itemChapter === chapterNumber;
+            });
+          } else {
+            // 소설 제목만 일치
+            dataList = dataList.filter(item => {
+              const itemNovel = item.novel?.title || '';
+              return itemNovel === novelTitle;
+            });
+          }
+        }
+        
+        // 검색 키워드로 필터링
+        if (searchKeyword && searchKeyword.trim()) {
+          const keywordLower = searchKeyword.toLowerCase().trim();
+          dataList = dataList.filter(item => {
+            const dataText = (item.data?.text || '').toLowerCase();
+            const attributeText = (item.attribute?.text || '').toLowerCase();
+            return dataText.includes(keywordLower) || attributeText.includes(keywordLower);
+          });
+        }
+        
+        // 데이터 포맷팅
+        const filteredDataList = dataList.map(item => ({
+          ...item.data,
+          attribute: item.attribute || item.data?.attribute || null,
+          novel: item.novel || null,
+          chapter: item.chapter || null
+        }));
+        
+        if (filteredDataList.length > 0 || !novelTitle) {
+          // 데이터가 있거나 필터 조건이 없으면 속성 포함
+          attributesWithData.push({
+            ...attr,
+            dataList: filteredDataList,
+            dataCount: filteredDataList.length
+          });
+        }
+      } catch (e) {
+        console.warn(`속성 "${attr.text}" 데이터 로드 실패:`, e);
+      }
+    }
+    
+    return res.json({ 
+      ok: true, 
+      count: attributesWithData.length, 
+      attributes: attributesWithData 
+    });
+  } catch (e) {
+    console.error('[Attributes] Filtered error:', e);
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });

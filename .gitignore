@@ -26,3 +26,7 @@ backups/
 .env
 .env.local
 
+# API Keys and sensitive data
+server/data/gpt_api_key.txt
+server/data/**/*.txt
+

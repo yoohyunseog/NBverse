@@ -163,6 +163,25 @@
             </div>
         </div>
 
+        <!-- 저장된 속성 목록: 과거 챕터 속성 -->
+        <div class="row g-3 mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <strong>📋 저장된 속성 목록 (과거 챕터)</strong>
+                        <button id="loadPreviousAttributesBtn" class="btn btn-sm btn-outline-primary">과거 챕터 속성 불러오기</button>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        <div id="previousAttributesList" class="row g-2">
+                            <div class="col-12 text-muted small text-center py-3">
+                                "과거 챕터 속성 불러오기" 버튼을 클릭하여 현재 선택된 챕터의 이전 챕터들의 속성을 불러오세요.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row g-3">
             <!-- 좌측: 문자 입력 및 BIT 계산 영역 (소설 본문 위쪽에서 이미 노출되므로 하단으로 우선순위 조정) -->
             <div class="col-lg-7 order-2 order-lg-1">
@@ -1629,8 +1648,89 @@
       return Object.keys(novelChapters).map(Number).sort((a,b)=>a-b);
     }
 
-    function showChapter(num) {
-      if (novelChapters[num] === undefined) return;
+    async function loadPreviousChaptersIfNeeded(currentNum) {
+      // 현재 챕터 구성 목록에 데이터가 있는지 확인
+      const currentChapterData = novelChapters[currentNum];
+      const hasCurrentData = currentChapterData !== undefined && currentChapterData.trim().length > 0;
+      
+      // 데이터가 있으면 스킵
+      if (hasCurrentData) {
+        return false;
+      }
+      
+      // 유사한 속성 검색 먼저 수행
+      const similarAttrs = await searchSimilarAttributesForChapter(currentNum);
+      
+      // 유사한 속성이 있으면 이전 챕터를 로드하지 않음
+      if (similarAttrs && similarAttrs.found && similarAttrs.items.length > 0) {
+        console.log(`[Chapter] 유사한 속성을 찾았습니다: ${similarAttrs.items.length}개`);
+        // 상태 메시지 지우기
+        const $statusText = document.getElementById('novelStatusText');
+        if ($statusText) $statusText.textContent = '';
+        return false;
+      }
+      
+      // 유사한 속성이 없을 때 메시지 표시
+      if (similarAttrs && similarAttrs.attributeText) {
+        const $statusText = document.getElementById('novelStatusText');
+        if ($statusText) {
+          $statusText.textContent = `"${similarAttrs.attributeText}"와 유사한 속성이 없습니다. (유사도 임계값: 0.1 이상)`;
+          $statusText.style.color = '#dc3545';
+        }
+      }
+      
+      // 유사한 속성이 없을 때만 이전 챕터들 가져오기
+      if (!currentNovelId) return false;
+      
+      let loadedAny = false;
+      
+      // 1부터 currentNum-1까지의 챕터를 서버에서 가져오기
+      for (let num = 1; num < currentNum; num++) {
+        // 이미 데이터가 있으면 스킵
+        if (novelChapters[num] !== undefined && novelChapters[num].trim().length > 0) {
+          continue;
+        }
+        
+        try {
+          const res = await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters/${num}`));
+          const data = await res.json();
+          if (data.ok && data.text && data.text.trim().length > 0) {
+            novelChapters[num] = data.text;
+            savedChapters.add(String(num));
+            loadedAny = true;
+          }
+        } catch (e) {
+          // 실패 무시
+          console.warn(`[Chapter] Failed to load chapter ${num}:`, e);
+        }
+      }
+      
+      if (loadedAny) {
+        updateChapterList();
+      }
+      
+      return loadedAny;
+    }
+
+    async function showChapter(num) {
+      // 현재 챕터 데이터가 없으면 이전 챕터들 먼저 로드 시도
+      const currentChapterData = novelChapters[num];
+      const hasCurrentData = currentChapterData !== undefined && currentChapterData.trim().length > 0;
+      
+      if (!hasCurrentData && currentNovelId && num > 0) {
+        // 데이터가 없으면 이전 챕터들을 로드하고 기다림
+        await loadPreviousChaptersIfNeeded(num);
+      }
+      
+      // 여전히 데이터가 없으면 표시 안 함
+      if (novelChapters[num] === undefined || novelChapters[num].trim().length === 0) {
+        $novelContent.textContent = '(챕터 데이터가 없습니다)';
+        if ($currentChapter) $currentChapter.value = num === 0 ? '개요' : `제${num}장`;
+        if ($recentEvents) $recentEvents.value = '';
+        currentChapterNum = num;
+        return;
+      }
+      
       currentChapterNum = num;
       const text = novelChapters[num];
       $novelContent.textContent = text;
@@ -1799,6 +1899,124 @@
           updateChapterList();
         }
       } catch {}
+    }
+
+    // 속성 목록 가져오기
+    async function loadAllAttributes() {
+      try {
+        const res = await fetch(getServerUrl('/api/attributes/all'));
+        const data = await res.json();
+        if (data.ok && data.attributes && Array.isArray(data.attributes)) {
+          return data.attributes;
+        }
+        return [];
+      } catch (e) {
+        console.error('[Attributes] Load error:', e);
+        return [];
+      }
+    }
+
+    // 현재 선택된 챕터의 과거 챕터들의 속성 가져오기
+    async function loadPreviousChaptersAttributes(currentChapterNum) {
+      if (!currentChapterNum || currentChapterNum === 0 || !currentNovelId) {
+        return [];
+      }
+      
+      // 소설 제목 가져오기
+      const novelTitle = $novelTitle ? $novelTitle.value.trim() : '';
+      if (!novelTitle) return [];
+      
+      const previousAttributes = [];
+      
+      // 1부터 currentChapterNum-1까지의 챕터들의 속성 가져오기
+      for (let num = 1; num < currentChapterNum; num++) {
+        // 챕터 제목 추출
+        let chapterTitle = `제${num}장`;
+        const chapterText = novelChapters[num];
+        if (chapterText && chapterText.trim().length > 0) {
+          const extracted = extractChapterTitle(chapterText);
+          if (extracted) chapterTitle = extracted;
+        }
+        
+        // 속성 텍스트 구성: "소설제목 → 챕터 N: 챕터제목"
+        const attributeText = `${novelTitle} → 챕터 ${num}: ${chapterTitle}`;
+        
+        // BIT 값 계산
+        const attrArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(attributeText);
+        if (attrArr.length === 0) continue;
+        
+        const attrBitMax = (window.BIT_MAX_NB || (()=>0))(attrArr);
+        const attrBitMin = (window.BIT_MIN_NB || (()=>0))(attrArr);
+        
+        // 해당 속성의 데이터 조회
+        try {
+          const url = getServerUrl(`/api/attributes/data?bitMax=${attrBitMax}&bitMin=${attrBitMin}&limit=100`);
+          const res = await fetch(url);
+          const data = await res.json();
+          
+          if (data.ok && data.items && Array.isArray(data.items) && data.items.length > 0) {
+            previousAttributes.push({
+              chapterNum: num,
+              chapterTitle: chapterTitle,
+              attributeText: attributeText,
+              bitMax: attrBitMax,
+              bitMin: attrBitMin,
+              items: data.items,
+              count: data.items.length
+            });
+          }
+        } catch (e) {
+          console.warn(`[Attributes] Failed to load attributes for chapter ${num}:`, e);
+        }
+      }
+      
+      return previousAttributes;
+    }
+
+    // 현재 챕터 정보로 유사한 속성 검색
+    async function searchSimilarAttributesForChapter(chapterNum) {
+      if (!chapterNum || chapterNum === 0) return null;
+      
+      // 소설 제목 가져오기
+      const novelTitle = $novelTitle ? $novelTitle.value.trim() : '';
+      if (!novelTitle) return null;
+      
+      // 챕터 제목 추출 (챕터 데이터가 있으면 추출, 없으면 기본값)
+      let chapterTitle = `제${chapterNum}장`;
+      const chapterText = novelChapters[chapterNum];
+      if (chapterText && chapterText.trim().length > 0) {
+        const extracted = extractChapterTitle(chapterText);
+        if (extracted) chapterTitle = extracted;
+      }
+      
+      // 속성 텍스트 구성: "소설제목 → 챕터 N: 챕터제목"
+      const attributeText = `${novelTitle} → 챕터 ${chapterNum}: ${chapterTitle}`;
+      
+      // BIT 값 계산
+      const attrArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(attributeText);
+      if (attrArr.length === 0) return null;
+      
+      const attrBitMax = (window.BIT_MAX_NB || (()=>0))(attrArr);
+      const attrBitMin = (window.BIT_MIN_NB || (()=>0))(attrArr);
+      
+      // 유사한 속성 검색 (threshold 0.1)
+      try {
+        const url = getServerUrl(`/api/attributes/data?bitMax=${attrBitMax}&bitMin=${attrBitMin}&limit=20&similarity=true&threshold=0.1`);
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.ok && data.items && Array.isArray(data.items)) {
+          return {
+            found: data.items.length > 0,
+            items: data.items,
+            attributeText: attributeText
+          };
+        }
+        return { found: false, items: [], attributeText: attributeText };
+      } catch (e) {
+        console.error('[Attributes] Search error:', e);
+        return { found: false, items: [], attributeText: attributeText };
+      }
     }
 
     async function loadNovelChapters(novelId) {
@@ -2233,6 +2451,117 @@
       };
       $notes.addEventListener('input', queue);
       $notes.addEventListener('blur', save);
+    })();
+
+    // ===== 과거 챕터 속성 목록 =====
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function renderPreviousAttributesList(attributes) {
+      const $list = document.getElementById('previousAttributesList');
+      if (!$list) return;
+      
+      if (!attributes || attributes.length === 0) {
+        $list.innerHTML = '<div class="col-12 text-muted small text-center py-3">과거 챕터 속성이 없습니다.</div>';
+        return;
+      }
+      
+      let html = '';
+      attributes.forEach(attr => {
+        const dataList = attr.items.map(item => ({
+          text: item.data?.text || item.s || '',
+          bitMax: item.data?.bitMax || item.max || null,
+          bitMin: item.data?.bitMin || item.min || null
+        }));
+        
+        html += `
+          <div class="attribute-item" 
+               data-bit-max="${attr.bitMax}" 
+               data-bit-min="${attr.bitMin}"
+               data-attribute-text="${escapeHtml(attr.attributeText)}"
+               style="border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white;">
+            <div class="attribute-header">
+              <div style="text-align: left;">
+                <span class="attribute-name" style="font-size: 1.1em; font-weight: bold; color: #007bff;">${escapeHtml(attr.attributeText)}</span>
+                <span class="badge bg-primary ms-2">챕터 ${attr.chapterNum}</span>
+                <span class="badge bg-success ms-1">${attr.count}개</span>
+              </div>
+              <div class="bit-display" style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">
+                BIT: ${attr.bitMax.toFixed(15)}, ${attr.bitMin.toFixed(15)} | 데이터 ${dataList.length}개
+              </div>
+            </div>
+            <div class="data-list mt-3">
+              ${dataList.length > 0 ? dataList.slice(0, 5).map(data => `
+                <div class="data-item" style="background: #f8f9fa; padding: 10px; margin: 8px 0; border-left: 3px solid #28a745; border-radius: 4px;">
+                  <strong>${escapeHtml(data.text)}</strong>
+                  ${data.bitMax !== null && data.bitMin !== null ? `
+                    <small class="text-muted ms-2">
+                      BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}
+                    </small>
+                  ` : ''}
+                </div>
+              `).join('') : '<div class="text-muted small">데이터가 없습니다.</div>'}
+              ${dataList.length > 5 ? `
+                <details class="mt-2">
+                  <summary class="small text-primary" style="cursor: pointer;">더 보기 (${dataList.length - 5}개 더)</summary>
+                  <div class="mt-2">
+                    ${dataList.slice(5).map(data => `
+                      <div class="data-item" style="background: #f8f9fa; padding: 10px; margin: 8px 0; border-left: 3px solid #28a745; border-radius: 4px;">
+                        <strong>${escapeHtml(data.text)}</strong>
+                        ${data.bitMax !== null && data.bitMin !== null ? `
+                          <small class="text-muted ms-2">
+                            BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}
+                          </small>
+                        ` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                </details>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      });
+      
+      $list.innerHTML = html;
+    }
+
+    // 과거 챕터 속성 불러오기 버튼
+    (function setupPreviousAttributesLoader() {
+      const $btn = document.getElementById('loadPreviousAttributesBtn');
+      if (!$btn) return;
+      
+      $btn.addEventListener('click', async () => {
+        if (!currentChapterNum || currentChapterNum === 0) {
+          alert('챕터를 선택해주세요.');
+          return;
+        }
+        
+        try {
+          $btn.disabled = true;
+          $btn.textContent = '로딩 중...';
+          
+          const attributes = await loadPreviousChaptersAttributes(currentChapterNum);
+          renderPreviousAttributesList(attributes);
+          
+          if (attributes.length === 0) {
+            const $list = document.getElementById('previousAttributesList');
+            if ($list) {
+              $list.innerHTML = '<div class="col-12 text-muted small text-center py-3">과거 챕터 속성이 없습니다.</div>';
+            }
+          }
+        } catch (e) {
+          console.error('[Attributes] Load previous chapters error:', e);
+          alert('과거 챕터 속성을 불러오는 중 오류가 발생했습니다.');
+        } finally {
+          $btn.disabled = false;
+          $btn.textContent = '과거 챕터 속성 불러오기';
+        }
+      });
     })();
     
     </script>
