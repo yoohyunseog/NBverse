@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>속성/데이터 관리 - N/B Novel AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0e1116;
+            --surface: #131825;
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #e8edf7;
+            --muted: #a9b3c7;
+            --primary: #7c5cff;
+            --success: #2bd576;
+            --warning: #ffc857;
+            --danger: #ef4444;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+        
+        .app-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 좌측: 조회 영역 */
+        .left-panel {
+            width: 50%;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+        }
+        
+        .left-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+        }
+        
+        .left-header h5,
+        .left-header label,
+        .left-header small {
+            color: var(--text) !important;
+        }
+        
+        .left-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        
+        /* 우측: 입력 영역 */
+        .right-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+        }
+        
+        .right-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+        }
+        
+        .right-header h5 {
+            color: var(--text) !important;
+        }
+        
+        .right-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text) !important;
+        }
+        
+        /* 카드 내부 모든 텍스트를 밝게 설정 */
+        .card,
+        .card * {
+            color: var(--text) !important;
+        }
+        
+        /* muted 색상은 유지 */
+        .card .text-muted,
+        .card .bit-info,
+        .card small.text-muted {
+            color: var(--muted) !important;
+        }
+        
+        .form-control, .form-select, textarea {
+            background-color: var(--surface) !important;
+            color: var(--text) !important;
+            border: 1px solid var(--border) !important;
+        }
+        
+        .form-control:focus, .form-select:focus, textarea:focus {
+            background-color: var(--surface) !important;
+            color: var(--text) !important;
+            border-color: var(--primary) !important;
+            box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.1);
+        }
+        
+        .form-control::placeholder, textarea::placeholder {
+            color: var(--muted) !important;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #8e6fff);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #8e6fff, var(--primary));
+        }
+        
+        .attribute-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background: var(--surface);
+            transition: all 0.2s ease;
+        }
+        
+        .attribute-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(124, 92, 255, 0.15);
+        }
+        
+        .attribute-name {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            word-break: break-word;
+        }
+        
+        .attribute-bit {
+            font-size: 0.75rem;
+            font-family: 'Courier New', monospace;
+            color: var(--muted);
+            margin-bottom: 0.5rem;
+        }
+        
+        .data-item {
+            background: var(--bg);
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            border-left: 3px solid var(--success);
+            border-radius: 4px;
+        }
+        
+        .data-text {
+            color: var(--text);
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 0.5rem;
+        }
+        
+        .data-bit {
+            font-size: 0.7rem;
+            font-family: 'Courier New', monospace;
+            color: var(--muted);
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .bit-info {
+            font-size: 0.75rem;
+            font-family: 'Courier New', monospace;
+            color: var(--muted);
+            margin-top: 0.5rem;
+        }
+        
+        .search-input {
+            margin-bottom: 1rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--muted);
+        }
+        
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 좌측: 조회 영역 -->
+        <div class="left-panel">
+            <div class="left-header">
+                <h5 class="mb-3">📚 소설 목록</h5>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">속성 필터 (BIT 값으로 조회)</label>
+                    <input type="text" id="attributeFilterInput" class="form-control form-control-sm" 
+                           placeholder="예: 소설 제목 → 챕터 1: 제1장">
+                    <small class="text-muted">입력하면 자동으로 속성 목록이 불러옵니다.</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">추가 검색 키워드</label>
+                    <input type="text" id="additionalSearchInput" class="form-control form-control-sm" 
+                           placeholder="쉼표로 구분된 키워드">
+                </div>
+                <div class="d-flex gap-2">
+                    <button id="refreshBtn" class="btn btn-sm btn-outline-light">🔄 새로고침</button>
+                    <button id="clearFilterBtn" class="btn btn-sm btn-outline-secondary">🧹 필터 초기화</button>
+                </div>
+            </div>
+            <div class="left-content">
+                <div id="attributesList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <div>속성 필터를 입력하여 조회하세요</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 우측: 입력 영역 -->
+        <div class="right-panel">
+            <div class="right-header">
+                <h5 class="mb-3">➕ 속성/데이터 입력</h5>
+            </div>
+            <div class="right-content">
+                <div class="card">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">속성 텍스트</label>
+                        <input type="text" id="attributeInput" class="form-control" 
+                               placeholder="예: 소설 제목 → 챕터 1: 제1장 → 개요">
+                        <div id="attributeBitInfo" class="bit-info">BIT: 계산 중...</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">데이터 텍스트</label>
+                        <textarea id="dataInput" class="form-control" rows="8" 
+                                  placeholder="속성에 해당하는 데이터를 입력하세요..."></textarea>
+                        <div id="dataBitInfo" class="bit-info">BIT: 계산 중...</div>
+                    </div>
+                    
+                    <div id="saveStatus" class="mt-2 small"></div>
+                    <div class="small text-muted mt-2">
+                        💡 속성과 데이터를 입력하면 자동으로 저장됩니다. (입력 후 1초 대기)
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h6 class="mb-3">📝 저장 정보</h6>
+                    <div class="small text-muted">
+                        <div>• 속성과 데이터 입력 시 자동으로 저장됩니다 (입력 후 1초 대기).</div>
+                        <div>• 저장된 데이터는 좌측 조회 영역에서 즉시 확인할 수 있습니다.</div>
+                        <div>• 중복 저장은 자동으로 방지됩니다.</div>
+                        <div>• 속성 형식: "소설 제목 → 챕터 N: 제목 → 속성명"</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h6 class="mb-3">🔧 서버 정보</h6>
+                    <div class="small">
+                        <div id="serverUrl" class="text-muted mb-2">서버 URL: 계산 중...</div>
+                        <div id="serverStatus" class="mb-2">연결 상태: 확인 중...</div>
+                        <button id="testConnectionBtn" class="btn btn-sm btn-outline-primary">🔌 연결 테스트</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/attribute_data.js"></script>
+</body>
+</html>
+

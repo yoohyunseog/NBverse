@@ -1,0 +1,2571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BIT_MAX / BIT_MIN 실시간 계산</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; }
+        @media (max-width: 1024px) {
+            body > div[style*="display: flex"] { flex-direction: column !important; }
+            body > div[style*="display: flex"] > div[style*="flex: 0 0 400px"] { flex: 1 1 auto !important; position: static !important; }
+        }
+        .row { margin-bottom: 16px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        input[type="text"] { width: 100%; padding: 10px; font-size: 16px; }
+        textarea { width: 100%; padding: 10px; font-size: 16px; min-height: 150px; resize: vertical; font-family: inherit; border: 1px solid #ccc; border-radius: 4px; }
+        .result { display: flex; gap: 16px; flex-wrap: wrap; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; min-width: 220px; }
+        .value { font-size: 24px; font-weight: bold; margin-top: 8px; }
+        .muted { color: #666; font-size: 12px; }
+        .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+        button { padding: 8px 12px; border: 1px solid #bbb; background: #f7f7f7; border-radius: 6px; cursor: pointer; }
+        button:hover { background: #eee; }
+        .history { margin-top: 16px; }
+        details summary { cursor: pointer; user-select: none; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #e5e5e5; padding: 6px 8px; text-align: left; font-size: 12px; }
+        th { background: #fafafa; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- 소설 전용 레이아웃 -->
+        <!-- 상단: 소설 선택 + 챕터 목록 (높이 제한 + 스크롤) -->
+        <div class="row g-3 mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center justify-content-between"><strong>📖 챕터 목록</strong>
+                        <div class="d-flex gap-2 align-items-center">
+                            <select id="novelSelect" class="form-select form-select-sm" style="min-width: 220px;"></select>
+                            <button id="newNovelBtn" class="btn btn-sm btn-outline-primary">새 소설</button>
+                        </div>
+                    </div>
+                    <div class="card-body p-2" style="max-height: 150px; overflow-y: auto;">
+                        <div id="chapterList" class="d-flex gap-2 flex-wrap">
+                            <span class="text-muted small">생성된 챕터가 여기에 표시됩니다...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 상단: 소설 정보 (width 100%) -->
+        <div class="row g-3 mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header"><strong>📚 소설 정보</strong></div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">제목</label>
+                                <input id="novelTitle" class="form-control" placeholder="예: 폐허의 서사" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">장르</label>
+                                <input id="novelGenre" class="form-control" placeholder="예: 다크 판타지" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">장 수</label>
+                                <input id="novelChapters" type="number" class="form-control" value="6" min="3" max="20" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">주요 등장인물</label>
+                                <div id="characterCards" class="row g-2" style="max-height: 180px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 본문 레이아웃 -->
+        <div class="row g-3 mb-3">
+            <!-- 좌측: 편집 가능한 현재 소설 컨텍스트 -->
+            <div class="col-12 col-lg-3">
+                <div class="card mb-3">
+                    <div class="card-header"><strong>📝 현재 소설 컨텍스트 (편집 가능)</strong></div>
+                    <div class="card-body" style="max-height:70vh; overflow:auto;">
+                        <div class="mb-3">
+                            <label class="form-label">현재 챕터</label>
+                            <input id="currentChapter" class="form-control" placeholder="예: 제1장: 그림자의 시작" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">주요 캐릭터 및 위치</label>
+                            <textarea id="characterLocations" class="form-control" rows="6" placeholder="예:&#10;- 카이: 폐허가 된 마을, 동쪽 숲&#10;- 세리엘: 엘프 가드 캠프, 서쪽 계곡&#10;- 리아나: 마을 광장, 중앙 분수대"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">현재 장소/배경</label>
+                            <textarea id="currentPlace" class="form-control" rows="3" placeholder="예: 폐허가 된 마을의 중심부. 부서진 돌담과 무너진 집들이 바람에 흔들리고 있다. 어둠이 내려앉기 시작했다."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">최근 사건/상황</label>
+                            <textarea id="recentEvents" class="form-control" rows="4" placeholder="예: 엘프 가드가 그림자 사냥꾼 자카르와 대치 중. 카이는 자신의 힘을 처음 발견했다."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">다음 전개 방향 (선택)</label>
+                            <input id="nextDirection" class="form-control" placeholder="예: 전투 장면으로 전환" />
+                        </div>
+                        <div class="alert alert-info small">
+                            <strong>💡</strong> 이 정보가 GPT 프롬프트로 자동 사용됩니다. 원하는 대로 수정하세요.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 중앙: 소설 본문 -->
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>🗺️ 현재 지도 배경 + 본문</strong>
+                        <span id="novelProgress" class="small text-muted"></span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="mapBackdrop" style="background: radial-gradient(circle at 20% 30%, #1f2937, #0f172a 60%), url('data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'40\' height=\'40\'><rect width=\'40\' height=\'40\' fill=\'none\' stroke=\'%23222\' stroke-width=\'1\'/></svg>'); background-size: cover, 40px 40px; padding: 16px; min-height: 70vh;">
+                            <div id="novelContent" class="bg-dark text-light rounded p-3" style="min-height: 60vh; white-space: pre-wrap; line-height: 1.8;">여기에 완성 소설이 생성됩니다...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: 소설 실행 -->
+            <div class="col-12 col-lg-3">
+                <div class="card h-100">
+                    <div class="card-header"><strong>🎬 소설 실행</strong></div>
+                    <div id="novelExecBody" class="card-body" style="max-height:70vh; overflow:auto;">
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <div class="btn-group" role="group" aria-label="chapter-nav">
+                                <button id="prevChapterBtn" class="btn btn-outline-secondary">이전</button>
+                                <button id="nextChapterBtn" class="btn btn-outline-secondary">다음</button>
+                            </div>
+                            <button id="stopNovelBtn" class="btn btn-outline-secondary">중지</button>
+                        </div>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="autoNovelToggle" checked>
+                            <label class="form-check-label small" for="autoNovelToggle">문자 입력 시 자동 생성</label>
+                        </div>
+                        <div class="mt-2 small text-muted d-flex align-items-center gap-2" id="novelStatus">
+                            <span id="novelStatusText"></span>
+                            <span id="novelLoading" class="spinner-border spinner-border-sm text-primary d-none" role="status" aria-hidden="true"></span>
+                        </div>
+                        <hr />
+                        <div class="mb-2">
+                            <label for="novelIdeaInput" class="form-label">새 입력란 (소설 아이디어/메모)</label>
+                            <textarea id="novelIdeaInput" class="form-control" placeholder="예) 다음 장면 아이디어, 인물 감정 변화, 배경 사운드 묘사 등" rows="4"></textarea>
+                            <div class="form-text">입력 시 자동 저장되며 컨텍스트에 반영됩니다.</div>
+                            <div class="small text-muted mt-1" id="notesSaveStatus"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 저장된 속성 목록: 과거 챕터 속성 -->
+        <div class="row g-3 mb-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <strong>📋 저장된 속성 목록 (과거 챕터)</strong>
+                        <button id="loadPreviousAttributesBtn" class="btn btn-sm btn-outline-primary">과거 챕터 속성 불러오기</button>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        <div id="previousAttributesList" class="row g-2">
+                            <div class="col-12 text-muted small text-center py-3">
+                                "과거 챕터 속성 불러오기" 버튼을 클릭하여 현재 선택된 챕터의 이전 챕터들의 속성을 불러오세요.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <!-- 좌측: 문자 입력 및 BIT 계산 영역 (소설 본문 위쪽에서 이미 노출되므로 하단으로 우선순위 조정) -->
+            <div class="col-lg-7 order-2 order-lg-1">
+                <!-- 입력 영역은 페이지 하단으로 이동됨 -->
+
+                <div class="result mb-3">
+                    <div class="card d-inline-block me-2 mb-2" style="min-width: 220px;">
+                        <div class="card-body">
+                            <div class="small">BIT_MAX</div>
+                            <div id="bitMax" class="value">-</div>
+                            <div class="muted small" id="bitMaxMeta"></div>
+                        </div>
+                    </div>
+                    <div class="card d-inline-block me-2 mb-2" style="min-width: 220px;">
+                        <div class="card-body">
+                            <div class="small">BIT_MIN</div>
+                            <div id="bitMin" class="value">-</div>
+                            <div class="muted small" id="bitMinMeta"></div>
+                        </div>
+                    </div>
+                    <div class="card d-inline-block me-2 mb-2" style="min-width: 220px;">
+                        <div class="card-body">
+                            <div class="small">예측 NEXT_MAX</div>
+                            <div id="predMax" class="value">-</div>
+                            <div class="muted small" id="predMaxMeta">최근 추세 기반</div>
+                        </div>
+                    </div>
+                    <div class="card d-inline-block me-2 mb-2" style="min-width: 220px;">
+                        <div class="card-body">
+                            <div class="small">예측 NEXT_MIN</div>
+                            <div id="predMin" class="value">-</div>
+                            <div class="muted small" id="predMinMeta">최근 추세 기반</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <h5>예측 입력값</h5>
+                    <div id="inputPredictions" class="border rounded p-2" style="max-height: 300px; overflow-y: auto;">
+                        <!-- 동적으로 생성됨 -->
+                    </div>
+                </div>
+
+                <div class="history">
+                    <h5>기록 보기</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>시간</th>
+                                    <th>입력</th>
+                                    <th>ASCII_CODES</th>
+                                    <th>BIT_MAX</th>
+                                    <th>BIT_MIN</th>
+                                    <th>출처</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: GPT AI -->
+            <div class="col-lg-5 order-1 order-lg-2" id="gptPanel">
+                <div class="sticky-top" style="top: 24px;">
+                    <h5 class="mb-3">GPT AI</h5>
+                    
+                    <!-- GPT 설정 -->
+                    <div class="accordion mb-3" id="gptSettingsAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gptSettingsCollapse">
+                                    설정 (API 키 입력)
+                                </button>
+                            </h2>
+                            <div id="gptSettingsCollapse" class="accordion-collapse collapse" data-bs-parent="#gptSettingsAccordion">
+                                <div class="accordion-body">
+                                    <label for="gptApiKey" class="form-label">OpenAI API 키:</label>
+                                    <input type="password" id="gptApiKey" class="form-control mb-2" placeholder="sk-..." />
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button id="saveApiKeyBtn" class="btn btn-sm btn-primary">저장</button>
+                                        <span id="apiKeyStatus" class="small text-muted"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GPT 프롬프트 입력 및 생성 -->
+                    <div class="mb-3">
+                        <label for="gptPrompt" class="form-label">프롬프트 입력:</label>
+                        <textarea id="gptPrompt" class="form-control" placeholder="예) 폐허가 된 마을에 새로운 NPC를 추가해주세요.&#10;폐허가 된 마을의 스토리를 계속 발전시켜주세요.&#10;엔터를 누르면 GPT가 폐허가 된 마을 정보를 기반으로 응답합니다." rows="6"></textarea>
+                        <div class="mt-2">
+                            <div class="btn-group mb-2" role="group">
+                                <button id="gptGenerateBtn" class="btn btn-primary">생성</button>
+                                <button id="gptUseCurrentBtn" class="btn btn-success">현재 입력 사용</button>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="gptUseSystemMsg" checked />
+                                <label class="form-check-label" for="gptUseSystemMsg">시스템 메시지 사용</label>
+                            </div>
+                            <span id="gptStatus" class="small text-muted ms-2"></span>
+                        </div>
+
+                        <!-- 던전 AI 컨트롤 (경량) -->
+                        <div class="mt-3 p-2 border rounded" style="background:#f9fafb;">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <strong class="me-2">던전 AI</strong>
+                        <button id="dungeonStartBtn" class="btn btn-sm btn-outline-dark">시작</button>
+                        <button id="dungeonNextBtn" class="btn btn-sm btn-outline-primary">다음 턴</button>
+                        <button id="useNovelFlowBtn" class="btn btn-sm btn-success">소설 완성 시작(좌측)</button>
+                                <span id="dungeonStatus" class="small text-muted"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <label class="form-label fw-bold">GPT 응답:</label>
+                            <div id="gptResponse" class="border rounded p-3 bg-light" style="min-height: 200px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.6;">응답이 여기에 표시됩니다...</div>
+                            <div class="mt-2 d-flex gap-2 align-items-center">
+                                <button id="gptCopyBtn" class="btn btn-sm btn-outline-secondary">복사</button>
+                                <button id="gptClearBtn" class="btn btn-sm btn-outline-secondary">지우기</button>
+                                <span id="gptUsageInfo" class="small text-muted"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단: 입력 & 새 입력란 -->
+    <div class="row g-3 mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header"><strong>입력 & 계산</strong></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="textInput" class="form-label">문자를 입력하세요 (입력 시 실시간 계산)</label>
+                        <textarea id="textInput" class="form-control" placeholder="예) 안녕하세요 Hello 123&#10;긴 문장이나 소설도 입력할 수 있습니다.&#10;엔터를 누르면 GPT가 응답합니다." autocomplete="off" rows="6"></textarea>
+                        <div class="controls mt-2">
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="autoSaveToggle" checked />
+                                <label class="form-check-label" for="autoSaveToggle">자동 저장</label>
+                            </div>
+                            <button id="exportBtn" class="btn btn-sm btn-outline-secondary">내보내기(JSON)</button>
+                            <button id="clearBtn" class="btn btn-sm btn-outline-secondary">기록 비우기</button>
+                            <span class="muted ms-2" id="historyInfo"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="novelIdeaInput" class="form-label">새 입력란 (소설 아이디어/메모)</label>
+                        <textarea id="novelIdeaInput" class="form-control" placeholder="예) 다음 장면 아이디어, 인물 감정 변화, 배경 사운드 묘사 등" rows="4"></textarea>
+                        <div class="form-text">이 입력은 컨텍스트에 참고용으로 포함됩니다.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ===== 서버 URL 헬퍼 함수 =====
+    function getServerUrl(path) {
+      // file:// 프로토콜에서 열린 경우 localhost:8123 사용
+      if (window.location.protocol === 'file:') {
+        return `http://localhost:8123${path}`;
+      }
+      // http/https 프로토콜에서는 상대 경로 사용
+      return path;
+    }
+    
+    // ===== 외부 스크립트 우선 사용, 없으면 로컬 구현으로 폴백 =====
+    (function(){
+      if (typeof window.BIT_MAX_NB === 'undefined') {
+        const initializeArrays = function(count) {
+          const arrays = ['BIT_START_A50', 'BIT_START_A100', 'BIT_START_B50', 'BIT_START_B100', 'BIT_START_NBA100'];
+          const initializedArrays = {};
+          arrays.forEach(array => {
+            initializedArrays[array] = new Array(count).fill(0);
+          });
+          return initializedArrays;
+        };
+
+        const calculateBit = function(nb, bit = 5.5, reverse = false) {
+          if (nb.length < 2) {
+            return bit / 100;
+          }
+          const BIT_NB = bit;
+          const max = Math.max(...nb);
+          const min = Math.min(...nb);
+          const COUNT = 50;
+          const CONT = 20;
+          const range = max - min;
+          const negativeRange = min < 0 ? Math.abs(min) : 0;
+          const positiveRange = max > 0 ? max : 0;
+          const negativeIncrement = negativeRange / (COUNT * nb.length - 1);
+          const positiveIncrement = positiveRange / (COUNT * nb.length - 1);
+          const arrays = initializeArrays(COUNT * nb.length);
+          let count = 0;
+          let totalSum = 0;
+          for (let value of nb) {
+            for (let i = 0; i < COUNT; i++) {
+              const BIT_END = 1;
+              const A50 = value < 0 ? min + negativeIncrement * (count + 1)
+                                    : min + positiveIncrement * (count + 1);
+              const A100 = (count + 1) * BIT_NB / (COUNT * nb.length);
+              const B50 = value < 0 ? A50 - negativeIncrement * 2 : A50 - positiveIncrement * 2;
+              const B100 = value < 0 ? A50 + negativeIncrement : A50 + positiveIncrement;
+              const NBA100 = A100 / (nb.length - 1);
+              arrays.BIT_START_A50[count] = A50;
+              arrays.BIT_START_A100[count] = A100;
+              arrays.BIT_START_B50[count] = B50;
+              arrays.BIT_START_B100[count] = B100;
+              arrays.BIT_START_NBA100[count] = NBA100;
+              count++;
+            }
+            totalSum += value;
+          }
+          if (reverse) {
+            arrays.BIT_START_NBA100.reverse();
+          }
+          let NB50 = 0;
+          for (let value of nb) {
+            for (let a = 0; a < arrays.BIT_START_NBA100.length; a++) {
+              if (arrays.BIT_START_B50[a] <= value && arrays.BIT_START_B100[a] >= value) {
+                NB50 += arrays.BIT_START_NBA100[Math.min(a, arrays.BIT_START_NBA100.length - 1)];
+                break;
+              }
+            }
+          }
+          if (nb.length === 2) {
+            return bit - NB50;
+          }
+          return NB50;
+        };
+
+        let SUPER_BIT = 0;
+        const updateSuperBit = function(newValue) { SUPER_BIT = newValue; };
+        const BIT_MAX_NB = function(nb, bit = 5.5) {
+          let result = calculateBit(nb, bit, false);
+          if (!isFinite(result) || isNaN(result) || result > 100 || result < -100) {
+            return SUPER_BIT;
+          } else {
+            updateSuperBit(result);
+            return result;
+          }
+        };
+        const BIT_MIN_NB = function(nb, bit = 5.5) {
+          let result = calculateBit(nb, bit, true);
+          if (!isFinite(result) || isNaN(result) || result > 100 || result < -100) {
+            return SUPER_BIT;
+          } else {
+            updateSuperBit(result);
+            return result;
+          }
+        };
+
+        // expose to window
+        window.initializeArrays = initializeArrays;
+        window.calculateBit = calculateBit;
+        window.BIT_MAX_NB = BIT_MAX_NB;
+        window.BIT_MIN_NB = BIT_MIN_NB;
+      }
+    })();
+
+    // ===== COUNT 200 오버라이드 =====
+    (function(){
+      const COUNT = 200;
+      function ensureInit(len){
+        if (typeof window.initializeArrays === 'function') return window.initializeArrays(len);
+        return {
+          BIT_START_A50: new Array(len).fill(0),
+          BIT_START_A100: new Array(len).fill(0),
+          BIT_START_B50: new Array(len).fill(0),
+          BIT_START_B100: new Array(len).fill(0),
+          BIT_START_NBA100: new Array(len).fill(0),
+        };
+      }
+      function calculateBitOverride(nb, bit = 5.5, reverse = false) {
+        if (!nb || nb.length < 2) return bit / 100;
+        const BIT_NB = bit;
+        const max = Math.max(...nb);
+        const min = Math.min(...nb);
+        const negativeRange = min < 0 ? Math.abs(min) : 0;
+        const positiveRange = max > 0 ? max : 0;
+        const negativeIncrement = negativeRange / (COUNT * nb.length - 1);
+        const positiveIncrement = positiveRange / (COUNT * nb.length - 1);
+        const arrays = ensureInit(COUNT * nb.length);
+        let count = 0;
+        for (let value of nb) {
+          for (let i = 0; i < COUNT; i++) {
+            const BIT_END = 1;
+            const A50 = value < 0 ? min + negativeIncrement * (count + 1)
+                                  : min + positiveIncrement * (count + 1);
+            const A100 = (count + 1) * BIT_NB / (COUNT * nb.length);
+            const B50 = value < 0 ? A50 - negativeIncrement * 2 : A50 - positiveIncrement * 2;
+            const B100 = value < 0 ? A50 + negativeIncrement : A50 + positiveIncrement;
+            const NBA100 = A100 / (nb.length - BIT_END);
+            arrays.BIT_START_A50[count] = A50;
+            arrays.BIT_START_A100[count] = A100;
+            arrays.BIT_START_B50[count] = B50;
+            arrays.BIT_START_B100[count] = B100;
+            arrays.BIT_START_NBA100[count] = NBA100;
+            count++;
+          }
+        }
+        if (reverse) arrays.BIT_START_NBA100.reverse();
+        let NB50 = 0;
+        for (let value of nb) {
+          for (let a = 0; a < arrays.BIT_START_NBA100.length; a++) {
+            if (arrays.BIT_START_B50[a] <= value && arrays.BIT_START_B100[a] >= value) {
+              NB50 += arrays.BIT_START_NBA100[Math.min(a, arrays.BIT_START_NBA100.length - 1)];
+              break;
+            }
+          }
+        }
+        if (nb.length === 2) return bit - NB50;
+        return NB50;
+      }
+      function updateSuperBit(v){ try { window.SUPER_BIT = v; } catch(e) {} }
+      window.BIT_MAX_NB = function(nb, bit = 5.5){
+        const result = calculateBitOverride(nb, bit, false);
+        if (!isFinite(result) || isNaN(result) || result > 100 || result < -100) {
+          return window.SUPER_BIT || 0;
+        }
+        updateSuperBit(result);
+        return result;
+      };
+      window.BIT_MIN_NB = function(nb, bit = 5.5){
+        const result = calculateBitOverride(nb, bit, true);
+        if (!isFinite(result) || isNaN(result) || result > 100 || result < -100) {
+          return window.SUPER_BIT || 0;
+        }
+        updateSuperBit(result);
+        return result;
+      };
+    })();
+
+    if (typeof window.wordNbUnicodeFormat !== 'function') {
+    function wordNbUnicodeFormat(domain) {
+      const defaultPrefix = '';
+      if (!domain || domain.length === 0) {
+        domain = defaultPrefix;
+      } else {
+        domain = defaultPrefix + domain;
+      }
+      const chars = Array.from(domain);
+      const langRanges = [
+        { range: [0xAC00, 0xD7AF], prefix: 1000000 },
+        { range: [0x3040, 0x309F], prefix: 2000000 },
+        { range: [0x30A0, 0x30FF], prefix: 3000000 },
+        { range: [0x4E00, 0x9FFF], prefix: 4000000 },
+        { range: [0x0410, 0x044F], prefix: 5000000 },
+        { range: [0x0041, 0x007A], prefix: 6000000 },
+        { range: [0x0590, 0x05FF], prefix: 7000000 },
+        { range: [0x00C0, 0x00FD], prefix: 8000000 },
+        { range: [0x0E00, 0x0E7F], prefix: 9000000 },
+      ];
+      return chars.map(char => {
+        const unicodeValue = char.codePointAt(0);
+        const lang = langRanges.find(lang =>
+          unicodeValue >= lang.range[0] && unicodeValue <= lang.range[1]
+        );
+        const prefix = lang ? lang.prefix : 0;
+        return prefix + unicodeValue;
+      });
+    }
+    window.wordNbUnicodeFormat = wordNbUnicodeFormat;
+    }
+
+    // ===== UI 연결 =====
+    const $input = document.getElementById('textInput');
+    const $bitMax = document.getElementById('bitMax');
+    const $bitMin = document.getElementById('bitMin');
+    const $bitMaxMeta = document.getElementById('bitMaxMeta');
+    const $bitMinMeta = document.getElementById('bitMinMeta');
+    const $predMax = document.getElementById('predMax');
+    const $predMin = document.getElementById('predMin');
+    const $predMaxMeta = document.getElementById('predMaxMeta');
+    const $predMinMeta = document.getElementById('predMinMeta');
+    const $autoSave = document.getElementById('autoSaveToggle');
+    const $exportBtn = document.getElementById('exportBtn');
+    const $clearBtn = document.getElementById('clearBtn');
+    const $historyInfo = document.getElementById('historyInfo');
+    const $historyBody = document.getElementById('historyBody');
+    const $inputPredictions = document.getElementById('inputPredictions');
+    
+    // GPT 관련 요소
+    const $gptApiKey = document.getElementById('gptApiKey');
+    const $saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+    const $apiKeyStatus = document.getElementById('apiKeyStatus');
+    const $gptPrompt = document.getElementById('gptPrompt');
+    const $gptGenerateBtn = document.getElementById('gptGenerateBtn');
+    const $gptUseCurrentBtn = document.getElementById('gptUseCurrentBtn');
+    const $gptUseSystemMsg = document.getElementById('gptUseSystemMsg');
+    const $gptStatus = document.getElementById('gptStatus');
+    const $gptResponse = document.getElementById('gptResponse');
+    const $gptCopyBtn = document.getElementById('gptCopyBtn');
+    const $gptClearBtn = document.getElementById('gptClearBtn');
+    const $gptUsageInfo = document.getElementById('gptUsageInfo');
+
+    // LocalStorage 제거: 세션 히스토리만 유지, 영속 저장은 파일에만 수행
+    const sessionHistory = [];
+    const DECIMALS = 15;
+    const fmt = (v) => Number(v).toFixed(DECIMALS);
+    const SETTINGS_KEY = 'bitui:settings';
+    const DB_NAME = 'bitui';
+    const DB_STORE = 'fsHandles';
+    const DB_KEY_HISTORY = 'historyFile';
+    const DB_HIST_NAME = 'bituiHist';
+    const DB_HIST_STORE = 'records';
+
+    
+
+    // ===== IndexedDB helpers for persisting file handle =====
+    function idbOpen() { return Promise.resolve(null); }
+    async function idbPutHandle() { return; }
+    async function idbGetHandle() { return null; }
+
+    // ===== IndexedDB history (no file permission needed) =====
+    function idbHistOpen() { return Promise.resolve(null); }
+    async function idbHistAdd() { return; }
+    async function idbHistClear() { return; }
+    async function idbHistLoadAll() { return []; }
+
+    // ===== Reload history from file on startup =====
+    
+
+    function asciiCodesFromString(str) {
+      if (!str) return [];
+      const chars = Array.from(str);
+      const codes = [];
+      for (const ch of chars) {
+        const cp = ch.codePointAt(0);
+        codes.push(cp);
+      }
+      return codes;
+    }
+
+    function renderHistoryInfo(history) {
+      $historyInfo.textContent = `기록 ${history.length}개`;
+    }
+
+    function renderHistoryTable(history) {
+      $historyBody.innerHTML = '';
+      const count = Math.min(history.length, 25); // 최근 25개만 표시
+      for (let r = 0; r < count; r++) {
+        const h = history[history.length - 1 - r]; // 최신부터 역순
+        const tr = document.createElement('tr');
+        const idxTd = document.createElement('td'); idxTd.textContent = String(r + 1); // 최신이 1번
+        const tTd = document.createElement('td'); tTd.textContent = new Date(h.t).toLocaleString();
+        const sTd = document.createElement('td'); sTd.textContent = h.s;
+        const asciiTd = document.createElement('td');
+        const asciiList = Array.isArray(h.ascii) ? h.ascii : [];
+        const fullAscii = `[${asciiList.join(', ')}]`;
+        const shortAscii = asciiList.length > 30 ? `[${asciiList.slice(0,30).join(', ')} ...]` : fullAscii;
+        asciiTd.textContent = shortAscii;
+        asciiTd.title = fullAscii;
+        const maxTd = document.createElement('td'); maxTd.textContent = fmt(h.max);
+        const minTd = document.createElement('td'); minTd.textContent = fmt(h.min);
+        const sourceTd = document.createElement('td');
+        const source = h.source || '저장';
+        sourceTd.textContent = source === 'saved' ? '저장' : source === 'fetched' ? '조회' : source;
+        sourceTd.style.color = source === 'saved' ? '#28a745' : source === 'fetched' ? '#007bff' : '#666';
+        tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd); tr.appendChild(sourceTd);
+        $historyBody.appendChild(tr);
+      }
+    }
+
+    function appendHistoryRow(h, indexOneBased) {
+      const tr = document.createElement('tr');
+      tr.dataset.recordId = h.t; // 레코드 ID로 식별
+      const idxTd = document.createElement('td'); idxTd.textContent = String(indexOneBased);
+      const tTd = document.createElement('td'); tTd.textContent = new Date(h.t).toLocaleString();
+      const sTd = document.createElement('td'); sTd.textContent = h.s;
+      const asciiTd = document.createElement('td');
+      const asciiList = Array.isArray(h.ascii) ? h.ascii : [];
+      const fullAscii = `[${asciiList.join(', ')}]`;
+      const shortAscii = asciiList.length > 30 ? `[${asciiList.slice(0,30).join(', ')} ...]` : fullAscii;
+      asciiTd.textContent = shortAscii;
+      asciiTd.title = fullAscii;
+      const maxTd = document.createElement('td'); maxTd.textContent = fmt(h.max);
+      const minTd = document.createElement('td'); minTd.textContent = fmt(h.min);
+      const sourceTd = document.createElement('td');
+      sourceTd.className = 'source-cell';
+      const source = h.source || 'checking';
+      sourceTd.textContent = source === 'saved' ? '저장' : source === 'fetched' ? '조회' : source === 'checking' ? '확인중...' : source;
+      sourceTd.style.color = source === 'saved' ? '#28a745' : source === 'fetched' ? '#007bff' : '#666';
+      tr.appendChild(idxTd); tr.appendChild(tTd); tr.appendChild(sTd); tr.appendChild(asciiTd); tr.appendChild(maxTd); tr.appendChild(minTd); tr.appendChild(sourceTd);
+      // 최신이 1번이므로 위에 붙이기
+      if ($historyBody.firstChild) {
+        $historyBody.insertBefore(tr, $historyBody.firstChild);
+      } else {
+        $historyBody.appendChild(tr);
+      }
+      // 25개 초과 시 마지막 행 제거
+      if ($historyBody.children.length > 25) {
+        $historyBody.removeChild($historyBody.lastChild);
+      }
+      return tr; // 행 참조 반환
+    }
+
+    function linearPredict(values, useCount) {
+      // values: number[]
+      const n = Math.min(values.length, useCount);
+      if (n < 2) return null;
+      // x: 0..n-1, y: last n values
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+      for (let i = 0; i < n; i++) {
+        const x = i;
+        const y = values[values.length - n + i];
+        sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+      }
+      const denom = n * sumXX - sumX * sumX;
+      if (denom === 0) return null;
+      const a = (n * sumXY - sumX * sumY) / denom; // slope
+      const b = (sumY - a * sumX) / n;             // intercept
+      const nextX = n; // next index
+      return a * nextX + b;
+    }
+
+    let lastTimer = null;
+    let lastPredictAt = 0;
+    let predictionTimer = null; // 예측 입력값 계산용 별도 타이머
+    const PREDICT_THROTTLE_MS = 250;
+    function update() {
+      const text = $input.value || '';
+      const arr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(text);
+      if (arr.length === 0) {
+        $bitMax.textContent = '-';
+        $bitMin.textContent = '-';
+        $bitMaxMeta.textContent = '';
+        $bitMinMeta.textContent = '';
+        $predMax.textContent = '-';
+        $predMin.textContent = '-';
+        if (predictionTimer) clearTimeout(predictionTimer);
+        $inputPredictions.innerHTML = '';
+        return;
+      }
+      try {
+        const maxVal = (window.BIT_MAX_NB || (()=>0))(arr);
+        const minVal = (window.BIT_MIN_NB || (()=>0))(arr);
+        $bitMax.textContent = fmt(maxVal);
+        $bitMin.textContent = fmt(minVal);
+        $bitMaxMeta.textContent = `len=${arr.length}`;
+        $bitMinMeta.textContent = `len=${arr.length}`;
+        
+        // 예측 입력값 계산 (부분 문자열들의 BIT 값) - 디바운싱 및 최적화
+        if (predictionTimer) clearTimeout(predictionTimer);
+        predictionTimer = setTimeout(() => {
+          $inputPredictions.innerHTML = '';
+          const currentText = $input.value || '';
+          if (currentText.length > 0) {
+            const chars = Array.from(currentText); // 유니코드 안전 분할
+            const totalLen = chars.length;
+            
+            // 표시할 인덱스 계산: 처음 15개, 중간 15개, 마지막 15개
+            const indicesToProcess = new Set();
+            
+            if (totalLen <= 45) {
+              // 45개 이하면 모두 표시
+              for (let i = 1; i <= totalLen; i++) {
+                indicesToProcess.add(i);
+              }
+            } else {
+              // 처음 15개
+              for (let i = 1; i <= 15; i++) {
+                indicesToProcess.add(i);
+              }
+              
+              // 중간 15개 (중간 지점 기준)
+              const midPoint = Math.floor(totalLen / 2);
+              const midStart = Math.max(16, midPoint - 7);
+              const midEnd = Math.min(totalLen - 15, midStart + 14);
+              for (let i = midStart; i <= midEnd; i++) {
+                indicesToProcess.add(i);
+              }
+              
+              // 마지막 15개
+              for (let i = Math.max(1, totalLen - 14); i <= totalLen; i++) {
+                indicesToProcess.add(i);
+              }
+            }
+            
+            // 인덱스를 정렬하여 순서대로 처리
+            const sortedIndices = Array.from(indicesToProcess).sort((a, b) => a - b);
+            
+            // 비동기 처리로 UI 블로킹 방지
+            const processBatch = (indexArray, startIdx) => {
+              requestAnimationFrame(() => {
+                const batchSize = 10; // 한 번에 10개씩 처리
+                const endIdx = Math.min(startIdx + batchSize, indexArray.length);
+                
+                for (let j = startIdx; j < endIdx; j++) {
+                  const i = indexArray[j];
+                  const partialText = chars.slice(0, i).join('');
+                  const partialArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(partialText);
+                  if (partialArr.length > 0) {
+                    try {
+                      const partialMax = (window.BIT_MAX_NB || (()=>0))(partialArr);
+                      const partialMin = (window.BIT_MIN_NB || (()=>0))(partialArr);
+                      const card = document.createElement('div');
+                      card.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center;';
+                      card.innerHTML = `
+                        <div style="flex: 1;">
+                          <strong style="font-size: 14px;">"${partialText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</strong>
+                          <span style="color: #666; font-size: 12px; margin-left: 8px;">(길이 ${i})</span>
+                        </div>
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                          <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #666;">MAX</div>
+                            <div style="font-size: 13px; font-weight: bold;">${fmt(partialMax)}</div>
+                          </div>
+                          <div style="text-align: right;">
+                            <div style="font-size: 11px; color: #666;">MIN</div>
+                            <div style="font-size: 13px; font-weight: bold;">${fmt(partialMin)}</div>
+                          </div>
+                        </div>
+                      `;
+                      $inputPredictions.appendChild(card);
+                    } catch (e) {
+                      // 계산 실패 시 무시
+                    }
+                  }
+                }
+                
+                // 다음 배치 처리
+                if (endIdx < indexArray.length) {
+                  processBatch(indexArray, endIdx);
+                }
+              });
+            };
+            
+            // 첫 배치부터 시작
+            if (sortedIndices.length > 0) {
+              processBatch(sortedIndices, 0);
+            }
+          }
+        }, 300); // 300ms 디바운싱
+
+        if ($autoSave.checked) {
+          const ascii = asciiCodesFromString(text);
+          const rec = { t: Date.now(), s: text, ascii, max: maxVal, min: minVal, source: 'checking' }; // 조회 중으로 초기 설정
+          sessionHistory.push(rec);
+          renderHistoryInfo(sessionHistory);
+          const row = appendHistoryRow(rec, 1);
+          // save to IndexedDB (auto-save without file)
+          idbHistAdd(rec);
+          
+          // 먼저 서버에서 조회 시도
+          (async () => {
+            try {
+              // 조회: 같은 max, min 값을 가진 데이터 확인
+              const queryUrl = getServerUrl(`/api/log/by-max?nb_max=${encodeURIComponent(maxVal)}&n=100`);
+              const queryRes = await fetch(queryUrl);
+              const queryData = await queryRes.json();
+              
+              // 조회 결과에서 정확히 일치하는 데이터 찾기
+              let found = false;
+              if (queryData && queryData.items && Array.isArray(queryData.items)) {
+                for (const item of queryData.items) {
+                  if ((item.s ?? '') === (rec.s ?? '') &&
+                      Math.abs(Number(item.max || 0) - maxVal) < 1e-10 &&
+                      Math.abs(Number(item.min || 0) - minVal) < 1e-10) {
+                    found = true;
+                    break;
+                  }
+                }
+              }
+              
+              if (found) {
+                // 조회 결과가 있으면 "조회"로 표시하고 저장하지 않음
+                rec.source = 'fetched';
+                if (row) {
+                  const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                  if (sourceTd) {
+                    sourceTd.textContent = '조회';
+                    sourceTd.style.color = '#007bff';
+                  }
+                }
+              } else {
+                // 조회 결과가 없으면 저장하고 "저장"으로 표시
+                rec.source = 'saved';
+                if (row) {
+                  const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                  if (sourceTd) {
+                    sourceTd.textContent = '저장';
+                    sourceTd.style.color = '#28a745';
+                  }
+                }
+                // 서버에 저장
+                try {
+                  await fetch(getServerUrl('/api/log'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ t: rec.t, s: rec.s, max: rec.max, min: rec.min })
+                  });
+                } catch (e) {
+                  // 저장 실패 무시
+                }
+              }
+            } catch (e) {
+              // 조회 실패 시 기본값 "저장"으로 처리하고 저장 시도
+              rec.source = 'saved';
+              if (row) {
+                const sourceTd = row.querySelector('.source-cell') || row.children[6];
+                if (sourceTd) {
+                  sourceTd.textContent = '저장';
+                  sourceTd.style.color = '#28a745';
+                }
+              }
+              try {
+                await fetch(getServerUrl('/api/log'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ t: rec.t, s: rec.s, max: rec.max, min: rec.min })
+                });
+              } catch (err) {
+                // 저장 실패 무시
+              }
+            }
+          })();
+          const now = performance.now();
+          if (now - lastPredictAt >= PREDICT_THROTTLE_MS) {
+            lastPredictAt = now;
+            const useN = 20;
+            const maxSeries = sessionHistory.map(h => Number(h.max)).filter(v => isFinite(v));
+            const minSeries = sessionHistory.map(h => Number(h.min)).filter(v => isFinite(v));
+            const predMax = linearPredict(maxSeries, useN);
+            const predMin = linearPredict(minSeries, useN);
+            $predMax.textContent = predMax == null ? '-' : fmt(predMax);
+            $predMin.textContent = predMin == null ? '-' : fmt(predMin);
+            $predMaxMeta.textContent = `최근 ${Math.min(maxSeries.length, useN)}개 기준`;
+            $predMinMeta.textContent = `최근 ${Math.min(minSeries.length, useN)}개 기준`;
+          }
+        }
+      } catch (e) {
+        $bitMax.textContent = '에러';
+        $bitMin.textContent = '에러';
+        $bitMaxMeta.textContent = '';
+        $bitMinMeta.textContent = '';
+        $predMax.textContent = '-';
+        $predMin.textContent = '-';
+        console.error(e);
+      }
+    }
+
+    function debouncedUpdate() {
+      const DELAY = 120; // ms
+      if (lastTimer) clearTimeout(lastTimer);
+      lastTimer = setTimeout(update, DELAY);
+    }
+
+    $input.addEventListener('input', debouncedUpdate);
+
+    // ===== GPT AI 기능 =====
+    // API 키 상태 확인
+    async function checkApiKeyStatus() {
+      try {
+        const res = await fetch(getServerUrl('/api/gpt/key'));
+        const data = await res.json();
+        if (data.ok && data.hasKey) {
+          $apiKeyStatus.textContent = '✓ API 키가 설정되어 있습니다';
+          $apiKeyStatus.style.color = '#28a745';
+        } else {
+          $apiKeyStatus.textContent = '⚠ API 키가 설정되지 않았습니다';
+          $apiKeyStatus.style.color = '#dc3545';
+        }
+      } catch (e) {
+        $apiKeyStatus.textContent = '⚠ API 키 확인 실패';
+        $apiKeyStatus.style.color = '#dc3545';
+      }
+    }
+
+    // API 키 저장
+    $saveApiKeyBtn.addEventListener('click', async () => {
+      const apiKey = $gptApiKey.value.trim();
+      if (!apiKey) {
+        alert('API 키를 입력해주세요');
+        return;
+      }
+      try {
+        $saveApiKeyBtn.disabled = true;
+        $saveApiKeyBtn.textContent = '저장 중...';
+        const res = await fetch(getServerUrl('/api/gpt/key'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          $apiKeyStatus.textContent = '✓ API 키가 저장되었습니다';
+          $apiKeyStatus.style.color = '#28a745';
+          $gptApiKey.value = '';
+          alert('API 키가 저장되었습니다');
+        } else {
+          alert('API 키 저장 실패: ' + (data.error || '알 수 없는 오류'));
+        }
+      } catch (e) {
+        alert('API 키 저장 실패: ' + e.message);
+      } finally {
+        $saveApiKeyBtn.disabled = false;
+        $saveApiKeyBtn.textContent = '저장';
+      }
+    });
+
+    // 현재 입력 텍스트를 프롬프트에 사용
+    $gptUseCurrentBtn.addEventListener('click', () => {
+      const currentText = $input.value.trim();
+      if (currentText) {
+        $gptPrompt.value = currentText;
+      } else {
+        alert('입력된 텍스트가 없습니다');
+      }
+    });
+
+    // 자동 캐릭터 생성 및 세계관 저장 (사용자 정보 포함)
+    async function processInputForWorld(inputText, bitMax, bitMin, userId = 'user_default') {
+      try {
+        // 1. GPT 분석 (화자 추출 + 사용자 정보 분석)
+        const analyzeRes = await fetch(getServerUrl('/api/gpt/analyze'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: inputText, bitMax, bitMin, userId })
+        });
+        
+        const analyzeData = await analyzeRes.json();
+        if (!analyzeData.ok || !analyzeData.analysis) {
+          return null;
+        }
+        
+        const analysis = analyzeData.analysis;
+        
+        // 2. 캐릭터가 있으면 생성/갱신 (단, 사용자 이름과 같으면 NPC로 저장하지 않음)
+        let npcId = null;
+        const userName = analysis.user?.name || null;
+        const whoName = analysis.who || null;
+        
+        // 사용자 이름과 다른 캐릭터만 NPC로 저장
+        if (analysis.hasCharacter && whoName && whoName !== userName) {
+          // 기존 캐릭터를 이름으로 찾기
+          const allCharsRes = await fetch(getServerUrl('/api/characters'));
+          const allCharsData = await allCharsRes.json();
+          
+          let existingCharId = null;
+          if (allCharsData.ok && allCharsData.characters) {
+            const existingChar = allCharsData.characters.find(c => 
+              c.name === whoName && !c.id?.startsWith('user_')
+            );
+            if (existingChar && existingChar.id) {
+              existingCharId = existingChar.id;
+            }
+          }
+          
+          // 기존 캐릭터가 있으면 그 ID 사용, 없으면 새로 생성
+          npcId = existingCharId || `npc_${Date.now()}_${whoName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}`;
+          
+          await fetch(getServerUrl('/api/characters'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              npcId,
+              name: whoName,
+              firstScene: analysis.place || '알 수 없음',
+              emotion: analysis.emotion,
+              tone: analysis.tone,
+              bitState: { max: bitMax, min: bitMin },
+              speaks: {
+                input: inputText,
+                bit: { max: bitMax, min: bitMin }
+              }
+            })
+          });
+        }
+        
+        // 3. 장소가 있으면 World Layer에 저장 (없으면 기본값: 폐허가 된 마을)
+        const defaultPlace = '폐허가 된 마을';
+        const placeToUse = (analysis.hasPlace && analysis.place) ? analysis.place : defaultPlace;
+        
+        // 항상 장소 정보 저장 (기본값이거나 분석된 장소)
+          await fetch(getServerUrl('/api/world'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+            place: placeToUse,
+              coords: { x: bitMax, y: bitMin },
+              npcIds: npcId ? [npcId] : []
+            })
+          });
+        
+        // 기본 장소(폐허가 된 마을) 정보도 새로고침
+        if (placeToUse === defaultPlace) {
+          // 실시간 마을 정보 새로고침 제거됨
+        }
+        
+        // 4. Memory DB에 기록 저장
+        await fetch(getServerUrl('/api/memory'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            input: inputText,
+            npcSpeaker: npcId,
+            place: analysis.place || null,
+            bit: { max: bitMax, min: bitMin }
+          })
+        });
+        
+        return { npcId, analysis };
+      } catch (e) {
+        console.error('[World] error:', e);
+        return null;
+      }
+    }
+
+    // GPT 생성 함수 (폐허가 된 마을 정보 중심)
+    async function generateGptResponse() {
+      let prompt = $gptPrompt.value.trim();
+      
+      // 프롬프트가 없으면 폐허가 된 마을 정보를 기반으로 확장 요청
+      if (!prompt) {
+        prompt = '폐허가 된 마을의 스토리를 계속해서 발전시켜주세요. 새로운 장면, NPC, 또는 사건을 추가하여 폐허가 된 마을의 세계관을 확장해주세요.';
+      }
+
+      try {
+        $gptGenerateBtn.disabled = true;
+        $gptStatus.textContent = '생성 중...';
+        $gptStatus.style.color = '#007bff';
+        $gptResponse.textContent = '응답을 기다리는 중...';
+
+        // 폐허가 된 마을 정보 가져오기 (기본 컨텍스트)
+        let villageContext = '';
+        try {
+          const villageName = '폐허가 된 마을';
+          const villageRes = await fetch(getServerUrl(`/api/world/${encodeURIComponent(villageName)}`));
+          if (villageRes.ok) {
+            const villageData = await villageRes.json();
+            if (villageData.ok && villageData.world) {
+              const world = villageData.world;
+              villageContext = `[폐허가 된 마을 - 현재 정보]\n`;
+              villageContext += `장소: ${world.place}\n`;
+              if (world.coords) {
+                villageContext += `좌표: X=${world.coords.x}, Y=${world.coords.y}\n`;
+              }
+              if (world.npc_ids && world.npc_ids.length > 0) {
+                villageContext += `등록된 NPC 수: ${world.npc_ids.length}명\n`;
+              } else {
+                villageContext += `등록된 NPC: 없음\n`;
+              }
+              villageContext += `\n`;
+            }
+          }
+        } catch (e) {
+          // 마을 정보 가져오기 실패 시 기본 정보 사용
+          villageContext = `[폐허가 된 마을 - 기본 장소]\n모든 스토리는 이 폐허가 된 마을을 중심으로 전개됩니다.\n\n`;
+        }
+        
+        // 추가 세계관 컨텍스트 가져오기
+        let worldContext = '';
+        try {
+          const contextRes = await fetch(getServerUrl('/api/world/context'));
+          const contextData = await contextRes.json();
+          if (contextData.ok && contextData.context) {
+            worldContext = contextData.context;
+          }
+        } catch (e) {
+          // 컨텍스트 가져오기 실패 시 무시
+        }
+        
+        // 데이터베이스에서 유사한 예시 검색 (RAG)
+        let similarExamples = '';
+        try {
+          const promptArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(prompt || '');
+          const promptBitMax = promptArr.length > 0 ? (window.BIT_MAX_NB || (()=>0))(promptArr) : undefined;
+          const promptBitMin = promptArr.length > 0 ? (window.BIT_MIN_NB || (()=>0))(promptArr) : undefined;
+          
+          const similarRes = await fetch(getServerUrl('/api/training/similar'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: prompt,
+              queryBitMax: promptBitMax,
+              queryBitMin: promptBitMin,
+              limit: 2  // 상위 2개 유사 예시 사용
+            })
+          });
+          const similarData = await similarRes.json();
+          if (similarData.ok && similarData.items && similarData.items.length > 0) {
+            similarExamples = '\n[데이터베이스에서 찾은 유사한 스토리 예시]\n';
+            similarData.items.forEach((ex, idx) => {
+              if (ex.input && ex.response) {
+                similarExamples += `예시 ${idx + 1}:\n입력: ${ex.input.substring(0, 120)}${ex.input.length > 120 ? '...' : ''}\n응답: ${ex.response.substring(0, 200)}${ex.response.length > 200 ? '...' : ''}\n\n`;
+              }
+            });
+          }
+        } catch (e) {
+          console.error('[GPT] Similar search error:', e);
+        }
+
+        // 최종 컨텍스트는 폐허가 된 마을 정보를 먼저, 그 다음 일반 세계관 정보, 마지막으로 유사 예시
+        const fullContext = villageContext + 
+          (worldContext ? `\n[전체 세계관]\n${worldContext}` : '') + 
+          (similarExamples ? `\n${similarExamples}` : '');
+
+        const systemMessage = $gptUseSystemMsg.checked ? 
+          '당신은 판타지 소설 작가이자 세계관 구축 엔진입니다. 질문하거나 되묻지 말고 즉시 판타지 이야기를 작성하세요. 모든 스토리는 "폐허가 된 마을"을 중심으로 전개됩니다. 사용자가 제공한 텍스트와 폐허가 된 마을의 실시간 정보를 바탕으로 새로운 장면, NPC, 대화, 사건을 즉시 생성합니다. 이야기를 멈추거나 질문하지 말고 계속해서 스토리를 발전시키세요. 폐허가 된 마을에 새로운 NPC를 추가하거나, 마을의 상황을 발전시켜 세계관을 확장하세요. 각 응답은 최소 200자 이상의 완성된 스토리여야 합니다. 데이터베이스의 유사한 예시를 참고하되, 완전히 동일하지 않게 창의적으로 변형하세요.\n\n**마을 정보 수정 방법:**\n스토리에서 새로운 NPC를 추가하거나 마을 좌표를 변경할 때는 응답 끝에 다음 형식으로 지시를 추가하세요:\n[VILLAGE_UPDATE]{"action": "add_npc", "name": "NPC이름", "emotion": "감정", "tone": "톤", "coords": {"x": 숫자, "y": 숫자}}\n또는 좌표만 변경:\n[VILLAGE_UPDATE]{"action": "update_coords", "coords": {"x": 숫자, "y": 숫자}}\n예시: [VILLAGE_UPDATE]{"action": "add_npc", "name": "리아", "emotion": "기쁨", "tone": "친근함"}' : 
+          null;
+
+        const res = await fetch(getServerUrl('/api/gpt/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            systemMessage,
+            context: fullContext,
+            model: 'gpt-4o-mini',
+            temperature: 0.7,
+            maxTokens: 2000
+          })
+        });
+
+        const data = await res.json();
+        if (data.ok) {
+          let responseText = data.response || '(응답 없음)';
+          
+          // GPT 응답에서 마을 수정 지시 파싱 및 실행
+          const villageUpdateMatch = responseText.match(/\[VILLAGE_UPDATE\](.+?)(?=\[VILLAGE_UPDATE\]|$)/s);
+          if (villageUpdateMatch) {
+            try {
+              const updateJson = JSON.parse(villageUpdateMatch[1].trim());
+              await processVillageUpdate(updateJson);
+              
+              // 응답에서 마을 수정 지시 부분 제거 (사용자에게는 보이지 않게)
+              responseText = responseText.replace(/\[VILLAGE_UPDATE\].+?$/s, '').trim();
+            } catch (e) {
+              console.error('[Village] Update parse error:', e);
+            }
+          }
+          
+          $gptResponse.textContent = responseText;
+          if (data.usage) {
+            $gptUsageInfo.textContent = `토큰 사용: ${data.usage.prompt_tokens || 0} (입력) + ${data.usage.completion_tokens || 0} (출력) = ${data.usage.total_tokens || 0} (총합)`;
+          }
+          
+          // GPT 응답의 BIT 값을 계산하여 학습 데이터로 저장 (마을 상태 정보 포함)
+          try {
+            const responseArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(responseText);
+            if (responseArr.length > 0) {
+              const responseBitMax = (window.BIT_MAX_NB || (()=>0))(responseArr);
+              const responseBitMin = (window.BIT_MIN_NB || (()=>0))(responseArr);
+              
+              // 학습 데이터로 저장 (마을 상태 정보는 서버에서 자동으로 추가됨)
+              await fetch(getServerUrl('/api/training/gpt-response'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  input: prompt,
+                  response: responseText,
+                  bitMax: responseBitMax,
+                  bitMin: responseBitMin,
+                  context: fullContext,  // 전체 컨텍스트 사용 (폐허가 된 마을 정보 포함)
+                  model: data.model || 'gpt-4o-mini'
+                })
+              });
+            }
+          } catch (e) {
+            console.error('Error saving training data:', e);
+          }
+          
+          $gptStatus.textContent = '✓ 생성 완료';
+          $gptStatus.style.color = '#28a745';
+        } else {
+          $gptResponse.textContent = `오류: ${data.error || '알 수 없는 오류'}`;
+          $gptStatus.textContent = '✗ 생성 실패';
+          $gptStatus.style.color = '#dc3545';
+        }
+      } catch (e) {
+        $gptResponse.textContent = `오류: ${e.message}`;
+        $gptStatus.textContent = '✗ 생성 실패';
+        $gptStatus.style.color = '#dc3545';
+      } finally {
+        $gptGenerateBtn.disabled = false;
+      }
+    }
+
+    // GPT 생성 버튼 클릭
+    $gptGenerateBtn.addEventListener('click', generateGptResponse);
+
+    // 문자 입력 textarea에서 엔터 키 (Shift+Enter는 줄바꿈, Enter만 누르면 GPT 응답 + 자동 캐릭터 생성)
+    $input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const currentText = $input.value.trim();
+        if (currentText) {
+          // 현재 BIT 값 계산
+          const arr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(currentText);
+          if (arr.length > 0) {
+            try {
+              const bitMax = (window.BIT_MAX_NB || (()=>0))(arr);
+              const bitMin = (window.BIT_MIN_NB || (()=>0))(arr);
+              
+              // 자동 캐릭터 생성 및 세계관 저장 (사용자 정보 포함)
+              $gptStatus.textContent = '분석 중...';
+              $gptStatus.style.color = '#007bff';
+              await processInputForWorld(currentText, bitMax, bitMin, 'user_default');
+              
+              // 폐허가 된 마을 정보도 새로고침 (기본 장소이므로)
+              // 실시간 마을 정보 새로고침 제거됨
+              
+              // GPT 프롬프트에 입력 텍스트만 설정하고 응답 생성 (폐허가 된 마을 정보는 자동 포함)
+              $gptPrompt.value = currentText;
+              await generateGptResponse();
+            } catch (err) {
+              console.error('Error processing input:', err);
+              // 실패해도 GPT 응답은 시도
+              $gptPrompt.value = currentText;
+              await generateGptResponse();
+            }
+          } else {
+            // BIT 값이 없어도 입력 텍스트만 사용
+            $gptPrompt.value = currentText;
+            await generateGptResponse();
+          }
+        }
+      }
+    });
+
+    // GPT 프롬프트 입력에서 엔터 키 (Shift+Enter는 줄바꿈, Enter만 누르면 GPT 응답)
+    $gptPrompt.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        generateGptResponse();
+      }
+    });
+
+    // GPT 응답 복사
+    $gptCopyBtn.addEventListener('click', () => {
+      const text = $gptResponse.textContent;
+      if (text && text !== '응답이 여기에 표시됩니다...' && text !== '응답을 기다리는 중...') {
+        navigator.clipboard.writeText(text).then(() => {
+          $gptCopyBtn.textContent = '복사됨!';
+          setTimeout(() => {
+            $gptCopyBtn.textContent = '복사';
+          }, 2000);
+        }).catch(() => {
+          alert('복사 실패');
+        });
+      }
+    });
+
+    // GPT 응답 지우기
+    $gptClearBtn.addEventListener('click', () => {
+      if (confirm('응답을 지우시겠습니까?')) {
+        $gptResponse.textContent = '응답이 여기에 표시됩니다...';
+        $gptUsageInfo.textContent = '';
+      }
+    });
+
+    // 페이지 로드 시 API 키 상태 확인
+    checkApiKeyStatus();
+
+    // 폐허가 된 마을 실시간 정보 새로고침
+    // 실시간 마을 정보 관련 코드 제거됨 (UI에서 해당 섹션이 제거되어 더 이상 필요하지 않음)
+
+    // export / clear
+    $exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(sessionHistory, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bit_history.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    $clearBtn.addEventListener('click', () => {
+      if (!confirm('기록을 모두 삭제할까요?')) return;
+      sessionHistory.length = 0;
+      renderHistoryInfo(sessionHistory);
+      renderHistoryTable(sessionHistory);
+      idbHistClear();
+    });
+
+    
+
+    // 초기 상태 (세션 히스토리 사용)
+    renderHistoryInfo(sessionHistory);
+    renderHistoryTable(sessionHistory);
+
+    // 초기 렌더
+    update();
+
+    
+
+    // 파일 연결 없이도 IndexedDB에서 자동 복원
+    (async () => {
+      if (sessionHistory.length > 0) return; // already loaded from file
+      const all = await idbHistLoadAll();
+      if (all && all.length) {
+        // ensure sorted by time
+        all.sort((a,b)=> a.t - b.t);
+        sessionHistory.push(...all);
+        renderHistoryInfo(sessionHistory);
+        renderHistoryTable(sessionHistory);
+      }
+    })();
+    
+    // ===== 마을 정보 자동 업데이트 =====
+    async function processVillageUpdate(updateJson) {
+      const villageName = '폐허가 된 마을';
+      try {
+        if (updateJson.action === 'add_npc') {
+          // NPC 생성
+          const npcId = `npc_${Date.now()}_${updateJson.name || 'npc'}`;
+          const createRes = await fetch(getServerUrl('/api/characters'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              npcId,
+              name: updateJson.name || '이름없음',
+              firstScene: villageName,
+              emotion: updateJson.emotion || '중립',
+              tone: updateJson.tone || '차분함',
+              bitState: updateJson.bitState || { max: 0.9, min: 4.7 }
+            })
+          });
+          
+          if (createRes.ok) {
+            // 마을에 NPC 추가
+            await fetch(getServerUrl('/api/world'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                place: villageName,
+                npcIds: [npcId]
+              })
+            });
+            
+            console.log('[Village] NPC 추가됨:', updateJson.name);
+          }
+        }
+        
+        if (updateJson.action === 'update_coords' && updateJson.coords) {
+          // 좌표 업데이트
+          await fetch(getServerUrl('/api/world'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              place: villageName,
+              coords: updateJson.coords
+            })
+          });
+          
+          console.log('[Village] 좌표 업데이트:', updateJson.coords);
+        }
+        
+        // 마을 정보 새로고침
+        // 실시간 마을 정보 새로고침 제거됨
+      } catch (e) {
+        console.error('[Village] Update error:', e);
+      }
+    }
+
+    // ===== 던전 AI (경량) =====
+    let dungeonSession = [];
+
+    async function fetchWorldContextText() {
+      try {
+        const res = await fetch(getServerUrl('/api/world_context'));
+        const data = await res.json();
+        if (data.ok && data.context) return data.context;
+      } catch (e) {}
+      return '';
+    }
+
+    async function fetchRecentMemory(n = 10) {
+      // 현재 서버에 메모리 조회 API가 없으므로, 컨텍스트로 world/context 중심 사용
+      // 필요 시 별도 API 추가 가능
+      return [];
+    }
+
+    function buildDungeonSystemMessage() {
+      return '당신은 한국어 텍스트 기반 던전 마스터입니다. 플레이어의 입력을 받아 서술, 선택지, 결과를 한국어로 간결하고 몰입감 있게 진행하세요. 불필요한 질문을 최소화하고, 장면·행동·결과·후속 선택지를 2~4개 제시하세요. 금지: 플레이어의 선택을 대신 결정하지 마세요.\n\n**마을 정보 수정 방법:**\n새로운 NPC를 추가하거나 마을 좌표를 변경할 때는 응답 끝에 다음 형식으로 지시를 추가하세요:\n[VILLAGE_UPDATE]{"action": "add_npc", "name": "NPC이름", "emotion": "감정", "tone": "톤"}\n또는 좌표만 변경:\n[VILLAGE_UPDATE]{"action": "update_coords", "coords": {"x": 숫자, "y": 숫자}}';
+    }
+
+    async function dungeonTurn(inputText) {
+      const $status = document.getElementById('dungeonStatus');
+      try {
+        $status.textContent = '진행 중...';
+        
+        // 1. 입력 텍스트의 BIT 값 계산
+        const queryArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(inputText || '');
+        const queryBitMax = queryArr.length > 0 ? (window.BIT_MAX_NB || (()=>0))(queryArr) : undefined;
+        const queryBitMin = queryArr.length > 0 ? (window.BIT_MIN_NB || (()=>0))(queryArr) : undefined;
+        
+        // 2. 데이터베이스에서 유사한 예시 검색 (RAG)
+        let similarExamples = '';
+        try {
+          const similarRes = await fetch(getServerUrl('/api/training/similar'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              query: inputText,
+              queryBitMax,
+              queryBitMin,
+              limit: 3  // 상위 3개 유사 예시 사용
+            })
+          });
+          const similarData = await similarRes.json();
+          if (similarData.ok && similarData.items && similarData.items.length > 0) {
+            similarExamples = '\n[데이터베이스에서 찾은 유사한 예시]\n';
+            similarData.items.forEach((ex, idx) => {
+              if (ex.input && ex.response) {
+                similarExamples += `예시 ${idx + 1}:\n입력: ${ex.input.substring(0, 100)}${ex.input.length > 100 ? '...' : ''}\n응답: ${ex.response.substring(0, 150)}${ex.response.length > 150 ? '...' : ''}\n\n`;
+              }
+            });
+          }
+        } catch (e) {
+          console.error('[Dungeon] Similar search error:', e);
+        }
+        
+        // 3. 세계관 컨텍스트 가져오기
+        const worldCtx = await fetchWorldContextText();
+        
+        // 4. 전체 컨텍스트 구성
+        const context = [
+          '[배경: 폐허가 된 마을을 중심으로 진행]',
+          worldCtx || '',
+          similarExamples
+        ].filter(Boolean).join('\n\n');
+
+        const systemMessage = buildDungeonSystemMessage();
+        const prompt = inputText && inputText.trim() ? inputText.trim() : '던전을 시작한다. 간단한 오프닝 장면과 2~4개의 선택지를 제시해라.';
+
+        const res = await fetch(getServerUrl('/api/gpt/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            systemMessage,
+            context,
+            model: 'gpt-4o-mini',
+            temperature: 0.9,
+            maxTokens: 1200
+          })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '생성 실패');
+
+        let responseText = data.response || '';
+        
+        // GPT 응답에서 마을 수정 지시 파싱 및 실행
+        const villageUpdateMatch = responseText.match(/\[VILLAGE_UPDATE\](.+?)(?=\[VILLAGE_UPDATE\]|$)/s);
+        if (villageUpdateMatch) {
+          try {
+            const updateJson = JSON.parse(villageUpdateMatch[1].trim());
+            await processVillageUpdate(updateJson);
+            
+            // 응답에서 마을 수정 지시 부분 제거 (사용자에게는 보이지 않게)
+            responseText = responseText.replace(/\[VILLAGE_UPDATE\].+?$/s, '').trim();
+          } catch (e) {
+            console.error('[Dungeon] Village update parse error:', e);
+          }
+        }
+        
+        $gptResponse.textContent = responseText;
+        if (data.usage) {
+          $gptUsageInfo.textContent = `토큰 사용: ${data.usage.total_tokens || 0}`;
+        }
+
+        // 세션 기록
+        dungeonSession.push({ input: prompt, response: responseText, t: Date.now() });
+
+        // 메모리/학습 저장 (데이터베이스에 기록)
+        try {
+          await fetch(getServerUrl('/api/memory'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: prompt + '\n\n' + responseText,
+              npcSpeaker: null,
+              place: '폐허가 된 마을',
+              bit: { max: queryBitMax, min: queryBitMin }
+            })
+          });
+        } catch (e) {}
+
+        try {
+          const responseArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(responseText);
+          const responseBitMax = responseArr.length > 0 ? (window.BIT_MAX_NB || (()=>0))(responseArr) : 0;
+          const responseBitMin = responseArr.length > 0 ? (window.BIT_MIN_NB || (()=>0))(responseArr) : 0;
+          await fetch(getServerUrl('/api/training/gpt-response'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: prompt,
+              response: responseText,
+              bitMax: responseBitMax,
+              bitMin: responseBitMin,
+              context,
+              model: data.model || 'gpt-4o-mini'
+            })
+          });
+        } catch (e) {}
+
+        $status.textContent = '완료';
+      } catch (e) {
+        $status.textContent = '실패';
+        $gptResponse.textContent = `오류: ${e.message}`;
+      }
+    }
+
+    document.getElementById('dungeonStartBtn').addEventListener('click', async () => {
+      dungeonSession = [];
+      await dungeonTurn(document.getElementById('gptPrompt').value);
+    });
+    document.getElementById('dungeonNextBtn').addEventListener('click', async () => {
+      await dungeonTurn(document.getElementById('gptPrompt').value);
+    });
+
+    // ===== 소설 완성 플로우 =====
+    let novelAbort = false;
+    let isGenerating = false; // 중복 생성 방지
+    let novelChapters = {}; // {1: "내용", 2: "내용", ...}
+    let savedChapters = new Set(); // 서버에 저장된 장 번호/개요 추적 ('0'은 개요)
+    let autosaveTimer = null;
+    let localSaveTimer = null;
+    let currentNovelId = null;
+    const $novelTitle = document.getElementById('novelTitle');
+    const $novelGenre = document.getElementById('novelGenre');
+    const $novelChapters = document.getElementById('novelChapters');
+    const $novelContent = document.getElementById('novelContent');
+    const $novelStatus = document.getElementById('novelStatus');
+    const $novelProgress = document.getElementById('novelProgress');
+    const $characterCards = document.getElementById('characterCards');
+    const $chapterList = document.getElementById('chapterList');
+    // 지연 평가로 변경 (DOM 준비 후 조회)
+    const $novelSelect = () => document.getElementById('novelSelect');
+    const $newNovelBtn = () => document.getElementById('newNovelBtn');
+    // 좌측 편집 가능한 컨텍스트 요소
+    const $currentChapter = document.getElementById('currentChapter');
+    const $characterLocations = document.getElementById('characterLocations');
+    const $currentPlace = document.getElementById('currentPlace');
+    const $recentEvents = document.getElementById('recentEvents');
+    const $nextDirection = document.getElementById('nextDirection');
+
+    // 챕터 목록 업데이트
+    function extractChapterTitle(text) {
+      if (!text) return '';
+      const firstLine = String(text).split(/\r?\n/)[0].trim();
+      return firstLine.length > 0 ? firstLine : '';
+    }
+
+    function extractChapterSummary(text, maxLen = 140) {
+      if (!text) return '';
+      const clean = String(text).replace(/\s+/g, ' ').trim();
+      return clean.length > maxLen ? clean.slice(0, maxLen) + '…' : clean;
+    }
+
+    let currentChapterNum = null;
+
+    function getSortedChapters() {
+      return Object.keys(novelChapters).map(Number).sort((a,b)=>a-b);
+    }
+
+    async function loadPreviousChaptersIfNeeded(currentNum) {
+      // 현재 챕터 구성 목록에 데이터가 있는지 확인
+      const currentChapterData = novelChapters[currentNum];
+      const hasCurrentData = currentChapterData !== undefined && currentChapterData.trim().length > 0;
+      
+      // 데이터가 있으면 스킵
+      if (hasCurrentData) {
+        return false;
+      }
+      
+      // 유사한 속성 검색 먼저 수행
+      const similarAttrs = await searchSimilarAttributesForChapter(currentNum);
+      
+      // 유사한 속성이 있으면 이전 챕터를 로드하지 않음
+      if (similarAttrs && similarAttrs.found && similarAttrs.items.length > 0) {
+        console.log(`[Chapter] 유사한 속성을 찾았습니다: ${similarAttrs.items.length}개`);
+        // 상태 메시지 지우기
+        const $statusText = document.getElementById('novelStatusText');
+        if ($statusText) $statusText.textContent = '';
+        return false;
+      }
+      
+      // 유사한 속성이 없을 때 메시지 표시
+      if (similarAttrs && similarAttrs.attributeText) {
+        const $statusText = document.getElementById('novelStatusText');
+        if ($statusText) {
+          $statusText.textContent = `"${similarAttrs.attributeText}"와 유사한 속성이 없습니다. (유사도 임계값: 0.1 이상)`;
+          $statusText.style.color = '#dc3545';
+        }
+      }
+      
+      // 유사한 속성이 없을 때만 이전 챕터들 가져오기
+      if (!currentNovelId) return false;
+      
+      let loadedAny = false;
+      
+      // 1부터 currentNum-1까지의 챕터를 서버에서 가져오기
+      for (let num = 1; num < currentNum; num++) {
+        // 이미 데이터가 있으면 스킵
+        if (novelChapters[num] !== undefined && novelChapters[num].trim().length > 0) {
+          continue;
+        }
+        
+        try {
+          const res = await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters/${num}`));
+          const data = await res.json();
+          if (data.ok && data.text && data.text.trim().length > 0) {
+            novelChapters[num] = data.text;
+            savedChapters.add(String(num));
+            loadedAny = true;
+          }
+        } catch (e) {
+          // 실패 무시
+          console.warn(`[Chapter] Failed to load chapter ${num}:`, e);
+        }
+      }
+      
+      if (loadedAny) {
+        updateChapterList();
+      }
+      
+      return loadedAny;
+    }
+
+    async function showChapter(num) {
+      // 현재 챕터 데이터가 없으면 이전 챕터들 먼저 로드 시도
+      const currentChapterData = novelChapters[num];
+      const hasCurrentData = currentChapterData !== undefined && currentChapterData.trim().length > 0;
+      
+      if (!hasCurrentData && currentNovelId && num > 0) {
+        // 데이터가 없으면 이전 챕터들을 로드하고 기다림
+        await loadPreviousChaptersIfNeeded(num);
+      }
+      
+      // 여전히 데이터가 없으면 표시 안 함
+      if (novelChapters[num] === undefined || novelChapters[num].trim().length === 0) {
+        $novelContent.textContent = '(챕터 데이터가 없습니다)';
+        if ($currentChapter) $currentChapter.value = num === 0 ? '개요' : `제${num}장`;
+        if ($recentEvents) $recentEvents.value = '';
+        currentChapterNum = num;
+        return;
+      }
+      
+      currentChapterNum = num;
+      const text = novelChapters[num];
+      $novelContent.textContent = text;
+      if ($currentChapter) $currentChapter.value = num === 0 ? '개요' : (extractChapterTitle(text) || `제${num}장`);
+      if ($recentEvents) $recentEvents.value = extractChapterSummary(text, 200);
+      if ($chapterList) {
+        $chapterList.querySelectorAll('button').forEach(b => {
+          b.classList.remove('btn-primary', 'btn-outline-primary');
+          b.classList.add('btn-outline-primary');
+        });
+        const btns = Array.from($chapterList.querySelectorAll('button'));
+        const idx = getSortedChapters().indexOf(num);
+        if (idx >= 0 && btns[idx]) {
+          btns[idx].classList.remove('btn-outline-primary');
+          btns[idx].classList.add('btn-primary');
+        }
+      }
+      // 마지막 본 챕터 저장 (소설별)
+      try {
+        if (currentNovelId) localStorage.setItem(`novel:${currentNovelId}:lastChapter`, String(num));
+      } catch {}
+    }
+
+    function updateChapterList() {
+      $chapterList.innerHTML = '';
+      const chapters = Object.keys(novelChapters).map(Number).sort((a, b) => a - b);
+      if (chapters.length === 0) {
+        $chapterList.innerHTML = '<span class="text-muted small">생성된 챕터가 없습니다...</span>';
+        return;
+      }
+      chapters.forEach(num => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-outline-primary';
+        btn.textContent = num === 0 ? '개요' : `제${num}장`;
+        btn.onclick = () => {
+          showChapter(num);
+        };
+        $chapterList.appendChild(btn);
+      });
+      if (currentChapterNum === null && chapters.length > 0) {
+        showChapter(chapters.find(n=>n>0) ?? chapters[0]);
+      } else if (currentChapterNum !== null && novelChapters[currentChapterNum] !== undefined) {
+        showChapter(currentChapterNum);
+      }
+
+      // 목록 갱신 후 자동 저장 호출 (디바운스)
+      queueAutosaveAllChapters();
+      // 로컬 스토리지 백업 저장 (디바운스)
+      queueLocalBackupSave();
+    }
+
+    function queueAutosaveAllChapters() {
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(autosaveAllChapters, 400);
+    }
+
+    async function autosaveAllChapters() {
+      try {
+        if (!currentNovelId) return;
+        const keys = Object.keys(novelChapters).map(n => Number(n)).sort((a,b)=>a-b);
+        for (const num of keys) {
+          const key = String(num);
+          if (savedChapters.has(key)) continue;
+          const text = novelChapters[num];
+          if (!text || text.trim().length === 0) continue;
+          if (num === 0) {
+            // 개요 저장
+            await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters`), {
+              method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ isOutline: true, text })
+            });
+          } else {
+            await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters`), {
+              method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ num, text })
+            });
+          }
+          savedChapters.add(key);
+        }
+      } catch (e) {
+        console.warn('[Novel] Autosave failed:', e);
+      }
+    }
+
+    function queueLocalBackupSave() {
+      if (!currentNovelId) return;
+      if (localSaveTimer) clearTimeout(localSaveTimer);
+      localSaveTimer = setTimeout(saveLocalBackup, 300);
+    }
+
+    function saveLocalBackup() {
+      try {
+        if (!currentNovelId) return;
+        const data = { chapters: novelChapters, t: Date.now() };
+        localStorage.setItem(`novel:${currentNovelId}:chapters`, JSON.stringify(data));
+      } catch {}
+    }
+
+    function loadLocalBackup(novelId) {
+      try {
+        const raw = localStorage.getItem(`novel:${novelId}:chapters`);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (data && data.chapters && typeof data.chapters === 'object') return data.chapters;
+      } catch {}
+      return null;
+    }
+
+    // ===== 소설 선택/로드 =====
+    async function fetchNovels() {
+      try {
+        const res = await fetch(getServerUrl('/api/novels'));
+        const data = await res.json();
+        return data.ok ? (data.items || []) : [];
+      } catch { return []; }
+    }
+
+    async function populateNovelSelect() {
+      const $select = $novelSelect();
+      if (!$select) {
+        console.warn('[Novel] novelSelect element not found');
+        return;
+      }
+      const items = await fetchNovels();
+      $select.innerHTML = '';
+      if (items.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '소설 없음 - 새 소설을 생성하세요';
+        $select.appendChild(opt);
+        return;
+      }
+      items.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = `${n.title} (${n.chapters}장)`;
+        $select.appendChild(opt);
+      });
+      // 저장된 소설이 있으면 선택, 없으면 첫 번째 소설 자동 선택
+      const saved = localStorage.getItem('currentNovelId');
+      let selectedId = null;
+      if (saved && items.some(i=>i.id===saved)) {
+        selectedId = saved;
+      } else if (items.length > 0) {
+        selectedId = items[0].id;
+        localStorage.setItem('currentNovelId', selectedId);
+      }
+      if (selectedId) {
+        $select.value = selectedId;
+        currentNovelId = selectedId;
+        await loadNovelChapters(selectedId);
+      }
+    }
+
+    async function createNewNovel() {
+      const title = prompt('소설 제목을 입력하세요', $novelTitle ? $novelTitle.value || '제목 미정' : '제목 미정');
+      if (!title) return;
+      const genre = prompt('장르를 입력하세요', $novelGenre ? $novelGenre.value || '' : '');
+      try {
+        const res = await fetch(getServerUrl('/api/novels'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ title, genre }) });
+        const data = await res.json();
+        if (data.ok && data.novel) {
+          currentNovelId = data.novel.id;
+          localStorage.setItem('currentNovelId', currentNovelId);
+          await populateNovelSelect();
+          if ($novelSelect) $novelSelect.value = currentNovelId;
+          novelChapters = {};
+          updateChapterList();
+        }
+      } catch {}
+    }
+
+    // 속성 목록 가져오기
+    async function loadAllAttributes() {
+      try {
+        const res = await fetch(getServerUrl('/api/attributes/all'));
+        const data = await res.json();
+        if (data.ok && data.attributes && Array.isArray(data.attributes)) {
+          return data.attributes;
+        }
+        return [];
+      } catch (e) {
+        console.error('[Attributes] Load error:', e);
+        return [];
+      }
+    }
+
+    // 현재 선택된 챕터의 과거 챕터들의 속성 가져오기
+    async function loadPreviousChaptersAttributes(currentChapterNum) {
+      if (!currentChapterNum || currentChapterNum === 0 || !currentNovelId) {
+        return [];
+      }
+      
+      // 소설 제목 가져오기
+      const novelTitle = $novelTitle ? $novelTitle.value.trim() : '';
+      if (!novelTitle) return [];
+      
+      const previousAttributes = [];
+      
+      // 1부터 currentChapterNum-1까지의 챕터들의 속성 가져오기
+      for (let num = 1; num < currentChapterNum; num++) {
+        // 챕터 제목 추출
+        let chapterTitle = `제${num}장`;
+        const chapterText = novelChapters[num];
+        if (chapterText && chapterText.trim().length > 0) {
+          const extracted = extractChapterTitle(chapterText);
+          if (extracted) chapterTitle = extracted;
+        }
+        
+        // 속성 텍스트 구성: "소설제목 → 챕터 N: 챕터제목"
+        const attributeText = `${novelTitle} → 챕터 ${num}: ${chapterTitle}`;
+        
+        // BIT 값 계산
+        const attrArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(attributeText);
+        if (attrArr.length === 0) continue;
+        
+        const attrBitMax = (window.BIT_MAX_NB || (()=>0))(attrArr);
+        const attrBitMin = (window.BIT_MIN_NB || (()=>0))(attrArr);
+        
+        // 해당 속성의 데이터 조회
+        try {
+          const url = getServerUrl(`/api/attributes/data?bitMax=${attrBitMax}&bitMin=${attrBitMin}&limit=100`);
+          const res = await fetch(url);
+          const data = await res.json();
+          
+          if (data.ok && data.items && Array.isArray(data.items) && data.items.length > 0) {
+            previousAttributes.push({
+              chapterNum: num,
+              chapterTitle: chapterTitle,
+              attributeText: attributeText,
+              bitMax: attrBitMax,
+              bitMin: attrBitMin,
+              items: data.items,
+              count: data.items.length
+            });
+          }
+        } catch (e) {
+          console.warn(`[Attributes] Failed to load attributes for chapter ${num}:`, e);
+        }
+      }
+      
+      return previousAttributes;
+    }
+
+    // 현재 챕터 정보로 유사한 속성 검색
+    async function searchSimilarAttributesForChapter(chapterNum) {
+      if (!chapterNum || chapterNum === 0) return null;
+      
+      // 소설 제목 가져오기
+      const novelTitle = $novelTitle ? $novelTitle.value.trim() : '';
+      if (!novelTitle) return null;
+      
+      // 챕터 제목 추출 (챕터 데이터가 있으면 추출, 없으면 기본값)
+      let chapterTitle = `제${chapterNum}장`;
+      const chapterText = novelChapters[chapterNum];
+      if (chapterText && chapterText.trim().length > 0) {
+        const extracted = extractChapterTitle(chapterText);
+        if (extracted) chapterTitle = extracted;
+      }
+      
+      // 속성 텍스트 구성: "소설제목 → 챕터 N: 챕터제목"
+      const attributeText = `${novelTitle} → 챕터 ${chapterNum}: ${chapterTitle}`;
+      
+      // BIT 값 계산
+      const attrArr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(attributeText);
+      if (attrArr.length === 0) return null;
+      
+      const attrBitMax = (window.BIT_MAX_NB || (()=>0))(attrArr);
+      const attrBitMin = (window.BIT_MIN_NB || (()=>0))(attrArr);
+      
+      // 유사한 속성 검색 (threshold 0.1)
+      try {
+        const url = getServerUrl(`/api/attributes/data?bitMax=${attrBitMax}&bitMin=${attrBitMin}&limit=20&similarity=true&threshold=0.1`);
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.ok && data.items && Array.isArray(data.items)) {
+          return {
+            found: data.items.length > 0,
+            items: data.items,
+            attributeText: attributeText
+          };
+        }
+        return { found: false, items: [], attributeText: attributeText };
+      } catch (e) {
+        console.error('[Attributes] Search error:', e);
+        return { found: false, items: [], attributeText: attributeText };
+      }
+    }
+
+    async function loadNovelChapters(novelId) {
+      try {
+        // 전체 텍스트로 로드
+        const metaRes = await fetch(getServerUrl(`/api/novels/${encodeURIComponent(novelId)}/chapters?full=true`));
+        const meta = await metaRes.json();
+        novelChapters = {};
+        savedChapters = new Set();
+        if (meta.ok) {
+          if (meta.outline) novelChapters[0] = meta.outline;
+          (meta.chapters || []).forEach(ch => {
+            novelChapters[ch.num] = ch.text; // 전체 텍스트 사용
+            savedChapters.add(String(ch.num));
+          });
+          if (meta.outline) savedChapters.add('0');
+        }
+        // 서버에 아무 것도 없으면 로컬 백업 복원 시도
+        if ((!meta.ok) || ((meta.chapters || []).length === 0 && !meta.outline)) {
+          const local = loadLocalBackup(novelId);
+          if (local) {
+            novelChapters = local;
+          }
+        }
+        updateChapterList();
+        // 마지막 본 챕터로 자동 이동
+        try {
+          const last = localStorage.getItem(`novel:${novelId}:lastChapter`);
+          const lastNum = last != null ? Number(last) : null;
+          if (lastNum != null && !Number.isNaN(lastNum) && novelChapters[lastNum] !== undefined) {
+            showChapter(lastNum);
+          }
+        } catch {}
+        // 소설 정보도 업데이트
+        if (meta.ok && meta.outline) {
+          const titleMatch = meta.outline.match(/제목:\s*(.+)/);
+          const genreMatch = meta.outline.match(/장르:\s*(.+)/);
+          if (titleMatch && $novelTitle) $novelTitle.value = titleMatch[1].trim();
+          if (genreMatch && $novelGenre) $novelGenre.value = genreMatch[1].trim();
+        }
+        // 노트 로드
+        try {
+          const notesRes = await fetch(getServerUrl(`/api/novels/${encodeURIComponent(novelId)}/notes`));
+          const notesData = await notesRes.json();
+          const $notes = document.getElementById('novelIdeaInput');
+          if (notesData.ok && $notes) $notes.value = notesData.text || '';
+        } catch {}
+        // 복원한 로컬 데이터가 있고 서버에 없었다면 서버로 동기화
+        queueAutosaveAllChapters();
+      } catch (e) {
+        console.error('[Novel] Load error:', e);
+      }
+    }
+
+    // 이벤트 리스너 등록 (DOM 준비 후)
+    (function setupNovelSelectListeners() {
+      const setup = () => {
+        const $select = $novelSelect();
+        if ($select && !$select.dataset.listenerAttached) {
+          $select.dataset.listenerAttached = 'true';
+          $select.addEventListener('change', async () => {
+            currentNovelId = $select.value || null;
+            if (currentNovelId) localStorage.setItem('currentNovelId', currentNovelId);
+            await loadNovelChapters(currentNovelId);
+          });
+        }
+        const $btn = $newNovelBtn();
+        if ($btn && !$btn.dataset.listenerAttached) {
+          $btn.dataset.listenerAttached = 'true';
+          $btn.addEventListener('click', createNewNovel);
+        }
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setup);
+      } else {
+        setup();
+      }
+    })();
+    
+    // 페이지 로드 시 자동 호출 (DOM 준비 후)
+    (function initNovelSelect() {
+      let retries = 0;
+      const maxRetries = 10;
+      const tryInit = async () => {
+        const $select = $novelSelect();
+        if ($select) {
+          console.log('[Novel] Initializing novel selector...');
+          await populateNovelSelect();
+          console.log('[Novel] Novel selector initialized');
+        } else if (retries < maxRetries) {
+          retries++;
+          setTimeout(tryInit, 200);
+        } else {
+          console.error('[Novel] Failed to find novelSelect element after retries');
+        }
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(tryInit, 100);
+        });
+      } else {
+        setTimeout(tryInit, 100);
+      }
+    })();
+
+    async function loadCharactersList() {
+      try {
+        const res = await fetch(getServerUrl('/api/characters'));
+        const data = await res.json();
+        if ($characterCards) $characterCards.innerHTML = '';
+        if (data.ok && Array.isArray(data.characters) && $characterCards) {
+          data.characters.slice(0, 30).forEach(c => {
+            const col = document.createElement('div');
+            col.className = 'col-12 col-sm-6 col-md-4 col-lg-3';
+            col.innerHTML = `
+              <div class="card h-100 shadow-sm">
+                <div class="card-body p-2">
+                  <div class="fw-bold">${c.name || '이름없음'}</div>
+                  <div class="text-muted small">${c.first_scene || '장소 미상'}</div>
+                  ${c.emotion ? `<span class="badge bg-light text-dark mt-1">${c.emotion}</span>` : ''}
+                </div>
+              </div>`;
+            $characterCards.appendChild(col);
+          });
+        }
+      } catch (e) {}
+    }
+    loadCharactersList();
+
+    function buildNovelSystem() {
+      return '너는 한국어 장편 소설 작가이자 시네마틱 연출가다. 각 장은 영화처럼 장면 묘사(공간/조명/사운드/카메라 무빙 느낌)와 등장인물의 생생한 대사를 반드시 포함하라. 전개가 끊기지 않도록 서사/대사/묘사를 균형 있게 구성하되, 불필요한 설명은 줄이고 현장감을 높여라. 각 장은 400~800자 내외. 메타 발언, 프롬프트 언급 금지.';
+    }
+
+    async function gptCall(prompt, context, temperature = 0.8, maxTokens = 1400) {
+      const res = await fetch(getServerUrl('/api/gpt/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, systemMessage: buildNovelSystem(), context, model: 'gpt-4o-mini', temperature, maxTokens })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'GPT 생성 실패');
+      return data.response || '';
+    }
+
+    // 좌측 컨텍스트를 프롬프트로 변환
+    function buildContextPrompt() {
+      const parts = [];
+      // 사용자 입력 텍스트를 컨텍스트에 포함
+      const $textInput = document.getElementById('textInput');
+      const $novelIdeaInput = document.getElementById('novelIdeaInput');
+      if ($textInput && $textInput.value && $textInput.value.trim().length > 0) {
+        parts.push(`[사용자 입력]\n${$textInput.value.trim()}`);
+      }
+      if ($novelIdeaInput && $novelIdeaInput.value && $novelIdeaInput.value.trim().length > 0) {
+        parts.push(`[추가 아이디어]\n${$novelIdeaInput.value.trim()}`);
+      }
+      if ($currentChapter && $currentChapter.value) {
+        parts.push(`[현재 챕터]\n${$currentChapter.value}`);
+      }
+      if ($characterLocations && $characterLocations.value) {
+        parts.push(`[주요 캐릭터 및 위치]\n${$characterLocations.value}`);
+      }
+      if ($currentPlace && $currentPlace.value) {
+        parts.push(`[현재 장소/배경]\n${$currentPlace.value}`);
+      }
+      if ($recentEvents && $recentEvents.value) {
+        parts.push(`[최근 사건/상황]\n${$recentEvents.value}`);
+      }
+      if ($nextDirection && $nextDirection.value) {
+        parts.push(`[다음 전개 방향]\n${$nextDirection.value}`);
+      }
+      return parts.join('\n\n');
+    }
+
+    async function generateFullNovel() {
+      if (isGenerating) return; // 이미 생성 중이면 무시
+      isGenerating = true;
+      novelAbort = false;
+      const $statusWrap = document.getElementById('novelStatus');
+      const $statusText = document.getElementById('novelStatusText');
+      const $loading = document.getElementById('novelLoading');
+      if ($statusText) $statusText.textContent = '';
+      if ($loading) $loading.classList.remove('d-none');
+      // 초기 상태에서만 개요/챕터 초기화
+      const hasAnyChapter = Object.keys(novelChapters).map(Number).some(n => n > 0);
+      const hasOutline = novelChapters[0] !== undefined;
+      try {
+
+      const title = ($novelTitle.value || '제목 미정').trim();
+      const genre = ($novelGenre.value || '판타지').trim();
+      const chapters = Math.max(3, Math.min(20, parseInt($novelChapters.value || '6', 10)));
+
+      // 좌측 컨텍스트 정보 가져오기
+      const contextInfo = buildContextPrompt();
+      const worldCtx = await fetchWorldContextText();
+      
+      // 전체 컨텍스트 조합
+      const fullContext = [
+        worldCtx ? `[전체 세계관]\n${worldCtx}` : '',
+        contextInfo ? `[현재 소설 상태]\n${contextInfo}` : ''
+      ].filter(Boolean).join('\n\n');
+
+      // 1) 개요가 없으면 개요만 1회 생성
+      if (!hasOutline) {
+        if ($statusText) $statusText.textContent = '개요 생성 중...';
+        const outlinePrompt = `제목: ${title}\n장르: ${genre}${contextInfo ? '\n\n' + contextInfo : ''}\n요청: 위 설정과 현재 상태를 참고하여 ${chapters}장 구성의 소설 개요(장 제목+한 줄 요약)를 만들어라.`;
+        const outline = await gptCall(outlinePrompt, fullContext, 0.6, 800);
+        if (novelAbort) return;
+        novelChapters[0] = `제목: ${title}\n장르: ${genre}\n\n[개요]\n${outline}`;
+        updateChapterList();
+        // save outline to DB if novel selected
+      // 소설이 선택되어 있으면 자동 저장 (없으면 제목/장르로 새 소설 생성)
+      if (!currentNovelId && title && genre) {
+        try {
+          const createRes = await fetch(getServerUrl('/api/novels'), {
+            method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ title, genre })
+          });
+          const createData = await createRes.json();
+          if (createData.ok && createData.novel) {
+            currentNovelId = createData.novel.id;
+            localStorage.setItem('currentNovelId', currentNovelId);
+            const $select = $novelSelect();
+            if ($select) {
+              await populateNovelSelect();
+              $select.value = currentNovelId;
+            }
+          }
+        } catch {}
+      }
+      if (currentNovelId) {
+        try {
+          await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters`), {
+            method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ isOutline: true, text: novelChapters[0] })
+          });
+        } catch {}
+      }
+      }
+
+      // 2) 이번 호출에서는 "다음 한 장"만 생성
+      // 다음 장 번호 계산
+      const existingNums = Object.keys(novelChapters).map(Number).filter(n => n > 0).sort((a,b)=>a-b);
+      const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 1;
+      if (nextNum > chapters) {
+        if ($statusText) $statusText.textContent = '모든 장이 생성되었습니다.';
+        return;
+      }
+
+      if ($statusText) $statusText.textContent = `${nextNum}장 작성 중...`;
+      $novelProgress.textContent = `${Math.min(nextNum, chapters)}/${chapters}`;
+
+      // 최신 좌측 컨텍스트 반영
+      const latestContext = buildContextPrompt();
+      const latestFullContext = [
+        worldCtx ? `[전체 세계관]\n${worldCtx}` : '',
+        latestContext ? `[현재 소설 상태]\n${latestContext}` : ''
+      ].filter(Boolean).join('\n\n');
+      const outlineText = novelChapters[0] || '';
+      const chapterPrompt = `제목: ${title}\n장르: ${genre}\n개요:\n${outlineText}${latestContext ? '\n\n' + latestContext : ''}\n요청: 위 개요와 현재 상태를 기준으로 ${nextNum}장을 완성하라. 장 제목을 포함하고, 400~800자 내로 서사/대사/묘사를 균형있게.`;
+      const chapter = await gptCall(chapterPrompt, latestFullContext, 0.85, 1500);
+      if (novelAbort) return;
+      novelChapters[nextNum] = chapter;
+      updateChapterList();
+      $novelContent.textContent = chapter;
+      try {
+        const arr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(chapter);
+        const responseBitMax = (window.BIT_MAX_NB || (()=>0))(arr);
+        const responseBitMin = (window.BIT_MIN_NB || (()=>0))(arr);
+        await fetch(getServerUrl('/api/training/gpt-response'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: chapterPrompt, response: chapter, bitMax: responseBitMax, bitMin: responseBitMin, context: latestFullContext, model: 'gpt-4o-mini' })
+        });
+        if (currentNovelId) {
+          try {
+            await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/chapters`), {
+              method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ num: nextNum, text: chapter })
+            });
+          } catch {}
+        }
+      } catch (e) {}
+
+      if ($statusText) $statusText.textContent = novelAbort ? '중지됨' : '완료';
+      // 완료 시 첫 번째 챕터 표시
+      if (!novelAbort && Object.keys(novelChapters).length > 0) {
+        const chapters = getSortedChapters();
+        const firstChapter = chapters.find(n=>n>0) ?? chapters[0];
+        if (firstChapter !== undefined) showChapter(firstChapter);
+      }
+    } catch (e) {
+      const $statusText = document.getElementById('novelStatusText');
+      if ($statusText) $statusText.textContent = `오류: ${e.message || e}`;
+    }
+    isGenerating = false;
+    var _l = document.getElementById('novelLoading');
+    if (_l) _l.classList.add('d-none');
+    }
+
+    // 시작 버튼 제거됨
+    document.getElementById('stopNovelBtn').addEventListener('click', () => { novelAbort = true; });
+    const $useNovelFlowBtn = document.getElementById('useNovelFlowBtn');
+    if ($useNovelFlowBtn) $useNovelFlowBtn.addEventListener('click', generateFullNovel);
+
+    // 문자 입력 자동 호출 (디바운스)
+    (function setupAutoCall(){
+      const $textInput = document.getElementById('textInput');
+      const $autoToggle = document.getElementById('autoNovelToggle');
+      if (!$textInput) return;
+      let timer = null;
+      const debounceMs = 1000;
+      function queue() {
+        if (!$autoToggle || !$autoToggle.checked) return;
+        if (isGenerating) return;
+        // 이미 한 장 이상 생성된 경우 자동 호출 제한
+        const hasAnyChapter = Object.keys(novelChapters).map(Number).some(n => n > 0);
+        if (hasAnyChapter) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          if ($textInput.value && $textInput.value.trim().length > 0 && !isGenerating) {
+            generateFullNovel();
+          }
+        }, debounceMs);
+      }
+      $textInput.addEventListener('input', queue);
+      $textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && ($autoToggle && $autoToggle.checked)) {
+          e.preventDefault();
+          if (timer) clearTimeout(timer);
+          const hasAnyChapter = Object.keys(novelChapters).map(Number).some(n => n > 0);
+          if (!isGenerating && !hasAnyChapter) generateFullNovel();
+        }
+      });
+    })();
+
+    // 이전/다음 네비게이션
+    (function setupPrevNext(){
+      const prevBtn = document.getElementById('prevChapterBtn');
+      const nextBtn = document.getElementById('nextChapterBtn');
+      if (!prevBtn || !nextBtn) return;
+      prevBtn.addEventListener('click', () => {
+        const chapters = getSortedChapters();
+        if (!chapters.length) return;
+        if (currentChapterNum === null) { showChapter(chapters[0]); return; }
+        const idx = chapters.indexOf(currentChapterNum);
+        const prevIdx = Math.max(0, idx - 1);
+        showChapter(chapters[prevIdx]);
+      });
+      nextBtn.addEventListener('click', () => {
+        const chapters = getSortedChapters();
+        if (!chapters.length) { generateFullNovel(); return; }
+        if (currentChapterNum === null) { showChapter(chapters[0]); return; }
+        const idx = chapters.indexOf(currentChapterNum);
+        const nextIdx = Math.min(chapters.length - 1, idx + 1);
+        if (nextIdx === idx) {
+          // 끝이면 새로 생성 유도
+          if (!isGenerating && confirm('다음 장이 없습니다. 새로 생성할까요?')) generateFullNovel();
+        } else {
+          showChapter(chapters[nextIdx]);
+        }
+      });
+    })();
+
+    // ===== 레이아웃 재배치: 입력/ GPT 패널을 소설 실행 카드로 이동 =====
+    (function relocatePanels(){
+      try {
+        const execBody = document.getElementById('novelExecBody');
+        if (!execBody) return;
+        // 문자 입력 블록 이동 로직 제거됨 (하단 고정)
+        // 2) GPT 패널 이동 (내용만 이동)
+        const gptPanel = document.getElementById('gptPanel');
+        if (gptPanel) {
+          const panelInner = gptPanel.querySelector('.sticky-top');
+          if (panelInner && !execBody.contains(panelInner)) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mt-3';
+            wrapper.appendChild(panelInner);
+            execBody.appendChild(wrapper);
+          }
+        }
+
+        // 3) 예측 입력값 블록을 하단 입력 카드 상단으로 이동
+        const textInput = document.getElementById('textInput');
+        const predictions = document.getElementById('inputPredictions');
+        if (textInput && predictions) {
+          const bottomCardBody = textInput.closest('.card-body');
+          if (bottomCardBody && !bottomCardBody.contains(predictions)) {
+            // 원래 위치의 제목은 제거하고, 새 섹션에 제목 생성
+            const section = document.createElement('div');
+            section.className = 'mb-3';
+            const h = document.createElement('h6');
+            h.textContent = '예측 입력값';
+            h.className = 'mb-2';
+            section.appendChild(h);
+            // 스타일 유지
+            predictions.classList.add('border','rounded','p-2');
+            section.appendChild(predictions);
+            bottomCardBody.prepend(section);
+            // 비어있다면 예시 chip 추가
+            if (!predictions.hasChildNodes() || predictions.innerText.trim().length === 0) {
+              const chip = document.createElement('span');
+              chip.className = 'badge bg-secondary me-2 mb-2';
+              chip.textContent = '소 (길이 1)';
+              predictions.appendChild(chip);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Relocate panels error:', e);
+      }
+    })();
+
+    // ===== 아이디어 자동 저장 =====
+    (function setupNotesAutosave(){
+      const $notes = document.getElementById('novelIdeaInput');
+      const $status = document.getElementById('notesSaveStatus');
+      if (!$notes) return;
+      let t = null;
+      const save = async () => {
+        if (!currentNovelId) return;
+        try {
+          if ($status) $status.textContent = '저장 중...';
+          const res = await fetch(getServerUrl(`/api/novels/${encodeURIComponent(currentNovelId)}/notes`), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: $notes.value || '' })
+          });
+          const data = await res.json();
+          if (data.ok && $status) $status.textContent = '저장됨';
+        } catch (e) {
+          if ($status) $status.textContent = '저장 실패';
+        }
+      };
+      const queue = () => {
+        if (t) clearTimeout(t);
+        t = setTimeout(save, 600);
+      };
+      $notes.addEventListener('input', queue);
+      $notes.addEventListener('blur', save);
+    })();
+
+    // ===== 과거 챕터 속성 목록 =====
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function renderPreviousAttributesList(attributes) {
+      const $list = document.getElementById('previousAttributesList');
+      if (!$list) return;
+      
+      if (!attributes || attributes.length === 0) {
+        $list.innerHTML = '<div class="col-12 text-muted small text-center py-3">과거 챕터 속성이 없습니다.</div>';
+        return;
+      }
+      
+      let html = '';
+      attributes.forEach(attr => {
+        const dataList = attr.items.map(item => ({
+          text: item.data?.text || item.s || '',
+          bitMax: item.data?.bitMax || item.max || null,
+          bitMin: item.data?.bitMin || item.min || null
+        }));
+        
+        html += `
+          <div class="attribute-item" 
+               data-bit-max="${attr.bitMax}" 
+               data-bit-min="${attr.bitMin}"
+               data-attribute-text="${escapeHtml(attr.attributeText)}"
+               style="border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: white;">
+            <div class="attribute-header">
+              <div style="text-align: left;">
+                <span class="attribute-name" style="font-size: 1.1em; font-weight: bold; color: #007bff;">${escapeHtml(attr.attributeText)}</span>
+                <span class="badge bg-primary ms-2">챕터 ${attr.chapterNum}</span>
+                <span class="badge bg-success ms-1">${attr.count}개</span>
+              </div>
+              <div class="bit-display" style="font-size: 0.85em; color: #6c757d; margin-top: 5px;">
+                BIT: ${attr.bitMax.toFixed(15)}, ${attr.bitMin.toFixed(15)} | 데이터 ${dataList.length}개
+              </div>
+            </div>
+            <div class="data-list mt-3">
+              ${dataList.length > 0 ? dataList.slice(0, 5).map(data => `
+                <div class="data-item" style="background: #f8f9fa; padding: 10px; margin: 8px 0; border-left: 3px solid #28a745; border-radius: 4px;">
+                  <strong>${escapeHtml(data.text)}</strong>
+                  ${data.bitMax !== null && data.bitMin !== null ? `
+                    <small class="text-muted ms-2">
+                      BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}
+                    </small>
+                  ` : ''}
+                </div>
+              `).join('') : '<div class="text-muted small">데이터가 없습니다.</div>'}
+              ${dataList.length > 5 ? `
+                <details class="mt-2">
+                  <summary class="small text-primary" style="cursor: pointer;">더 보기 (${dataList.length - 5}개 더)</summary>
+                  <div class="mt-2">
+                    ${dataList.slice(5).map(data => `
+                      <div class="data-item" style="background: #f8f9fa; padding: 10px; margin: 8px 0; border-left: 3px solid #28a745; border-radius: 4px;">
+                        <strong>${escapeHtml(data.text)}</strong>
+                        ${data.bitMax !== null && data.bitMin !== null ? `
+                          <small class="text-muted ms-2">
+                            BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}
+                          </small>
+                        ` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                </details>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      });
+      
+      $list.innerHTML = html;
+    }
+
+    // 과거 챕터 속성 불러오기 버튼
+    (function setupPreviousAttributesLoader() {
+      const $btn = document.getElementById('loadPreviousAttributesBtn');
+      if (!$btn) return;
+      
+      $btn.addEventListener('click', async () => {
+        if (!currentChapterNum || currentChapterNum === 0) {
+          alert('챕터를 선택해주세요.');
+          return;
+        }
+        
+        try {
+          $btn.disabled = true;
+          $btn.textContent = '로딩 중...';
+          
+          const attributes = await loadPreviousChaptersAttributes(currentChapterNum);
+          renderPreviousAttributesList(attributes);
+          
+          if (attributes.length === 0) {
+            const $list = document.getElementById('previousAttributesList');
+            if ($list) {
+              $list.innerHTML = '<div class="col-12 text-muted small text-center py-3">과거 챕터 속성이 없습니다.</div>';
+            }
+          }
+        } catch (e) {
+          console.error('[Attributes] Load previous chapters error:', e);
+          alert('과거 챕터 속성을 불러오는 중 오류가 발생했습니다.');
+        } finally {
+          $btn.disabled = false;
+          $btn.textContent = '과거 챕터 속성 불러오기';
+        }
+      });
+    })();
+    
+    </script>
+</body>
+</html>
+
+
