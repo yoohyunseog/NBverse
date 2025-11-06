@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>소설 구성 요소 관리</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+        }
+        .main-container {
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .card {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 0;
+        }
+        .attribute-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: white;
+        }
+        .attribute-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .attribute-name {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .bit-display {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .data-item {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 8px 0;
+            border-left: 3px solid #28a745;
+            border-radius: 4px;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        .status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .attribute-card {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .attribute-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            border-color: #007bff !important;
+        }
+        .attribute-card:active {
+            transform: translateY(0);
+        }
+        .attribute-item.highlighted {
+            background-color: #fff3cd;
+            border: 2px solid #ffc107;
+            box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+            animation: highlight-pulse 2s ease-in-out;
+        }
+        @keyframes highlight-pulse {
+            0%, 100% {
+                box-shadow: 0 0 15px rgba(255, 193, 7, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 25px rgba(255, 193, 7, 0.8);
+            }
+        }
+        .log-container {
+            width: 100%;
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            border-top: 2px solid #333;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 2px 0;
+            border-bottom: 1px solid #222;
+        }
+        .log-entry:first-child {
+            border-top: 1px solid #333;
+        }
+        .log-time {
+            color: #888;
+            margin-right: 8px;
+        }
+        .log-message {
+            color: #0f0;
+        }
+        .log-error {
+            color: #f00;
+        }
+        .log-warn {
+            color: #ff0;
+        }
+        .log-info {
+            color: #0ff;
+        }
+        .log-entry {
+            cursor: pointer;
+        }
+        .log-entry:hover {
+            background-color: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1 class="mb-4 p-3">📚 소설 구성 요소 관리 (GPT 자동 정리)</h1>
+
+        <div class="row g-0">
+            <!-- 좌측: 속성 목록 섹션 -->
+            <div class="col-md-3">
+                <div class="card h-100" style="border-radius: 0;">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">📋 저장된 속성 목록</h5>
+                        <button id="refreshBtn" class="btn btn-sm btn-light">🔄 새로고침</button>
+                    </div>
+                    <div class="card-body" style="max-height: calc(100vh - 200px); overflow-y: auto;">
+                        <div id="attributesList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 가운데: GPT 분석 결과 -->
+            <div class="col-md-6">
+                <!-- GPT 분석 결과 -->
+                <div class="card" id="gptResultCard" style="display: none; border-radius: 0;">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">📋 GPT 분석 결과</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="gptResponse" class="mb-3 p-3 bg-light rounded" style="white-space: pre-wrap; max-height: 300px; overflow-y: auto;"></div>
+                        <div id="extractedAttributes" class="mb-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: GPT 분석 입력 섹션 -->
+            <div class="col-md-3">
+                <!-- GPT 자동 분석 섹션 -->
+                <div class="card h-100" style="border-radius: 0;">
+                    <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <h5 class="mb-0">🤖 GPT AI 자동 속성 추출</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">분석할 텍스트 입력</label>
+                            <textarea 
+                                id="gptInput" 
+                                class="form-control" 
+                                placeholder="소설 관련 텍스트를 입력하세요. GPT가 자동으로 속성(소설 구성 요소)들을 추출하고 정리합니다.&#10;예: 소설의 내용, 등장인물 설명, 배경 설정, 주요 사건 등..."
+                                rows="6"
+                            ></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">프롬프트 입력 1</label>
+                            <textarea 
+                                id="gptPrompt1" 
+                                class="form-control mb-2" 
+                                placeholder="GPT에게 추가 지시사항을 입력하세요. 예: '속성을 더 추가해주세요', '소설의 등장인물과 배경만 추출해주세요', '장르와 주제로 분류해주세요' 등..."
+                                rows="2"
+                            ></textarea>
+                        </div>
+                        <button id="analyzeBtn1" class="btn btn-primary btn-lg w-100 mb-3">
+                            🔍 GPT AI로 분석 (프롬프트 1)
+                        </button>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">프롬프트 입력 2</label>
+                            <textarea 
+                                id="gptPrompt2" 
+                                class="form-control mb-2" 
+                                placeholder="GPT에게 추가 지시사항을 입력하세요. 예: '개요를 써달라', '상세하게 구조화해서 작성해주세요' 등..."
+                                rows="2"
+                            ></textarea>
+                        </div>
+                        <button id="analyzeBtn2" class="btn btn-success btn-lg w-100">
+                            🔍 GPT AI로 분석 (프롬프트 2)
+                        </button>
+                        <div id="gptStatus" class="mt-2 small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 로그 출력 영역 -->
+        <div class="log-container" id="logContainer"></div>
+
+        <!-- 속성별 데이터 추가 모달 -->
+        <div class="modal fade" id="addDataModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">데이터 추가</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">속성:</label>
+                            <div id="modalAttributeName" class="fw-bold text-primary"></div>
+                            <small class="text-muted">
+                                BIT MAX: <span id="modalAttributeMax">-</span> | 
+                                BIT MIN: <span id="modalAttributeMin">-</span>
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">데이터 추가 (이 속성에 속하는 구체적인 내용)</label>
+                            <textarea 
+                                id="newDataInput" 
+                                class="form-control" 
+                                rows="3"
+                                placeholder="예: '주인공의 내적 갈등', '마법 세계의 법칙' 등..."
+                            ></textarea>
+                            <div class="row mt-2">
+                                <div class="col-md-6">
+                                    <div class="bit-display">
+                                        <strong>데이터 BIT MAX:</strong> <span id="newDataMax">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="bit-display">
+                                        <strong>데이터 BIT MIN:</strong> <span id="newDataMin">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="saveDataBtn" class="btn btn-success">데이터 저장</button>
+                        <span id="saveDataStatus" class="ms-2 small"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script>
+        // DOM 요소
+        const $gptPrompt1 = document.getElementById('gptPrompt1');
+        const $gptPrompt2 = document.getElementById('gptPrompt2');
+        const $gptInput = document.getElementById('gptInput');
+        const $analyzeBtn1 = document.getElementById('analyzeBtn1');
+        const $analyzeBtn2 = document.getElementById('analyzeBtn2');
+        const $gptStatus = document.getElementById('gptStatus');
+        const $gptResultCard = document.getElementById('gptResultCard');
+        const $gptResponse = document.getElementById('gptResponse');
+        const $extractedAttributes = document.getElementById('extractedAttributes');
+
+        const $attributesList = document.getElementById('attributesList');
+        const $refreshBtn = document.getElementById('refreshBtn');
+        
+        // 로그 관련
+        const $logContainer = document.getElementById('logContainer');
+        const MAX_LOG_ENTRIES = 50;
+
+        // 로그 추가 함수
+        function addLog(type, ...args) {
+            const timestamp = new Date().toLocaleTimeString();
+            let fullMessage = args.map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+
+            // 표시용 메시지 길이 50자로 제한
+            let displayMessage = fullMessage;
+            const isTruncated = fullMessage.length > 50;
+            if (isTruncated) {
+                displayMessage = fullMessage.substring(0, 47) + '...';
+            }
+
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.setAttribute('data-full-message', fullMessage);
+            logEntry.setAttribute('data-timestamp', timestamp);
+            logEntry.setAttribute('data-type', type);
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.textContent = `[${timestamp}]`;
+            
+            const messageSpan = document.createElement('span');
+            messageSpan.className = `log-message log-${type}`;
+            messageSpan.textContent = displayMessage;
+            
+            logEntry.appendChild(timeSpan);
+            logEntry.appendChild(messageSpan);
+            
+            // 클릭 이벤트: 전체 메시지 보기
+            if (isTruncated || fullMessage.length > 0) {
+                logEntry.addEventListener('click', () => {
+                    showLogDetail(fullMessage, timestamp, type);
+                });
+            }
+            
+            // prepend: 새 메시지를 맨 위에 추가
+            const firstChild = $logContainer.firstChild;
+            if (firstChild) {
+                $logContainer.insertBefore(logEntry, firstChild);
+            } else {
+                $logContainer.appendChild(logEntry);
+            }
+            
+            // 최대 50개까지만 유지 (맨 아래부터 제거)
+            const allEntries = $logContainer.querySelectorAll('.log-entry');
+            if (allEntries.length > MAX_LOG_ENTRIES) {
+                // 맨 아래(가장 오래된) 항목 제거
+                const oldestEntry = allEntries[allEntries.length - 1];
+                if (oldestEntry && oldestEntry.parentNode) {
+                    oldestEntry.parentNode.removeChild(oldestEntry);
+                }
+            }
+        }
+
+        // 로그 상세 내용 표시
+        function showLogDetail(fullMessage, timestamp, type) {
+            const typeLabels = {
+                'message': '정보',
+                'error': '에러',
+                'warn': '경고',
+                'info': '정보'
+            };
+            
+            // HTML 이스케이프 헬퍼 함수
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.setAttribute('tabindex', '-1');
+            
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-dialog modal-lg';
+            
+            const content = document.createElement('div');
+            content.className = 'modal-content bg-dark text-light';
+            
+            // 헤더
+            const header = document.createElement('div');
+            header.className = 'modal-header border-secondary';
+            header.innerHTML = `
+                <h5 class="modal-title">로그 상세 내용</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            `;
+            
+            // 바디
+            const body = document.createElement('div');
+            body.className = 'modal-body';
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'mb-2';
+            timeDiv.innerHTML = `<strong>시간:</strong> ${escapeHtml(timestamp)}`;
+            
+            const typeDiv = document.createElement('div');
+            typeDiv.className = 'mb-2';
+            typeDiv.innerHTML = `<strong>타입:</strong> <span class="log-${type}">${typeLabels[type] || type}</span>`;
+            
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'mb-2';
+            labelDiv.innerHTML = `<strong>전체 메시지:</strong>`;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'p-3 bg-black rounded';
+            messageDiv.style.cssText = 'max-height: 400px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; word-break: break-all; color: #0f0;';
+            messageDiv.textContent = fullMessage;
+            
+            body.appendChild(timeDiv);
+            body.appendChild(typeDiv);
+            body.appendChild(labelDiv);
+            body.appendChild(messageDiv);
+            
+            // 푸터
+            const footer = document.createElement('div');
+            footer.className = 'modal-footer border-secondary';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'btn btn-secondary';
+            closeBtn.setAttribute('data-bs-dismiss', 'modal');
+            closeBtn.textContent = '닫기';
+            
+            footer.appendChild(closeBtn);
+            
+            content.appendChild(header);
+            content.appendChild(body);
+            content.appendChild(footer);
+            modalContent.appendChild(content);
+            modal.appendChild(modalContent);
+            
+            document.body.appendChild(modal);
+            
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // 모달이 닫히면 DOM에서 제거
+            modal.addEventListener('hidden.bs.modal', () => {
+                if (modal.parentNode) {
+                    document.body.removeChild(modal);
+                }
+            });
+        }
+
+
+        // console 메서드 인터셉션
+        (function() {
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            const originalInfo = console.info;
+
+            console.log = function(...args) {
+                originalLog.apply(console, args);
+                addLog('message', ...args);
+            };
+
+            console.error = function(...args) {
+                originalError.apply(console, args);
+                addLog('error', ...args);
+            };
+
+            console.warn = function(...args) {
+                originalWarn.apply(console, args);
+                addLog('warn', ...args);
+            };
+
+            console.info = function(...args) {
+                originalInfo.apply(console, args);
+                addLog('info', ...args);
+            };
+        })();
+
+        // 전역 에러 핸들러
+        window.addEventListener('error', (event) => {
+            console.error('전역 에러:', event.error || event.message, event.filename, event.lineno);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('처리되지 않은 Promise 거부:', event.reason);
+        });
+
+        // Fetch 에러 인터셉션 (선택적)
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+            try {
+                const response = await originalFetch.apply(this, args);
+                return response;
+            } catch (error) {
+                console.error('Fetch 에러:', error, args[0]);
+                throw error;
+            }
+        };
+        
+        // 모달 관련
+        const addDataModal = new bootstrap.Modal(document.getElementById('addDataModal'));
+        const $modalAttributeName = document.getElementById('modalAttributeName');
+        const $modalAttributeMax = document.getElementById('modalAttributeMax');
+        const $modalAttributeMin = document.getElementById('modalAttributeMin');
+        const $newDataInput = document.getElementById('newDataInput');
+        const $newDataMax = document.getElementById('newDataMax');
+        const $newDataMin = document.getElementById('newDataMin');
+        const $saveDataBtn = document.getElementById('saveDataBtn');
+        const $saveDataStatus = document.getElementById('saveDataStatus');
+
+        let currentAttribute = null;
+        let extractedAttributesList = [];
+
+        function getServerUrl(path) {
+            if (window.location.protocol === 'file:') {
+                return `http://localhost:8123${path}`;
+            }
+            return path;
+        }
+
+        function calculateBitValues(text) {
+            if (!text || typeof text !== 'string' || text.trim() === '') {
+                return { max: null, min: null };
+            }
+            try {
+                if (typeof wordNbUnicodeFormat === 'undefined' || typeof BIT_MAX_NB === 'undefined' || typeof BIT_MIN_NB === 'undefined') {
+                    console.warn('BIT 계산 함수가 아직 로드되지 않았습니다.');
+                    return { max: null, min: null };
+                }
+                const unicodeArray = wordNbUnicodeFormat(text);
+                const max = BIT_MAX_NB(unicodeArray);
+                const min = BIT_MIN_NB(unicodeArray);
+                return { max: isFinite(max) ? max : null, min: isFinite(min) ? min : null };
+            } catch (e) {
+                console.error('BIT 계산 오류:', e);
+                return { max: null, min: null };
+            }
+        }
+
+        // GPT 분석 함수
+        async function analyzeWithGPT(customPrompt = null) {
+            const text = $gptInput.value.trim();
+            if (!text) {
+                console.warn('GPT 분석: 분석할 텍스트가 없습니다.');
+                alert('분석할 텍스트를 입력하세요.');
+                return;
+            }
+
+            // 프롬프트가 전달되지 않으면 첫 번째 프롬프트 사용
+            if (customPrompt === null) {
+                customPrompt = $gptPrompt1.value.trim();
+            }
+
+            // 프롬프트 로그 출력 (50자 제한)
+            const promptForLog = customPrompt && customPrompt.length > 50 
+                ? customPrompt.substring(0, 47) + '...' 
+                : customPrompt || '(없음)';
+            console.log('GPT 분석 시작', `프롬프트: ${promptForLog}`, `텍스트길이: ${text.length}`);
+
+            try {
+                // 두 버튼 모두 비활성화
+                $analyzeBtn1.disabled = true;
+                $analyzeBtn2.disabled = true;
+                $gptStatus.textContent = 'GPT AI 분석 중...';
+                $gptStatus.style.color = '#007bff';
+                $gptResponse.textContent = '분석 중...';
+
+                console.log('프롬프트 설정', `프롬프트: ${promptForLog}`);
+                
+                // 개요 요청 확인 (더 넓은 범위로 검색)
+                const lowerPrompt = customPrompt ? customPrompt.toLowerCase() : '';
+                const isOutlineRequest = customPrompt && (
+                    lowerPrompt.includes('개요') || 
+                    lowerPrompt.includes('상세') || 
+                    lowerPrompt.includes('구조화') ||
+                    lowerPrompt.includes('outline') ||
+                    lowerPrompt.includes('요약') ||
+                    lowerPrompt.includes('정리')
+                );
+                
+                console.log('개요 요청 확인', { isOutlineRequest, customPrompt });
+                
+                const outlineInstructions = isOutlineRequest ? `
+
+**⚠️ 중요: 개요 작성 모드 활성화 ⚠️**
+사용자가 "${customPrompt}"라고 요청했습니다. 이를 반드시 준수하세요.
+
+각 속성의 "데이터" 부분을 구조화되고 상세한 개요 형식으로 작성해주세요:
+
+- **등장인물의 경우**: 각 인물의 이름, 역할, 특징을 명확히 구분하여 작성
+  예: "카이 (주인공): 엘프 가드에 합류한 인물, 정체성을 찾는 중 | 세리엘: 리더 역할, 경험 많은 전사 | 리아나: 지원 역할, 마법사..."
+
+- **배경 설정의 경우**: 시간, 장소, 세계관을 구분하여 작성
+  예: "시간: 판타지 시대 | 장소: 어두운 숲 | 세계관: 엘프 가드의 전설이 존재하는 판타지 세계..."
+
+- **주요 사건의 경우**: 사건들을 시간순 또는 중요도순으로 정리
+  예: "1. 카이가 엘프 가드 부대에 합류 | 2. 전투와 갱킹 발생 | 3. 자카르와의 대치 | 4. 포포리의 등장 및 협력..."
+
+- **감정/분위기의 경우**: 감정 변화와 분위기를 구체적으로 설명
+  예: "긴장감: 전투 상황에서의 불안감 | 협력: 위기 상황에서의 연대감 | 혼란: 예상치 못한 상황에 대한 당황..."
+
+- **테마/주제의 경우**: 주요 주제와 하위 주제를 구분
+  예: "- 협력과 배신: 동료들 간의 신뢰 관계 | - 정체성의 탐구: 카이의 자기 발견 | - 전설과 현실의 충돌: 이상과 현실의 갭..."
+
+- **스타일/톤의 경우**: 문체 특징과 톤을 구체적으로 설명
+  예: "문체: 서사적 문체, 긴장감 있는 서술 | 톤: 판타지적 요소 강조, 진지하고 몰입도 높은 분위기..."
+
+**⚠️ 반드시 준수**: 데이터 부분은 단순 나열이 아닌 구조화된 개요 형식으로 작성하되, 너무 길지 않게 핵심만 간결하게 정리해주세요.
+` : '';
+
+                // 프롬프트를 시스템 메시지와 사용자 프롬프트 모두에 명확히 반영
+                const systemMessage = `당신은 소설 텍스트를 분석하여 소설 구성 요소(속성)들을 추출하는 전문가입니다.
+
+입력된 텍스트를 분석하여 소설에 필요한 구성 요소들을 찾아주세요. 예를 들어:
+- 등장인물 (주인공, 조연, 악역 등)
+- 배경 설정 (시간, 장소, 세계관)
+- 주요 사건 (플롯, 갈등, 전개)
+- 감정/분위기 (분위기, 감정 변화)
+- 테마/주제 (메시지, 교훈)
+- 스타일/톤 (문체, 톤)
+
+${customPrompt ? `\n\n═══════════════════════════════════════
+⚠️ 사용자 요청사항 (반드시 준수) ⚠️
+═══════════════════════════════════════
+${customPrompt}
+
+위 요청사항을 반드시 반영하여 응답해주세요. 이 지시사항은 다른 모든 지침보다 우선합니다.
+═══════════════════════════════════════\n\n` : ''}${outlineInstructions}
+
+**응답 형식**: 아래 형식을 정확히 따르세요. 각 속성마다 다음과 같이 작성하세요:
+
+속성 1: [속성명]
+
+데이터: ${isOutlineRequest ? '[⚠️ 위 개요 작성 모드 지침을 반드시 따르세요 - 구조화되고 상세한 개요 형식으로 작성]' : '[구체적인 데이터 내용]'}
+
+이유: [이 속성을 추출한 이유]
+
+속성 BIT: -, -
+
+데이터 BIT: -, -
+
+---
+
+속성 2: [속성명]
+
+데이터: ${isOutlineRequest ? '[⚠️ 위 개요 작성 모드 지침을 반드시 따르세요 - 구조화되고 상세한 개요 형식으로 작성]' : '[구체적인 데이터 내용]'}
+
+이유: [이 속성을 추출한 이유]
+
+속성 BIT: -, -
+
+데이터 BIT: -, -
+
+---
+
+(계속 반복...)
+
+**중요**: 
+- 최소 3개 이상의 속성을 추출해주세요.
+- 사용자가 "속성을 더 추가해주세요" 또는 유사한 요청을 하면, 기존 속성 외에 추가 속성들을 더 찾아서 제공해주세요.
+- 속성 BIT와 데이터 BIT는 항상 "-, -"로 표시하세요 (실제 계산은 시스템에서 처리합니다).
+- JSON 형식이 아닌 위의 텍스트 형식으로만 응답하세요.`;
+
+                // 프롬프트 입력이 있으면 해당 프롬프트 사용, 텍스트는 그대로 포함
+                // 프롬프트에 {text} 플레이스홀더가 있으면 텍스트로 치환, 없으면 프롬프트 뒤에 텍스트 추가
+                let finalPrompt;
+                if (customPrompt) {
+                    // 사용자 프롬프트를 명확히 표시
+                    if (customPrompt.includes('{text}')) {
+                        // 프롬프트에 {text} 플레이스홀더가 있으면 치환
+                        finalPrompt = customPrompt.replace(/{text}/g, text);
+                    } else {
+                        // 플레이스홀더가 없으면 프롬프트를 먼저 명시하고 텍스트 추가
+                        finalPrompt = `${customPrompt}\n\n[위 요청사항에 따라 아래 텍스트를 분석해주세요]\n\n${text}`;
+                    }
+                } else {
+                    // 기본 프롬프트
+                    finalPrompt = `다음 소설 텍스트를 분석하여 소설 구성 요소(속성)들을 추출해주세요:\n\n"${text}"`;
+                }
+
+                const url = getServerUrl('/api/gpt/chat');
+                console.log('GPT API 요청 시작', { url, promptLength: finalPrompt.length });
+                
+                const requestBody = {
+                    prompt: finalPrompt,
+                    systemMessage: systemMessage,
+                    model: 'gpt-4o-mini',
+                    temperature: 0.3,
+                    maxTokens: 1500
+                };
+                
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('GPT API 응답 수신', { status: res.status, statusText: res.statusText });
+
+                if (!res.ok) {
+                    console.error('GPT API 오류', { status: res.status });
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                console.log('GPT API 응답 파싱 완료', { ok: data.ok, responseLength: data.response?.length || 0 });
+                
+                if (!data.ok) {
+                    console.error('GPT 분석 실패', { error: data.error });
+                    throw new Error(data.error || 'GPT 분석 실패');
+                }
+
+                console.log('GPT 응답 텍스트 파싱 시작');
+
+                // 텍스트 형식 응답 파싱
+                let parsed = [];
+                try {
+                    const responseText = data.response.trim();
+                    
+                    // 먼저 JSON 형식인지 확인 (하위 호환성을 위해)
+                    let jsonText = responseText;
+                    if (jsonText.startsWith('```json')) {
+                        jsonText = jsonText.replace(/```json\s*/, '').replace(/\s*```$/, '');
+                    } else if (jsonText.startsWith('```')) {
+                        jsonText = jsonText.replace(/```\s*/, '').replace(/\s*```$/, '');
+                    }
+                    
+                    try {
+                        const jsonParsed = JSON.parse(jsonText);
+                        if (Array.isArray(jsonParsed)) {
+                            // JSON 형식으로 파싱 성공
+                            parsed = jsonParsed.map(item => ({
+                                attribute: item.attribute?.trim() || '',
+                                data: item.data?.trim() || '',
+                                reasoning: item.reasoning?.trim() || ''
+                            }));
+                        }
+                    } catch {
+                        // JSON이 아니면 텍스트 형식으로 파싱
+                        // "속성 N: ..." 패턴으로 속성들을 분리
+                        // "---" 또는 빈 줄로 구분된 섹션을 찾음
+                        const sections = responseText.split(/(?:^|\n)---+|\n\n(?=속성\s*\d+\s*:)/m);
+                        
+                        for (const section of sections) {
+                            const trimmedSection = section.trim();
+                            if (!trimmedSection) continue;
+                            
+                            // 속성명 추출 (속성 1: 또는 속성 N: 형식)
+                            const attrMatch = trimmedSection.match(/속성\s*\d+\s*:\s*(.+?)(?:\n|$)/);
+                            if (!attrMatch) continue;
+                            const attribute = attrMatch[1].trim();
+                            
+                            // 데이터 추출 (데이터: 다음부터 이유: 또는 속성 BIT: 전까지)
+                            const dataMatch = trimmedSection.match(/데이터\s*:\s*(.+?)(?:\n\n이유:|\n이유:|\n\n속성\s*BIT:|\n속성\s*BIT:|$)/s);
+                            const dataText = dataMatch ? dataMatch[1].trim() : '';
+                            
+                            // 이유 추출 (이유: 다음부터 속성 BIT: 또는 데이터 BIT: 전까지)
+                            const reasonMatch = trimmedSection.match(/이유\s*:\s*(.+?)(?:\n\n속성\s*BIT:|\n속성\s*BIT:|\n\n데이터\s*BIT:|\n데이터\s*BIT:|$)/s);
+                            const reasoning = reasonMatch ? reasonMatch[1].trim() : '';
+                            
+                            if (attribute && dataText) {
+                                parsed.push({
+                                    attribute: attribute,
+                                    data: dataText,
+                                    reasoning: reasoning
+                                });
+                            }
+                        }
+                        
+                        // 섹션 분리가 안 된 경우, 직접 패턴 매칭 시도
+                        if (parsed.length === 0) {
+                            const attributeMatches = [...responseText.matchAll(/속성\s*\d+\s*:\s*(.+?)(?:\n|$)/g)];
+                            for (const attrMatch of attributeMatches) {
+                                const attribute = attrMatch[1].trim();
+                                if (!attribute) continue;
+                                
+                                // 해당 속성 다음 부분 찾기
+                                const attrIndex = attrMatch.index + attrMatch[0].length;
+                                const nextSection = responseText.substring(attrIndex);
+                                
+                                const dataMatch = nextSection.match(/데이터\s*:\s*(.+?)(?:\n\n이유:|\n이유:|\n\n속성\s*BIT:|\n속성\s*BIT:|속성\s*\d+\s*:|$)/s);
+                                const dataText = dataMatch ? dataMatch[1].trim() : '';
+                                
+                                const reasonMatch = nextSection.match(/이유\s*:\s*(.+?)(?:\n\n속성\s*BIT:|\n속성\s*BIT:|\n\n데이터\s*BIT:|\n데이터\s*BIT:|속성\s*\d+\s*:|$)/s);
+                                const reasoning = reasonMatch ? reasonMatch[1].trim() : '';
+                                
+                                if (attribute && dataText) {
+                                    parsed.push({
+                                        attribute: attribute,
+                                        data: dataText,
+                                        reasoning: reasoning
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('파싱 오류:', e);
+                    throw new Error('GPT 응답 파싱 실패: ' + e.message);
+                }
+
+                console.log('파싱 완료', { parsedCount: parsed.length });
+
+                if (!Array.isArray(parsed) || parsed.length === 0) {
+                    console.error('속성 추출 실패: 추출된 속성이 없습니다.');
+                    throw new Error('GPT 응답에서 속성을 추출할 수 없습니다. 응답 형식을 확인해주세요.');
+                }
+
+                console.log('추출된 속성 처리 시작', { count: parsed.length });
+
+                // 추출된 속성 처리
+                extractedAttributesList = parsed.map(item => {
+                    const attribute = item.attribute?.trim() || '';
+                    const dataText = item.data?.trim() || '';
+                    const reasoning = item.reasoning?.trim() || '';
+                    
+                    if (!attribute || !dataText) {
+                        return null;
+                    }
+
+                    const attrBits = calculateBitValues(attribute);
+                    const dataBits = calculateBitValues(dataText);
+                    
+                    console.log('속성 BIT 계산', { 
+                        attribute, 
+                        attrBitMax: attrBits.max, 
+                        attrBitMin: attrBits.min,
+                        dataBitMax: dataBits.max,
+                        dataBitMin: dataBits.min
+                    });
+                    
+                    return {
+                        attribute: attribute,
+                        data: dataText,
+                        reasoning: reasoning,
+                        attributeBitMax: attrBits.max,
+                        attributeBitMin: attrBits.min,
+                        dataBitMax: dataBits.max,
+                        dataBitMin: dataBits.min
+                    };
+                }).filter(Boolean);
+
+                console.log('속성 처리 완료', { validCount: extractedAttributesList.length });
+
+                if (extractedAttributesList.length === 0) {
+                    console.error('유효한 속성이 없습니다.');
+                    throw new Error('추출된 유효한 속성이 없습니다.');
+                }
+
+                // 결과 표시
+                console.log('분석 결과 표시', { attributeCount: extractedAttributesList.length });
+                $gptResponse.textContent = data.response;
+                displayExtractedAttributes();
+                $gptResultCard.style.display = 'block';
+                $gptStatus.textContent = `✓ 분석 완료: ${extractedAttributesList.length}개 속성 추출됨. 자동 저장 중...`;
+                $gptStatus.style.color = '#007bff';
+
+                // 자동 저장 실행
+                console.log('자동 저장 시작');
+                await saveAllAttributes();
+                console.log('GPT 분석 완료');
+
+            } catch (e) {
+                console.error('GPT 분석 오류:', e);
+                $gptStatus.textContent = `✗ 분석 실패: ${e.message}`;
+                $gptStatus.style.color = '#dc3545';
+                $gptResponse.textContent = `오류: ${e.message}`;
+            } finally {
+                $analyzeBtn1.disabled = false;
+                $analyzeBtn2.disabled = false;
+            }
+        }
+
+        // 추출된 속성 표시
+        function displayExtractedAttributes() {
+            let html = '<div class="row">';
+            extractedAttributesList.forEach((item, idx) => {
+                const attrMax = item.attributeBitMax !== null && item.attributeBitMax !== undefined ? item.attributeBitMax.toFixed(15) : '-';
+                const attrMin = item.attributeBitMin !== null && item.attributeBitMin !== undefined ? item.attributeBitMin.toFixed(15) : '-';
+                const dataMax = item.dataBitMax !== null && item.dataBitMax !== undefined ? item.dataBitMax.toFixed(15) : '-';
+                const dataMin = item.dataBitMin !== null && item.dataBitMin !== undefined ? item.dataBitMin.toFixed(15) : '-';
+                const saveStatus = item.saveStatus || 'pending'; // pending, saving, success, duplicate, error
+                const saveMessage = item.saveMessage || '';
+                
+                let statusHtml = '';
+                if (saveStatus === 'pending') {
+                    statusHtml = '<div class="small text-muted mt-2"><em>저장 대기 중...</em></div>';
+                } else if (saveStatus === 'saving') {
+                    statusHtml = '<div class="small text-info mt-2">💾 저장 중...</div>';
+                } else if (saveStatus === 'success') {
+                    statusHtml = `<div class="small text-success mt-2">✓ ${saveMessage || '저장 완료'}</div>`;
+                } else if (saveStatus === 'duplicate') {
+                    statusHtml = `<div class="small text-warning mt-2">⚠ ${saveMessage || '이미 저장됨'}</div>`;
+                } else if (saveStatus === 'error') {
+                    statusHtml = `<div class="small text-danger mt-2">✗ ${saveMessage || '저장 실패'}</div>`;
+                }
+                
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3 attribute-card" 
+                             onclick="handleAttributeCardClick(${idx})">
+                            <h6 class="text-primary">속성 ${idx + 1}: ${escapeHtml(item.attribute)}</h6>
+                            <div class="mb-2">
+                                <strong>데이터:</strong> ${escapeHtml(item.data)}
+                            </div>
+                            ${item.reasoning ? `<div class="small text-muted mb-2"><strong>이유:</strong> ${escapeHtml(item.reasoning)}</div>` : ''}
+                            <div class="small text-muted">
+                                <strong>속성 BIT:</strong> MAX ${attrMax}, MIN ${attrMin}<br>
+                                <strong>데이터 BIT:</strong> MAX ${dataMax}, MIN ${dataMin}
+                            </div>
+                            ${(item.attributeBitMax === null || item.attributeBitMin === null || item.dataBitMax === null || item.dataBitMin === null) ? 
+                                '<div class="text-warning small mt-1">⚠ BIT 값 계산 실패</div>' : ''}
+                            ${statusHtml}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            $extractedAttributes.innerHTML = html;
+        }
+        
+        // 속성 카드 클릭 핸들러
+        window.handleAttributeCardClick = function(idx) {
+            const item = extractedAttributesList[idx];
+            if (!item) return;
+            
+            // 좌측 속성 목록에서 해당 속성 찾기
+            if (item.attributeBitMax && item.attributeBitMin) {
+                scrollToAttribute(item.attributeBitMax, item.attributeBitMin, item.attribute);
+            }
+        };
+
+        // 좌측 속성 목록에서 속성 찾아서 스크롤하고 강조 표시
+        function scrollToAttribute(bitMax, bitMin, attributeText) {
+            console.log('속성 스크롤 시작', { attributeText, bitMax, bitMin });
+            
+            // 이전 하이라이트 제거
+            const previousHighlighted = document.querySelector('.attribute-item.highlighted');
+            if (previousHighlighted) {
+                previousHighlighted.classList.remove('highlighted');
+            }
+
+            // 모든 속성 아이템 찾기
+            const attributeItems = document.querySelectorAll('.attribute-item');
+            let targetElement = null;
+
+            // BIT 값으로 정확히 일치하는 속성 찾기
+            attributeItems.forEach(item => {
+                const bitMaxText = item.getAttribute('data-bit-max');
+                const bitMinText = item.getAttribute('data-bit-min');
+                
+                if (bitMaxText && bitMinText) {
+                    const itemBitMax = parseFloat(bitMaxText);
+                    const itemBitMin = parseFloat(bitMinText);
+                    
+                    // BIT 값이 일치하는지 확인 (소수점 오차 허용)
+                    if (Math.abs(itemBitMax - bitMax) < 0.0001 && Math.abs(itemBitMin - bitMin) < 0.0001) {
+                        targetElement = item;
+                    }
+                }
+            });
+
+            // BIT 값으로 못 찾았으면 텍스트로 찾기
+            if (!targetElement) {
+                attributeItems.forEach(item => {
+                    const nameElement = item.querySelector('.attribute-name');
+                    if (nameElement && nameElement.textContent.trim() === attributeText.trim()) {
+                        targetElement = item;
+                    }
+                });
+            }
+
+            if (targetElement) {
+                console.log('속성 찾음 및 스크롤', { attributeText });
+                // 하이라이트 추가
+                targetElement.classList.add('highlighted');
+                
+                // 스크롤하여 해당 요소를 보이게 함
+                targetElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+
+                // 3초 후 하이라이트 제거
+                setTimeout(() => {
+                    targetElement.classList.remove('highlighted');
+                    console.log('속성 하이라이트 제거', { attributeText });
+                }, 3000);
+            } else {
+                console.warn('속성을 찾을 수 없습니다:', attributeText);
+                // 속성 목록 새로고침 후 다시 시도
+                console.log('속성 목록 새로고침 후 재시도');
+                loadAttributes().then(() => {
+                    setTimeout(() => scrollToAttribute(bitMax, bitMin, attributeText), 500);
+                });
+            }
+        }
+
+
+        // 모든 속성 저장 (자동 저장)
+        async function saveAllAttributes() {
+            if (extractedAttributesList.length === 0) {
+                console.warn('저장할 속성이 없습니다.');
+                return;
+            }
+
+            console.log('속성 저장 시작', { totalCount: extractedAttributesList.length });
+
+            try {
+                let successCount = 0;
+                let duplicateCount = 0;
+                let errorCount = 0;
+
+                // 각 속성별로 저장
+                for (let idx = 0; idx < extractedAttributesList.length; idx++) {
+                    const item = extractedAttributesList[idx];
+                    
+                    // 저장 중 상태로 표시
+                    item.saveStatus = 'saving';
+                    item.saveMessage = '저장 중...';
+                    displayExtractedAttributes();
+                    
+                    try {
+                        // BIT 값 검증
+                        if (item.attributeBitMax === null || item.attributeBitMin === null || 
+                            item.dataBitMax === null || item.dataBitMin === null) {
+                            item.saveStatus = 'error';
+                            item.saveMessage = 'BIT 값 계산 실패';
+                            errorCount++;
+                            displayExtractedAttributes();
+                            continue;
+                        }
+
+                        console.log(`속성 저장 시도: ${item.attribute}`);
+                        const url = getServerUrl('/api/attributes/data');
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                attributeBitMax: item.attributeBitMax,
+                                attributeBitMin: item.attributeBitMin,
+                                attributeText: item.attribute,
+                                text: item.data,
+                                dataBitMax: item.dataBitMax,
+                                dataBitMin: item.dataBitMin
+                            })
+                        });
+
+                        console.log(`속성 저장 API 응답: ${item.attribute}`, { status: res.status });
+
+                        if (!res.ok) {
+                            throw new Error(`HTTP ${res.status}`);
+                        }
+
+                        const data = await res.json();
+                        if (data.ok) {
+                            if (data.duplicate) {
+                                duplicateCount++;
+                                item.saveStatus = 'duplicate';
+                                item.saveMessage = data.message || '이미 저장되어 있습니다.';
+                                console.warn(`속성 중복: ${item.attribute}`);
+                            } else {
+                                successCount++;
+                                item.saveStatus = 'success';
+                                item.saveMessage = '저장 완료';
+                                console.log(`속성 저장 완료: ${item.attribute}`);
+                            }
+                        } else {
+                            throw new Error(data.error || '저장 실패');
+                        }
+                    } catch (e) {
+                        console.error(`속성 "${item.attribute}" 저장 오류:`, e);
+                        errorCount++;
+                        item.saveStatus = 'error';
+                        item.saveMessage = e.message || '저장 실패';
+                    }
+                    
+                    // 각 항목 저장 후 즉시 화면 업데이트
+                    displayExtractedAttributes();
+                }
+
+                // 전체 저장 완료 상태 업데이트
+                console.log('속성 저장 완료', { success: successCount, duplicate: duplicateCount, error: errorCount });
+                $gptStatus.textContent = `✓ 저장 완료: 성공 ${successCount}개, 중복 ${duplicateCount}개, 실패 ${errorCount}개`;
+                $gptStatus.style.color = '#28a745';
+                
+                // 속성 목록 새로고침
+                console.log('속성 목록 새로고침 예약');
+                setTimeout(() => {
+                    loadAttributes();
+                }, 500);
+            } catch (e) {
+                console.error('저장 오류:', e);
+                $gptStatus.textContent = `✗ 저장 실패: ${e.message}`;
+                $gptStatus.style.color = '#dc3545';
+            }
+        }
+
+        // GPT 분석 버튼 이벤트
+        $analyzeBtn1.addEventListener('click', () => {
+            const prompt = $gptPrompt1.value.trim();
+            analyzeWithGPT(prompt);
+        });
+        
+        $analyzeBtn2.addEventListener('click', () => {
+            analyzeWithGPT2();
+        });
+
+        // GPT 분석 함수 2: 속성 결정 후 프롬프트 2 적용
+        async function analyzeWithGPT2() {
+            const text = $gptInput.value.trim();
+            if (!text) {
+                console.warn('GPT 분석: 분석할 텍스트가 없습니다.');
+                alert('분석할 텍스트를 입력하세요.');
+                return;
+            }
+
+            const prompt2 = $gptPrompt2.value.trim();
+            if (!prompt2) {
+                console.warn('GPT 분석 2: 프롬프트 입력 2가 없습니다.');
+                alert('프롬프트 입력 2를 입력하세요.');
+                return;
+            }
+
+            console.log('GPT 분석 2 시작', { prompt2, textLength: text.length });
+
+            try {
+                // 두 버튼 모두 비활성화
+                $analyzeBtn1.disabled = true;
+                $analyzeBtn2.disabled = true;
+                $gptStatus.textContent = 'GPT AI 분석 중... (속성 결정 중)';
+                $gptStatus.style.color = '#007bff';
+                $gptResponse.textContent = '분석 중...';
+
+                // 첫 번째 GPT 호출: 속성 결정
+                console.log('1단계: 속성 결정 시작');
+                const attributeSystemMessage = `당신은 소설 텍스트를 분석하여 어떤 속성(소설 구성 요소)을 분석할지 결정하는 전문가입니다.
+
+사용자의 요청: "${prompt2}"
+
+사용자의 요청을 바탕으로, 다음 중 하나의 속성 이름을 정확히 선택하여 반환해주세요:
+- 등장인물
+- 배경 설정
+- 주요 사건
+- 감정/분위기
+- 테마/주제
+- 스타일/톤
+
+**중요**: 
+- 사용자의 요청에 가장 적합한 속성 이름 하나만 선택하세요.
+- 다른 설명 없이 속성 이름만 정확히 반환하세요.
+- 예: 사용자가 "등장인물을" 또는 "등장인물에 대해" 요청하면 → "등장인물"
+- 예: 사용자가 "배경" 또는 "설정"을 요청하면 → "배경 설정"
+- 예: 사용자가 "개요를 써줘"라고 했지만 속성을 명시하지 않았다면, 텍스트를 보고 가장 적합한 속성을 선택하세요.`;
+
+                const attributePrompt = `다음 소설 텍스트를 분석하여, 사용자 요청 "${prompt2}"에 해당하는 속성 하나를 선택해주세요.\n\n[텍스트]\n${text}\n\n위 요청에 가장 적합한 속성 이름 하나만 정확히 반환하세요.`;
+
+                const attributeUrl = getServerUrl('/api/gpt/chat');
+                const attributeRes = await fetch(attributeUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: attributePrompt,
+                        systemMessage: attributeSystemMessage,
+                        model: 'gpt-4o-mini',
+                        temperature: 0.3,
+                        maxTokens: 100
+                    })
+                });
+
+                if (!attributeRes.ok) {
+                    throw new Error(`HTTP ${attributeRes.status}`);
+                }
+
+                const attributeData = await attributeRes.json();
+                if (!attributeData.ok) {
+                    throw new Error(attributeData.error || '속성 결정 실패');
+                }
+
+                // 속성 이름 추출
+                let selectedAttribute = attributeData.response.trim();
+                // 속성 이름만 추출 (불필요한 설명 제거)
+                const lowerResponse = selectedAttribute.toLowerCase();
+                
+                if (lowerResponse.includes('등장인물') || lowerResponse.includes('인물')) {
+                    selectedAttribute = '등장인물';
+                } else if (lowerResponse.includes('배경') && (lowerResponse.includes('설정') || lowerResponse.includes('장소') || lowerResponse.includes('세계'))) {
+                    selectedAttribute = '배경 설정';
+                } else if ((lowerResponse.includes('주요') && lowerResponse.includes('사건')) || lowerResponse.includes('사건') || lowerResponse.includes('플롯')) {
+                    selectedAttribute = '주요 사건';
+                } else if ((lowerResponse.includes('감정') || lowerResponse.includes('분위기')) && !lowerResponse.includes('테마')) {
+                    selectedAttribute = '감정/분위기';
+                } else if (lowerResponse.includes('테마') || lowerResponse.includes('주제') || lowerResponse.includes('메시지')) {
+                    selectedAttribute = '테마/주제';
+                } else if (lowerResponse.includes('스타일') || lowerResponse.includes('톤') || lowerResponse.includes('문체')) {
+                    selectedAttribute = '스타일/톤';
+                } else {
+                    // 기본값: 첫 번째 속성 (등장인물)
+                    console.warn('속성을 자동으로 결정할 수 없어 등장인물로 설정합니다.', { response: selectedAttribute });
+                    selectedAttribute = '등장인물';
+                }
+
+                console.log('선택된 속성', { selectedAttribute, originalResponse: attributeData.response });
+
+                // 두 번째 GPT 호출: 선택된 속성에 대해 프롬프트 2 요구사항 반영하여 분석
+                console.log('2단계: 속성 분석 시작', { attribute: selectedAttribute });
+                $gptStatus.textContent = `GPT AI 분석 중... (${selectedAttribute} 분석 중)`;
+                
+                const analysisSystemMessage = `당신은 소설 텍스트를 분석하여 "${selectedAttribute}" 속성에 대한 정보를 추출하는 전문가입니다.
+
+사용자 요청: "${prompt2}"
+
+위 요청사항을 반드시 반영하여 "${selectedAttribute}" 속성에 대한 분석 결과를 제공해주세요.
+
+**응답 형식**:
+
+속성: ${selectedAttribute}
+
+데이터: [프롬프트 요청사항에 따라 작성]
+
+속성 BIT: -, -
+
+데이터 BIT: -, -
+
+**중요**: 
+- 사용자 요청 "${prompt2}"를 반드시 반영하여 데이터를 작성하세요.
+- 속성 BIT와 데이터 BIT는 항상 "-, -"로 표시하세요 (실제 계산은 시스템에서 처리합니다).
+- JSON 형식이 아닌 위의 텍스트 형식으로만 응답하세요.`;
+
+                const analysisPrompt = `다음 소설 텍스트에서 "${selectedAttribute}" 속성에 대한 정보를 추출해주세요.\n\n사용자 요청: "${prompt2}"\n\n[텍스트]\n${text}\n\n위 요청사항에 따라 "${selectedAttribute}" 속성의 데이터를 작성해주세요.`;
+
+                const analysisUrl = getServerUrl('/api/gpt/chat');
+                const analysisRes = await fetch(analysisUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: analysisPrompt,
+                        systemMessage: analysisSystemMessage,
+                        model: 'gpt-4o-mini',
+                        temperature: 0.3,
+                        maxTokens: 1500
+                    })
+                });
+
+                if (!analysisRes.ok) {
+                    throw new Error(`HTTP ${analysisRes.status}`);
+                }
+
+                const analysisData = await analysisRes.json();
+                if (!analysisData.ok) {
+                    throw new Error(analysisData.error || '속성 분석 실패');
+                }
+
+                console.log('속성 분석 완료');
+
+                // 응답 파싱
+                let parsed = [];
+                try {
+                    const responseText = analysisData.response.trim();
+                    
+                    // 속성 추출
+                    const attrMatch = responseText.match(/속성\s*:\s*(.+?)(?:\n|$)/);
+                    const attribute = attrMatch ? attrMatch[1].trim() : selectedAttribute;
+                    
+                    // 데이터 추출
+                    const dataMatch = responseText.match(/데이터\s*:\s*(.+?)(?:\n\n속성\s*BIT:|\n속성\s*BIT:|$)/s);
+                    const dataText = dataMatch ? dataMatch[1].trim() : responseText;
+                    
+                    if (attribute && dataText) {
+                        parsed.push({
+                            attribute: attribute,
+                            data: dataText,
+                            reasoning: ''
+                        });
+                    }
+                } catch (e) {
+                    console.error('파싱 오류:', e);
+                    // 파싱 실패 시 전체 응답을 데이터로 사용
+                    parsed.push({
+                        attribute: selectedAttribute,
+                        data: analysisData.response,
+                        reasoning: ''
+                    });
+                }
+
+                if (parsed.length === 0) {
+                    throw new Error('분석 결과를 파싱할 수 없습니다.');
+                }
+
+                // 추출된 속성 처리
+                extractedAttributesList = parsed.map(item => {
+                    const attribute = item.attribute?.trim() || '';
+                    const dataText = item.data?.trim() || '';
+                    
+                    if (!attribute || !dataText) {
+                        return null;
+                    }
+
+                    const attrBits = calculateBitValues(attribute);
+                    const dataBits = calculateBitValues(dataText);
+                    
+                    console.log('속성 BIT 계산', { 
+                        attribute, 
+                        attrBitMax: attrBits.max, 
+                        attrBitMin: attrBits.min,
+                        dataBitMax: dataBits.max,
+                        dataBitMin: dataBits.min
+                    });
+                    
+                    return {
+                        attribute: attribute,
+                        data: dataText,
+                        reasoning: item.reasoning?.trim() || '',
+                        attributeBitMax: attrBits.max,
+                        attributeBitMin: attrBits.min,
+                        dataBitMax: dataBits.max,
+                        dataBitMin: dataBits.min
+                    };
+                }).filter(Boolean);
+
+                if (extractedAttributesList.length === 0) {
+                    throw new Error('추출된 유효한 속성이 없습니다.');
+                }
+
+                // 결과 표시
+                console.log('분석 결과 표시', { attributeCount: extractedAttributesList.length });
+                $gptResponse.textContent = analysisData.response;
+                displayExtractedAttributes();
+                $gptResultCard.style.display = 'block';
+                $gptStatus.textContent = `✓ 분석 완료: ${extractedAttributesList.length}개 속성 추출됨. 자동 저장 중...`;
+                $gptStatus.style.color = '#007bff';
+
+                // 자동 저장 실행
+                console.log('자동 저장 시작');
+                await saveAllAttributes();
+                console.log('GPT 분석 2 완료');
+
+            } catch (e) {
+                console.error('GPT 분석 2 오류:', e);
+                $gptStatus.textContent = `✗ 분석 실패: ${e.message}`;
+                $gptStatus.style.color = '#dc3545';
+                $gptResponse.textContent = `오류: ${e.message}`;
+            } finally {
+                $analyzeBtn1.disabled = false;
+                $analyzeBtn2.disabled = false;
+            }
+        }
+
+
+        // 데이터 입력 시 BIT 계산
+        $newDataInput.addEventListener('input', (e) => {
+            const text = e.target.value.trim();
+            if (text) {
+                const { max, min } = calculateBitValues(text);
+                $newDataMax.textContent = max !== null ? max.toFixed(15) : '-';
+                $newDataMin.textContent = min !== null ? min.toFixed(15) : '-';
+            } else {
+                $newDataMax.textContent = '-';
+                $newDataMin.textContent = '-';
+            }
+        });
+
+        // 속성 목록 로드
+        async function loadAttributes() {
+            console.log('속성 목록 로드 시작');
+            try {
+                $attributesList.innerHTML = '<div class="text-center text-muted">로딩 중...</div>';
+                
+                // 모든 속성 목록 조회
+                const url = getServerUrl('/api/attributes/all');
+                console.log('속성 목록 API 요청', { url });
+                const res = await fetch(url);
+
+                console.log('속성 목록 API 응답', { status: res.status });
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+                console.log('속성 목록 데이터 수신', { ok: data.ok, attributeCount: data.attributes?.length || 0 });
+                
+                if (!data.ok || !data.attributes || data.attributes.length === 0) {
+                    $attributesList.innerHTML = '<div class="text-center text-muted">저장된 속성이 없습니다.</div>';
+                    return;
+                }
+
+                // 각 속성의 데이터 조회
+                const attributePromises = data.attributes.map(async (attr) => {
+                    try {
+                        const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=100`);
+                        const dataRes = await fetch(dataUrl);
+                        if (dataRes.ok) {
+                            const dataData = await dataRes.json();
+                            if (dataData.ok && dataData.items) {
+                                // 속성 자체를 데이터로 저장한 경우는 제외
+                                const dataList = dataData.items
+                                    .filter(item => item.data && item.data.text && item.data.text !== attr.text)
+                                    .map(item => item.data);
+                                return {
+                                    ...attr,
+                                    dataList: dataList,
+                                    dataCount: dataList.length
+                                };
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`속성 "${attr.text}" 데이터 로드 실패:`, e);
+                    }
+                    return {
+                        ...attr,
+                        dataList: [],
+                        dataCount: 0
+                    };
+                });
+
+                const attributesWithData = await Promise.all(attributePromises);
+                console.log('속성 데이터 조회 완료', { count: attributesWithData.length });
+
+                // 속성 목록 렌더링
+                console.log('속성 목록 렌더링 시작');
+                let html = '';
+                attributesWithData.forEach((attr) => {
+                    html += `
+                        <div class="attribute-item" 
+                             data-bit-max="${attr.bitMax}" 
+                             data-bit-min="${attr.bitMin}"
+                             data-attribute-text="${escapeHtml(attr.text)}">
+                            <div class="attribute-header">
+                                <div>
+                                    <span class="attribute-name">${escapeHtml(attr.text)}</span>
+                                </div>
+                                <small class="text-muted">
+                                    BIT: ${attr.bitMax.toFixed(15)}, ${attr.bitMin.toFixed(15)} | 
+                                    데이터 ${attr.dataCount}개
+                                </small>
+                            </div>
+                            <div class="data-list">
+                                ${attr.dataList.length > 0 ? attr.dataList.map(data => `
+                                    <div class="data-item">
+                                        <strong>${escapeHtml(data.text)}</strong>
+                                        <small class="text-muted ms-2">
+                                            BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}
+                                        </small>
+                                    </div>
+                                `).join('') : '<div class="text-muted small">데이터가 없습니다.</div>'}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                $attributesList.innerHTML = html;
+                console.log('속성 목록 렌더링 완료', { renderedCount: attributesWithData.length });
+            } catch (e) {
+                console.error('속성 목록 로드 오류:', e);
+                $attributesList.innerHTML = `<div class="text-danger">✗ 로드 실패: ${e.message}</div>`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 데이터 추가 모달 열기
+        window.openAddDataModal = function(attributeText, attributeBitMax, attributeBitMin) {
+            currentAttribute = {
+                text: attributeText,
+                bitMax: attributeBitMax,
+                bitMin: attributeBitMin
+            };
+            
+            $modalAttributeName.textContent = attributeText;
+            $modalAttributeMax.textContent = attributeBitMax.toFixed(15);
+            $modalAttributeMin.textContent = attributeBitMin.toFixed(15);
+            $newDataInput.value = '';
+            $newDataMax.textContent = '-';
+            $newDataMin.textContent = '-';
+            $saveDataStatus.textContent = '';
+            
+            addDataModal.show();
+        };
+
+        // 데이터 저장
+        $saveDataBtn.addEventListener('click', async () => {
+            console.log('데이터 저장 버튼 클릭');
+            
+            if (!currentAttribute) {
+                console.warn('데이터 저장: 속성 정보가 없습니다.');
+                $saveDataStatus.textContent = '✗ 속성 정보가 없습니다.';
+                $saveDataStatus.style.color = '#dc3545';
+                return;
+            }
+
+            const dataText = $newDataInput.value.trim();
+            if (!dataText) {
+                console.warn('데이터 저장: 데이터가 입력되지 않았습니다.');
+                $saveDataStatus.textContent = '✗ 데이터를 입력하세요.';
+                $saveDataStatus.style.color = '#dc3545';
+                return;
+            }
+
+            console.log('데이터 저장 시작', { attribute: currentAttribute.text, dataLength: dataText.length });
+            
+            const { max, min } = calculateBitValues(dataText);
+            console.log('데이터 BIT 계산', { max, min });
+            
+            if (max === null || min === null) {
+                console.error('데이터 저장: BIT 값 계산 실패');
+                $saveDataStatus.textContent = '✗ BIT 값 계산 실패.';
+                $saveDataStatus.style.color = '#dc3545';
+                return;
+            }
+
+            try {
+                $saveDataBtn.disabled = true;
+                $saveDataStatus.textContent = '저장 중...';
+                $saveDataStatus.style.color = '#007bff';
+
+                console.log('데이터 저장 API 요청');
+                const url = getServerUrl('/api/attributes/data');
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        attributeText: currentAttribute.text,
+                        attributeBitMax: currentAttribute.bitMax,
+                        attributeBitMin: currentAttribute.bitMin,
+                        text: dataText,
+                        dataBitMax: max,
+                        dataBitMin: min
+                    })
+                });
+
+                console.log('데이터 저장 API 응답', { status: res.status });
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    console.error('데이터 저장 API 오류', { status: res.status, error: errorText });
+                    throw new Error(`HTTP ${res.status}: ${errorText}`);
+                }
+
+                const data = await res.json();
+                console.log('데이터 저장 결과', { ok: data.ok, duplicate: data.duplicate });
+                
+                if (!data.ok) {
+                    throw new Error(data.error || '저장 실패');
+                }
+
+                if (data.duplicate) {
+                    console.warn('데이터 중복 저장 시도');
+                    $saveDataStatus.textContent = '⚠ 이미 동일한 데이터가 저장되어 있습니다.';
+                    $saveDataStatus.style.color = '#ffc107';
+                } else {
+                    console.log('데이터 저장 완료');
+                    $saveDataStatus.textContent = '✓ 데이터 저장 완료';
+                    $saveDataStatus.style.color = '#28a745';
+                    $newDataInput.value = '';
+                    $newDataMax.textContent = '-';
+                    $newDataMin.textContent = '-';
+                    
+                    setTimeout(() => {
+                        addDataModal.hide();
+                        loadAttributes();
+                    }, 1000);
+                }
+            } catch (e) {
+                console.error('데이터 저장 오류:', e);
+                $saveDataStatus.textContent = `✗ 저장 실패: ${e.message}`;
+                $saveDataStatus.style.color = '#dc3545';
+            } finally {
+                $saveDataBtn.disabled = false;
+            }
+        });
+
+        // 속성으로 검색
+        window.searchByAttribute = function(attributeText, attributeBitMax, attributeBitMin) {
+            window.location.href = `bit_search.html?attribute=${encodeURIComponent(attributeText)}&bitMax=${attributeBitMax}&bitMin=${attributeBitMin}`;
+        };
+
+        // 새로고침
+        $refreshBtn.addEventListener('click', () => {
+            console.log('속성 목록 새로고침 버튼 클릭');
+            loadAttributes();
+        });
+
+        // 페이지 로드 시 속성 목록 로드
+        console.log('페이지 로드 완료, 속성 목록 로드 시작');
+        loadAttributes();
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N/B Novel AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- 로그 컨테이너 -->
+        <div class="log-container-wrapper" id="topLogWrapper">
+            <div class="log-header">
+                <span class="log-title">📋 로그</span>
+                <button id="toggleLogBtn" class="log-toggle-btn">▼</button>
+                <button id="clearLogBtn" class="log-clear-btn">🧹 지우기</button>
+            </div>
+            <div id="logContainer" class="log-container"></div>
+            <div class="log-resize-handle" id="topLogResizeHandle"></div>
+        </div>
+
+        <!-- 상단 헤더 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="brand-section">
+                    <div class="brand-logo">
+                        <div class="brand-dot"></div>
+                        <span class="brand-pulse"></span>
+                    </div>
+                    <div class="brand-text">
+                        <h4 class="brand-title">N/B Novel AI</h4>
+                        <span class="brand-subtitle">Novel Composition Assistant</span>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <div class="model-selector">
+                        <label class="model-label">Model</label>
+                        <select id="chatModel" class="model-select">
+                            <option value="gpt-4o" selected>gpt-4o</option>
+                            <option value="gpt-4o-mini">gpt-4o-mini</option>
+                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                            <option value="gpt-4">gpt-4</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="app-main">
+            <!-- 좌측: 속성 조회 영역 -->
+            <aside class="left-panel">
+                <div class="left-header">
+                    <h5 class="mb-3">📚 Novel AI</h5>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">속성 필터 (BIT 값으로 조회)</label>
+                        <input type="text" id="attributeFilterInput" class="form-control form-control-sm" 
+                               placeholder="예: 소설 제목 → 챕터 1: 제1장">
+                        <small class="text-muted">입력하면 자동으로 속성 목록이 불러옵니다.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">추가 검색 키워드</label>
+                        <input type="text" id="additionalSearchInput" class="form-control form-control-sm" 
+                               placeholder="쉼표로 구분된 키워드">
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button id="refreshBtn" class="btn btn-sm btn-outline-light">🔄 새로고침</button>
+                        <button id="clearFilterBtn" class="btn btn-sm btn-outline-secondary">🧹 필터 초기화</button>
+                    </div>
+                </div>
+                <div class="left-content">
+                    <div id="attributesList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔍</div>
+                            <div>속성 필터를 입력하여 조회하세요</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 가운데: 챗봇 영역 -->
+            <main class="chat-main">
+                <div class="chat-container">
+                    <div id="mainContent" class="chat-messages">
+                        <div class="welcome-message">
+                            <div class="welcome-icon">📝</div>
+                            <div class="welcome-text">소설 제목을 입력하세요</div>
+                            <div class="welcome-desc">속성 필터에 소설 제목을 입력하면 해당 소설의 속성과 데이터를 조회할 수 있습니다.</div>
+                            <div class="welcome-desc" style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-muted);">
+                                예: "소설 제목" 또는 "소설 제목 → 챕터 1: 제1장"
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chat-input-wrapper">
+                        <div class="input-container">
+                            <textarea 
+                                id="chatInput" 
+                                class="chat-input" 
+                                rows="1"
+                                placeholder="소설 구성 목록을 작성하세요... 예: 소설 제목: 미드 라이너는 황무지에 있다, 챕터 1: 제1장 (장면: 코어 점화, 주인공 등장) (Shift+Enter 줄바꿈)"
+                                autocomplete="off"
+                                spellcheck="false"></textarea>
+                            <button id="chatSendBtn" class="send-btn" title="전송 (Enter)">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="input-footer">
+                            <span class="input-hint">Shift+Enter 줄바꿈</span>
+                            <button id="chatClearBtn" class="clear-btn">대화 지우기</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <!-- 우측: 속성/데이터 입력 영역 -->
+            <aside class="right-panel">
+                <div class="right-header">
+                    <h5 class="mb-3">➕ 속성/데이터 입력</h5>
+                </div>
+                <div class="right-content">
+                    <div class="card">
+                        <h6 class="mb-3">📖 소설 제목</h6>
+                        <div class="mb-3">
+                            <input type="text" id="novelTitleInputForChapter" class="form-control" 
+                                   placeholder="예: 미드 라이너는 황무지에 있다">
+                            <small class="text-muted">소설 제목을 입력하면 챕터 목록이 표시됩니다</small>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h6 class="mb-3">📚 챕터 구성 목록</h6>
+                        <div id="chapterListContainer" class="chapter-list-container">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">📖</div>
+                                <div class="small text-muted">소설 제목을 입력하면 챕터 목록이 표시됩니다</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">속성</label>
+                            <input type="text" id="novelTitleInput" class="form-control" 
+                                   placeholder="예: 미드 라이너는 황무지에 있다">
+                            <small class="text-muted">속성을 입력하세요 (저장 시 속성에 포함됩니다)</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">속성 텍스트 (소설 제목 제외)</label>
+                            <input type="text" id="attributeInput" class="form-control" 
+                                   placeholder="예: 챕터 1 → 제1장 → 개요(코어 점화)">
+                            <div id="attributeBitInfo" class="bit-info">BIT: 계산 중...</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">데이터 텍스트</label>
+                            <textarea id="dataInput" class="form-control" rows="8" 
+                                      placeholder="속성에 해당하는 데이터를 입력하세요..."></textarea>
+                            <div id="dataBitInfo" class="bit-info">BIT: 계산 중...</div>
+                        </div>
+                        
+                        <div id="saveStatus" class="mt-2 small"></div>
+                        <div class="small text-muted mt-2">
+                            💡 속성과 데이터를 입력하면 자동으로 저장됩니다. (입력 후 1초 대기)
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h6 class="mb-3">📝 저장 정보</h6>
+                        <div class="small text-muted">
+                            <div>• 속성과 데이터 입력 시 자동으로 저장됩니다 (입력 후 1초 대기).</div>
+                            <div>• 저장된 데이터는 좌측 조회 영역에서 즉시 확인할 수 있습니다.</div>
+                            <div>• 중복 저장은 자동으로 방지됩니다.</div>
+                            <div>• 속성 형식: "소설 제목 → 챕터 N: 제목 → 속성명"</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h6 class="mb-3">🔧 서버 정보</h6>
+                        <div class="small">
+                            <div id="serverUrl" class="text-muted mb-2">서버 URL: 계산 중...</div>
+                            <div id="serverStatus" class="mb-2">연결 상태: 확인 중...</div>
+                            <button id="testConnectionBtn" class="btn btn-sm btn-outline-primary">🔌 연결 테스트</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+        
+        <!-- 하단 로그 컨테이너 -->
+        <div class="bottom-log-container-wrapper" id="bottomLogWrapper">
+            <div class="bottom-log-resize-handle" id="bottomLogResizeHandle"></div>
+            <div class="bottom-log-header">
+                <span class="bottom-log-title">📋 하단 로그</span>
+                <button id="toggleBottomLogBtn" class="bottom-log-toggle-btn">▼</button>
+                <button id="clearBottomLogBtn" class="bottom-log-clear-btn">🧹 지우기</button>
+            </div>
+            <div class="bottom-log-split-container">
+                <div class="bottom-log-left-section">
+                    <div class="bottom-log-section-header">
+                        <span class="bottom-log-section-title">좌측 로그</span>
+                        <button id="clearLeftLogBtn" class="bottom-log-clear-btn">🧹</button>
+                    </div>
+                    <div id="bottomLogLeftContainer" class="bottom-log-container"></div>
+                </div>
+                <div class="bottom-log-right-section">
+                    <div class="bottom-log-section-header">
+                        <span class="bottom-log-section-title">우측 로그</span>
+                        <button id="clearRightLogBtn" class="bottom-log-clear-btn">🧹</button>
+                    </div>
+                    <div id="bottomLogRightContainer" class="bottom-log-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/prompts.js"></script>
+    <script src="assets/js/attribute_data.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
+

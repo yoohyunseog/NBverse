@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>실시간 자동화 시스템</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script src="js/searchAlgorithm.js"></script>
+    <style>
+        .input-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .output-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .bit-display {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            background: white;
+            color: #333;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .auto-status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+        .status-active {
+            background: #28a745;
+            color: white;
+        }
+        .status-paused {
+            background: #ffc107;
+            color: #333;
+        }
+        .result-item {
+            border-left: 3px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .result-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }
+        .similarity-badge {
+            font-size: 0.85em;
+            padding: 3px 8px;
+        }
+        .input-textarea {
+            font-size: 1.1em;
+            min-height: 120px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="mb-4">⚡ 실시간 자동화 시스템</h2>
+            </div>
+        </div>
+
+        <!-- 실시간 입력 섹션 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="input-section">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">📝 실시간 입력</h4>
+                        <div>
+                            <span class="auto-status" id="autoStatus">⏸️ 일시정지</span>
+                            <button id="toggleAutoBtn" class="btn btn-light btn-sm ms-2">자동화 활성화</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 속성 입력 -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">1단계: 속성 (문자 입력)</label>
+                        <textarea 
+                            id="attributeInput" 
+                            class="form-control input-textarea" 
+                            placeholder="속성을 나타내는 텍스트를 입력하세요..."
+                            rows="2"
+                        ></textarea>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <div class="bit-display">
+                                    <strong>속성 BIT MAX:</strong> <span id="attributeMax">-</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="bit-display">
+                                    <strong>속성 BIT MIN:</strong> <span id="attributeMin">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 데이터 입력 -->
+                    <div class="mb-3 border-top pt-3">
+                        <label class="form-label fw-bold">2단계: 데이터 (문자 입력)</label>
+                        <textarea 
+                            id="realtimeInput" 
+                            class="form-control input-textarea" 
+                            placeholder="이 속성에 저장할 데이터(텍스트)를 입력하세요..."
+                            rows="3"
+                        ></textarea>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <div class="bit-display">
+                                    <strong>데이터 BIT MAX:</strong> <span id="calculatedMax">-</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="bit-display">
+                                    <strong>데이터 BIT MIN:</strong> <span id="calculatedMin">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 저장 버튼 -->
+                    <div class="mt-3">
+                        <button id="saveBtn" class="btn btn-light">속성에 데이터 저장</button>
+                        <span id="saveStatus" class="ms-2 small"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 실시간 출력 섹션 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="output-section">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5>📊 실시간 출력</h5>
+                        <button id="clearOutputBtn" class="btn btn-sm btn-outline-secondary">출력 지우기</button>
+                    </div>
+                    <div id="realtimeOutput"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 실시간 조회 결과 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>🔍 실시간 조회 결과</strong>
+                        <span id="resultCount" class="badge bg-secondary">0개</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="searchStatus" class="small text-muted mb-2"></div>
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 5%;">#</th>
+                                        <th style="width: 15%;">시간</th>
+                                        <th style="width: 12%;">BIT_MAX</th>
+                                        <th style="width: 12%;">BIT_MIN</th>
+                                        <th style="width: 20%;">속성</th>
+                                        <th style="width: 26%;">데이터</th>
+                                        <th style="width: 10%;">유사도</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+      const $attributeInput = document.getElementById('attributeInput');
+      const $attributeMax = document.getElementById('attributeMax');
+      const $attributeMin = document.getElementById('attributeMin');
+      const $input = document.getElementById('realtimeInput');
+      const $calculatedMax = document.getElementById('calculatedMax');
+      const $calculatedMin = document.getElementById('calculatedMin');
+      const $autoStatus = document.getElementById('autoStatus');
+      const $toggleAutoBtn = document.getElementById('toggleAutoBtn');
+      const $realtimeOutput = document.getElementById('realtimeOutput');
+      const $clearOutputBtn = document.getElementById('clearOutputBtn');
+      const $resultBody = document.getElementById('resultBody');
+      const $resultCount = document.getElementById('resultCount');
+      const $searchStatus = document.getElementById('searchStatus');
+      const $saveBtn = document.getElementById('saveBtn');
+      const $saveStatus = document.getElementById('saveStatus');
+
+      let isAutoEnabled = false;
+      let inputDebounceTimer = null;
+      let searchTimer = null;
+      let lastInput = '';
+      let lastAttribute = '';
+
+      function getServerUrl(path) {
+        if (window.location.protocol === 'file:') {
+          return `http://localhost:8123${path}`;
+        }
+        return path;
+      }
+
+      async function testServerConnection() {
+        try {
+          const res = await fetch(getServerUrl('/health'));
+          return res.ok;
+        } catch {
+          return false;
+        }
+      }
+
+      function calculateBitValues(text) {
+        if (!text || typeof text !== 'string' || text.trim() === '') {
+          return { max: null, min: null };
+        }
+        try {
+          if (typeof wordNbUnicodeFormat === 'undefined' || typeof BIT_MAX_NB === 'undefined' || typeof BIT_MIN_NB === 'undefined') {
+            console.warn('BIT 계산 함수가 아직 로드되지 않았습니다.');
+            return { max: null, min: null };
+          }
+          const unicodeArray = wordNbUnicodeFormat(text);
+          const max = BIT_MAX_NB(unicodeArray);
+          const min = BIT_MIN_NB(unicodeArray);
+          return { max: isFinite(max) ? max : null, min: isFinite(min) ? min : null };
+        } catch (e) {
+          console.error('BIT 계산 오류:', e);
+          return { max: null, min: null };
+        }
+      }
+
+      function addOutput(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString('ko-KR');
+        const div = document.createElement('div');
+        div.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show`;
+        div.style.fontSize = '0.9em';
+        div.innerHTML = `
+          <small class="text-muted">[${timestamp}]</small> ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        $realtimeOutput.insertBefore(div, $realtimeOutput.firstChild);
+      }
+
+      async function autoSaveAttributeData(attributeText, dataText) {
+        if (!attributeText || !dataText) return;
+
+        const attrBits = calculateBitValues(attributeText);
+        const dataBits = calculateBitValues(dataText);
+
+        if (!attrBits.max || !attrBits.min || !dataBits.max || !dataBits.min) {
+          return;
+        }
+
+        try {
+          const url = getServerUrl('/api/attributes/data');
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              attributeBitMax: attrBits.max,
+              attributeBitMin: attrBits.min,
+              attributeText: attributeText,
+              text: dataText,
+              dataBitMax: dataBits.max,
+              dataBitMin: dataBits.min
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (data.ok) {
+            if (data.duplicate) {
+              $saveStatus.textContent = `⚠ 자동 저장: ${data.message || '이미 저장되어 있습니다.'}`;
+              $saveStatus.style.color = '#ffc107';
+              addOutput(`⚠ 속성 "${attributeText}"에 데이터 "${dataText}" 자동 저장 시도 (중복)`, 'warning');
+            } else {
+              $saveStatus.textContent = '✓ 자동 저장 완료!';
+              $saveStatus.style.color = '#28a745';
+              addOutput(`✓ 속성 "${attributeText}"에 데이터 "${dataText}" 자동 저장 완료`, 'success');
+              // 자동 저장 후 데이터 입력란은 유지 (사용자가 계속 입력할 수 있도록)
+            }
+          } else {
+            throw new Error(data.error || '저장 실패');
+          }
+        } catch (e) {
+          console.error('자동 저장 오류:', e);
+          $saveStatus.textContent = `✗ 자동 저장 실패: ${e.message}`;
+          $saveStatus.style.color = '#dc3545';
+          addOutput(`자동 저장 오류: ${e.message}`, 'error');
+        }
+      }
+
+      async function saveAttributeData() {
+        const attributeText = $attributeInput.value.trim();
+        const dataText = $input.value.trim();
+
+        if (!attributeText) {
+          $saveStatus.textContent = '속성 텍스트를 먼저 입력하세요.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+
+        if (!dataText) {
+          $saveStatus.textContent = '데이터 텍스트를 입력하세요.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+
+        await autoSaveAttributeData(attributeText, dataText);
+      }
+
+      async function autoSave(text, bitMax, bitMin) {
+        if (!text || !bitMax || !bitMin) return;
+
+        try {
+          // 자동 저장은 비활성화 (명시적 저장만)
+          addOutput(`입력 텍스트: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}" (BIT: ${bitMax.toFixed(15)}, ${bitMin.toFixed(15)})`, 'info');
+        } catch (e) {
+          addOutput(`저장 오류: ${e.message}`, 'error');
+        }
+      }
+
+      // 유사도 계산 헬퍼 함수 (공통 모듈 사용)
+      function calculateSimilarity(queryBitMax, queryBitMin, resultBitMax, resultBitMin) {
+        return window.SearchAlgorithm.calculateSimilarity(queryBitMax, queryBitMin, resultBitMax, resultBitMin);
+      }
+
+      async function autoSearch(bitMax, bitMin, searchText = null) {
+        if (!bitMax || !bitMin) return;
+
+        try {
+          $searchStatus.textContent = '검색 중...';
+          $searchStatus.style.color = '#007bff';
+
+          // 검색 옵션 (real_time.html은 기본값으로 'attribute'만 사용)
+          let searchOption = 'attribute';
+
+          let results = [];
+          // 검색 텍스트가 제공되면 해당 텍스트를 속성 후보로도 고려
+          let attributeText = $attributeInput.value.trim();
+          // 실시간 조회 입력란에서 검색한 경우, 검색 텍스트를 속성 후보로 사용
+          if (!attributeText && searchText) {
+            attributeText = searchText.trim();
+          }
+          const dataText = $input.value.trim();
+
+          // 1. 속성 검색 (속성 검색 또는 전체 검색일 때)
+          if (searchOption === 'attribute' || searchOption === 'all') {
+            try {
+              
+              // 검색 텍스트가 있으면 그것을 우선 사용 (실시간 조회 입력란에서 검색한 경우)
+              const searchAttributeText = searchText ? searchText.trim() : attributeText;
+              
+              if (searchAttributeText) {
+                const attrBits = calculateBitValues(searchAttributeText);
+                if (attrBits.max && attrBits.min) {
+                  // 속성 유사도 검색 (threshold로 유사한 속성들을 찾음)
+                  const url = getServerUrl(`/api/attributes/data?bitMax=${attrBits.max}&bitMin=${attrBits.min}&limit=20&similarity=true&threshold=0.1`);
+                  const res = await fetch(url);
+
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.ok && data.items) {
+                      results.push(...data.items.map(item => {
+                        // 속성 검색인 경우: 검색 쿼리의 속성 BIT와 결과의 속성 BIT를 비교
+                        const resultAttrBitMax = item.attribute?.bitMax || null;
+                        const resultAttrBitMin = item.attribute?.bitMin || null;
+                        const resultAttrText = item.attribute?.text || '';
+                        
+                        // 속성 BIT로 유사도 계산 (공통 모듈 사용)
+                        const similarity = window.SearchAlgorithm.calculateAttributeSimilarity(
+                          searchAttributeText,
+                          attrBits.max,
+                          attrBits.min,
+                          item
+                        );
+                        
+                        return {
+                          ...item,
+                          source: 'attribute_data',
+                          input: item.attribute?.text || searchAttributeText,
+                          response: item.data?.text || item.s || '',
+                          similarity: similarity
+                        };
+                      }));
+                    }
+                  }
+                }
+              }
+              
+              // 속성으로만 검색하는 경우, 검색 텍스트 BIT로 모든 속성과 유사도 비교
+              if (searchOption === 'attribute' && searchText && bitMax && bitMin) {
+                try {
+                  // 모든 속성 목록 가져오기
+                  const allAttrUrl = getServerUrl('/api/attributes/all');
+                  const allAttrRes = await fetch(allAttrUrl);
+                  
+                  if (allAttrRes.ok) {
+                    const allAttrData = await allAttrRes.json();
+                    if (allAttrData.ok && allAttrData.attributes && allAttrData.attributes.length > 0) {
+                      // 검색 텍스트 BIT와 각 속성 BIT 간의 유사도 계산 (공통 모듈 사용)
+                      const similarAttributes = window.SearchAlgorithm.findSimilarAttributes(
+                        searchText, 
+                        bitMax, 
+                        bitMin, 
+                        allAttrData.attributes, 
+                        0.1, 
+                        10
+                      );
+                      
+                      // 유사한 속성들의 데이터 조회
+                      for (const similarAttr of similarAttributes) {
+                        try {
+                          const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${similarAttr.bitMax}&bitMin=${similarAttr.bitMin}&limit=5`);
+                          const dataRes = await fetch(dataUrl);
+                          
+                          if (dataRes.ok) {
+                            const dataData = await dataRes.json();
+                            if (dataData.ok && dataData.items) {
+                              results.push(...dataData.items.map(item => ({
+                                ...item,
+                                source: 'attribute_similar',
+                                input: item.attribute?.text || similarAttr.text,
+                                response: item.data?.text || item.s || '',
+                                similarity: similarAttr.similarity * 0.9 // 속성 유사도에 약간의 페널티 적용
+                              })));
+                            }
+                          }
+                        } catch (e) {
+                          console.warn(`속성 "${similarAttr.text}" 데이터 조회 오류:`, e);
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.warn('속성 유사도 검색 오류:', e);
+                }
+              }
+            } catch (e) {
+              console.warn('속성 데이터 검색 오류:', e);
+            }
+          }
+
+          // 2. 데이터 BIT 값으로도 검색 (속성-데이터 연결된 항목) - 전체 검색 또는 데이터 검색일 때
+          if (searchOption === 'all' || searchOption === 'data') {
+            try {
+              const maxUrl = getServerUrl(`/api/log/by-max?nb_max=${bitMax}&n=20`);
+              const minUrl = getServerUrl(`/api/log/by-min?nb_min=${bitMin}&n=20`);
+              
+              const [maxRes, minRes] = await Promise.all([fetch(maxUrl), fetch(minUrl)]);
+              
+              if (maxRes.ok) {
+                const maxData = await maxRes.json();
+                if (maxData.ok && maxData.items) {
+                  const attrItems = maxData.items.filter(item => item.attribute).map(item => {
+                    // 검색 쿼리 BIT와 결과 BIT 간의 유사도 계산
+                    const resultBitMax = item.data?.bitMax || item.max || item.nb_max || null;
+                    const resultBitMin = item.data?.bitMin || item.min || item.nb_min || null;
+                    const similarity = calculateSimilarity(bitMax, bitMin, resultBitMax, resultBitMin);
+                    
+                    return {
+                      ...item,
+                      source: 'attribute_data_by_data',
+                      input: item.attribute?.text || '',
+                      response: item.data?.text || item.s || '',
+                      similarity: similarity
+                    };
+                  });
+                  results.push(...attrItems);
+                }
+              }
+              
+              if (minRes.ok) {
+                const minData = await minRes.json();
+                if (minData.ok && minData.items) {
+                  const attrItems = minData.items.filter(item => item.attribute).map(item => {
+                    // 검색 쿼리 BIT와 결과 BIT 간의 유사도 계산
+                    const resultBitMax = item.data?.bitMax || item.max || item.nb_max || null;
+                    const resultBitMin = item.data?.bitMin || item.min || item.nb_min || null;
+                    const similarity = calculateSimilarity(bitMax, bitMin, resultBitMax, resultBitMin);
+                    
+                    return {
+                      ...item,
+                      source: 'attribute_data_by_data',
+                      input: item.attribute?.text || '',
+                      response: item.data?.text || item.s || '',
+                      similarity: similarity
+                    };
+                  });
+                  results.push(...attrItems);
+                }
+              }
+            } catch (e) {
+              console.warn('데이터 BIT 검색 오류:', e);
+            }
+          }
+
+          // 3. 일반 로그 데이터 검색 (속성이 없는 일반 데이터) - 전체 검색일 때만
+          if (searchOption === 'all') {
+            try {
+              const maxUrl = getServerUrl(`/api/log/by-max?nb_max=${bitMax}&n=10`);
+              const minUrl = getServerUrl(`/api/log/by-min?nb_min=${bitMin}&n=10`);
+              
+              const [maxRes, minRes] = await Promise.all([fetch(maxUrl), fetch(minUrl)]);
+              
+              const generalItems = [];
+              
+              if (maxRes.ok) {
+                const maxData = await maxRes.json();
+                if (maxData.ok && maxData.items) {
+                  maxData.items.filter(item => !item.attribute).forEach(item => {
+                    const resultBitMax = item.nb_max || item.max || null;
+                    const resultBitMin = item.nb_min || item.min || null;
+                    const similarity = calculateSimilarity(bitMax, bitMin, resultBitMax, resultBitMin);
+                    
+                    generalItems.push({
+                      ...item,
+                      source: 'log',
+                      input: item.input_text || item.s || '',
+                      response: item.output || item.s || '',
+                      similarity: similarity
+                    });
+                  });
+                }
+              }
+              
+              if (minRes.ok) {
+                const minData = await minRes.json();
+                if (minData.ok && minData.items) {
+                  minData.items.filter(item => !item.attribute).forEach(item => {
+                    const resultBitMax = item.nb_max || item.max || null;
+                    const resultBitMin = item.nb_min || item.min || null;
+                    const similarity = calculateSimilarity(bitMax, bitMin, resultBitMax, resultBitMin);
+                    
+                    generalItems.push({
+                      ...item,
+                      source: 'log',
+                      input: item.input_text || item.s || '',
+                      response: item.output || item.s || '',
+                      similarity: similarity
+                    });
+                  });
+                }
+              }
+              
+              results.push(...generalItems);
+            } catch (e) {
+              console.warn('일반 로그 검색 오류:', e);
+            }
+          }
+
+          // 4. 유사도 검색 (training 데이터) - 전체 검색일 때만
+          if (searchOption === 'all') {
+            try {
+              const url = getServerUrl('/api/training/similar');
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  query: '',
+                  queryBitMax: bitMax,
+                  queryBitMin: bitMin,
+                  limit: 10
+                })
+              });
+
+              if (res.ok) {
+                const data = await res.json();
+                if (data.ok && data.items) {
+                  results.push(...data.items.map(item => ({
+                    ...item,
+                    source: 'training',
+                    similarity: item.similarity_score || calculateSimilarity(bitMax, bitMin, item.bit?.max, item.bit?.min)
+                  })));
+                }
+              }
+            } catch (e) {
+              console.warn('유사도 검색 오류:', e);
+            }
+          }
+
+          // 중복 제거 및 정렬 (공통 모듈 사용)
+          let finalResults = window.SearchAlgorithm.processSearchResults(results, bitMax, bitMin, 20);
+          
+          // 검색 텍스트가 있을 때 텍스트 정확 매칭 우선 정렬
+          if (searchText && searchText.trim()) {
+            const searchTextTrimmed = searchText.trim();
+            finalResults = finalResults.sort((a, b) => {
+              const aAttrText = (a.attribute?.text || a.input || '').trim();
+              const bAttrText = (b.attribute?.text || b.input || '').trim();
+              
+              // 텍스트가 정확히 일치하는 경우 우선
+              const aExactMatch = aAttrText === searchTextTrimmed;
+              const bExactMatch = bAttrText === searchTextTrimmed;
+              
+              if (aExactMatch && !bExactMatch) return -1;
+              if (!aExactMatch && bExactMatch) return 1;
+              
+              // 둘 다 정확히 일치하거나 둘 다 아닌 경우 유사도순 정렬
+              return (b.similarity || 0) - (a.similarity || 0);
+            });
+          }
+
+          renderResults(finalResults);
+          $resultCount.textContent = `${finalResults.length}개`;
+          $searchStatus.textContent = `✓ 검색 완료 (${finalResults.length}개 결과)`;
+          $searchStatus.style.color = '#28a745';
+
+        } catch (e) {
+          console.error('검색 오류:', e);
+          $searchStatus.textContent = `✗ 검색 실패: ${e.message}`;
+          $searchStatus.style.color = '#dc3545';
+        }
+      }
+
+      function renderResults(results) {
+        $resultBody.innerHTML = '';
+        
+        if (results.length === 0) {
+          $resultBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">검색 결과가 없습니다.</td></tr>';
+          return;
+        }
+
+        results.forEach((item, idx) => {
+          const tr = document.createElement('tr');
+          
+          const time = item.t ? new Date(item.t).toLocaleString('ko-KR') : (item.timestamp || '');
+          
+          const bitMax = (item.attribute && item.attribute.bitMax != null) ? String(item.attribute.bitMax) : 
+                        (item.bit && item.bit.max != null) ? String(item.bit.max) : 
+                        (item.nb_max != null ? String(item.nb_max) : '');
+          const bitMin = (item.attribute && item.attribute.bitMin != null) ? String(item.attribute.bitMin) : 
+                        (item.bit && item.bit.min != null) ? String(item.bit.min) : 
+                        (item.nb_min != null ? String(item.nb_min) : '');
+          
+          const input = item.input || item.attribute?.text || item.input_text || '';
+          const response = item.response || item.data?.text || item.s || item.output || '';
+          const similarity = item.similarity != null ? (item.similarity * 100).toFixed(10) + '%' : '100%';
+          
+          const similarityClass = item.similarity >= 0.9 ? 'bg-success' : item.similarity >= 0.7 ? 'bg-warning' : 'bg-danger';
+          
+          tr.innerHTML = `
+            <td>${idx + 1}</td>
+            <td><small>${time}</small></td>
+            <td><code>${bitMax.substring(0, 10)}${bitMax.length > 10 ? '...' : ''}</code></td>
+            <td><code>${bitMin.substring(0, 10)}${bitMin.length > 10 ? '...' : ''}</code></td>
+            <td>${input.substring(0, 30)}${input.length > 30 ? '...' : ''}</td>
+            <td>${response.substring(0, 40)}${response.length > 40 ? '...' : ''}</td>
+            <td><span class="badge ${similarityClass} similarity-badge">${similarity}</span></td>
+          `;
+          
+          $resultBody.appendChild(tr);
+        });
+      }
+
+      function updateBitDisplay(text, $maxEl, $minEl) {
+        const { max, min } = calculateBitValues(text);
+        if ($maxEl) $maxEl.textContent = max !== null ? max.toFixed(15) : '-';
+        if ($minEl) $minEl.textContent = min !== null ? min.toFixed(15) : '-';
+        return { max, min };
+      }
+
+      function updateAttributeBitDisplay(text) {
+        return updateBitDisplay(text, $attributeMax, $attributeMin);
+      }
+
+      function updateDataBitDisplay(text) {
+        return updateBitDisplay(text, $calculatedMax, $calculatedMin);
+      }
+
+      async function processInput(text) {
+        if (!text || text.trim() === '') {
+          updateDataBitDisplay('');
+          return;
+        }
+
+        const { max, min } = updateDataBitDisplay(text);
+
+        if (max !== null && min !== null) {
+          // 속성과 데이터가 모두 입력되어 있으면 자동 저장 (저장과 독립적으로 실행)
+          const attributeText = $attributeInput.value.trim();
+          if (attributeText) {
+            // 자동 저장 (디바운싱) - 저장 결과와 관계없이 실행
+            if (inputDebounceTimer) clearTimeout(inputDebounceTimer);
+            inputDebounceTimer = setTimeout(async () => {
+              await autoSaveAttributeData(attributeText, text);
+              // 저장 후에도 검색은 별도로 실행됨 (중복이어도 상관없이)
+            }, 1000); // 1초 후 자동 저장
+          }
+
+          // 자동 검색 (저장과 독립적으로 실행, 중복이어도 검색 수행)
+          if (searchTimer) clearTimeout(searchTimer);
+          searchTimer = setTimeout(() => {
+            autoSearch(max, min); // 중복 저장 여부와 관계없이 항상 검색 실행
+          }, 1000); // 1초 후 검색 (저장과 동시에 실행 가능)
+        }
+      }
+
+      function processAttributeInput(text) {
+        if (!text || text.trim() === '') {
+          updateAttributeBitDisplay('');
+          return;
+        }
+
+        // 속성 입력에서는 BIT 계산만 하고 검색은 하지 않음
+        updateAttributeBitDisplay(text);
+      }
+
+      // 속성 입력 이벤트 리스너 (검색하지 않음, BIT 계산만)
+      $attributeInput.addEventListener('input', (e) => {
+        const text = e.target.value;
+        processAttributeInput(text);
+        // 속성 입력에서는 검색하지 않음
+      });
+
+      // 데이터 입력 이벤트 리스너 (자동 저장 + 검색)
+      $input.addEventListener('input', (e) => {
+        const text = e.target.value;
+        
+        // 실시간 BIT 계산 (즉시)
+        updateDataBitDisplay(text);
+
+        if (!isAutoEnabled) return;
+
+        // 자동 처리 (디바운싱)
+        if (inputDebounceTimer) clearTimeout(inputDebounceTimer);
+        
+        inputDebounceTimer = setTimeout(() => {
+          if (text !== lastInput) {
+            lastInput = text;
+            processInput(text); // 여기서 자동 저장 + 검색
+          }
+        }, 500); // 0.5초 후 처리
+      });
+
+      // 저장 버튼 클릭
+      $saveBtn.addEventListener('click', saveAttributeData);
+
+      // 자동화 토글
+      $toggleAutoBtn.addEventListener('click', async () => {
+        const isConnected = await testServerConnection();
+        if (!isConnected) {
+          alert('서버에 연결할 수 없습니다. 서버가 http://localhost:8123 에서 실행 중인지 확인하세요.');
+          return;
+        }
+
+        isAutoEnabled = !isAutoEnabled;
+        
+        if (isAutoEnabled) {
+          $autoStatus.textContent = '▶️ 활성';
+          $autoStatus.className = 'auto-status status-active';
+          $toggleAutoBtn.textContent = '자동화 비활성화';
+          
+          // 현재 입력된 텍스트로 즉시 처리
+          const text = $input.value.trim();
+          if (text) {
+            processInput(text);
+          }
+        } else {
+          $autoStatus.textContent = '⏸️ 일시정지';
+          $autoStatus.className = 'auto-status status-paused';
+          $toggleAutoBtn.textContent = '자동화 활성화';
+          
+          if (inputDebounceTimer) clearTimeout(inputDebounceTimer);
+          if (searchTimer) clearTimeout(searchTimer);
+        }
+      });
+
+      // 출력 지우기
+      $clearOutputBtn.addEventListener('click', () => {
+        $realtimeOutput.innerHTML = '';
+      });
+
+      // 페이지 로드 시 초기화
+      addOutput('실시간 자동화 시스템이 준비되었습니다. 텍스트를 입력하고 "자동화 활성화"를 클릭하세요.', 'info');
+    })();
+    </script>
+</body>
+</html>
+
