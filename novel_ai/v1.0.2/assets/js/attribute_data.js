@@ -1,6 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
     console.info('[속성/데이터 관리] 초기화 중...');
     
+    // right_data_manager.js에 필요한 설정 전달
+    if (typeof window.setRightDataManagerConfig === 'function') {
+        window.setRightDataManagerConfig({
+            getDOMElements: () => ({
+                $novelTitleInput: $novelTitleInput,
+                $attributeInput: $attributeInput,
+                $dataInput: $dataInput,
+                $attributeBitInfo: $attributeBitInfo,
+                $dataBitInfo: $dataBitInfo,
+                $saveStatus: $saveStatus,
+                $attributeFilterInput: $attributeFilterInput,
+                $additionalSearchInput: $additionalSearchInput
+            }),
+            getGlobalVariables: () => ({
+                STORAGE_KEY_ATTRIBUTE_TEXT: STORAGE_KEY_ATTRIBUTE_TEXT,
+                STORAGE_KEY_DATA_TEXT: STORAGE_KEY_DATA_TEXT,
+                STORAGE_KEY_NOVEL_TITLE: STORAGE_KEY_NOVEL_TITLE
+            }),
+            getServerUrl: getServerUrl,
+            calculateBitValues: calculateBitValues,
+            updateSaveStatus: updateSaveStatus,
+            loadAttributes: loadAttributes,
+            loadNovelList: loadNovelList
+        });
+    }
+    
     // DOM 요소
     const $attributeFilterInput = document.getElementById('attributeFilterInput');
     const $additionalSearchInput = document.getElementById('additionalSearchInput');
@@ -61,10 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 서버 URL 헬퍼
     function getServerUrl(path) {
         // config.js의 getServerUrl 사용 (로드 확인)
-        if (typeof window.getServerUrl === 'function') {
-            return window.getServerUrl(path);
+        // 무한 재귀 방지: window.getServerUrl이 이 함수 자체가 아닌지 확인
+        if (typeof window.getServerUrl === 'function' && window.getServerUrl !== getServerUrl) {
+            try {
+                return window.getServerUrl(path);
+            } catch (e) {
+                console.warn('[getServerUrl] window.getServerUrl 호출 실패, 로컬 함수 사용:', e);
+                // fallback to local implementation
+            }
         }
-        // config.js가 로드되지 않은 경우 기본값 사용
+        // config.js가 로드되지 않은 경우 또는 오류 발생 시 기본값 사용
         try {
             const base = window.location.origin || 'http://localhost:8123';
             if (!path) return base;
@@ -141,25 +173,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 중복 저장 체크 함수
+    // 중복 저장 체크 함수 (right_data_manager.js로 이동)
     async function checkDuplicate(attributeText, dataText, attributeBits, dataBits) {
+        // right_data_manager.js의 함수 사용
+        if (typeof window.checkDuplicate === 'function') {
+            return await window.checkDuplicate(attributeText, dataText, attributeBits, dataBits);
+        }
+        // fallback (right_data_manager.js가 로드되지 않은 경우)
         try {
-            // 속성과 데이터의 BIT 값으로 중복 체크
             const url = getServerUrl(`/api/attributes/data?bitMax=${attributeBits.max}&bitMin=${attributeBits.min}&limit=100`);
             const response = await fetch(url);
-            
             if (!response.ok) return false;
-            
             const data = await response.json();
             if (!data.ok || !data.items) return false;
-            
-            // 같은 속성 BIT와 데이터 텍스트가 있는지 확인
             const duplicate = data.items.some(item => {
                 const itemAttribute = item.attribute?.text || item.attributeText || '';
                 const itemData = item.s || item.text || item.data?.text || '';
                 return itemAttribute === attributeText && itemData === dataText;
             });
-            
             return duplicate;
         } catch (error) {
             console.error('[중복 체크] 오류:', error);
@@ -247,8 +278,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // 자동 저장 함수
+    // 자동 저장 함수 (right_data_manager.js로 이동 - 여기서는 래퍼만 유지)
+    // 주의: right_data_manager.js의 autoSave를 직접 참조하여 순환 참조 방지
+    let rightDataManagerAutoSave = null;
     async function autoSave() {
+        // right_data_manager.js의 함수 사용 (순환 참조 방지를 위해 직접 참조)
+        if (rightDataManagerAutoSave) {
+            return await rightDataManagerAutoSave();
+        }
+        if (typeof window.autoSave === 'function' && window.autoSave !== autoSave) {
+            // right_data_manager.js의 autoSave를 캐시
+            rightDataManagerAutoSave = window.autoSave;
+            return await rightDataManagerAutoSave();
+        }
+        // fallback은 원래 코드 유지 (right_data_manager.js가 로드되지 않은 경우)
+        console.warn('[자동 저장] right_data_manager.js가 로드되지 않았습니다. 원래 함수를 사용합니다.');
         // 중요: 저장 시에는 항상 현재 입력 필드의 실제 값을 사용해야 함
         // 로컬 스토리지에서 값을 읽어오지 않고, DOM 요소의 .value를 직접 사용
         const novelTitle = ($novelTitleInput && $novelTitleInput.value || '').trim();
@@ -266,21 +310,72 @@ document.addEventListener('DOMContentLoaded', () => {
             일치여부_소설제목: novelTitle === localStorage.getItem(STORAGE_KEY_NOVEL_TITLE)
         });
         
-        if (typeof window.addRightLog === 'function') {
-            window.addRightLog('info', `[우측 저장] 자동 저장 시작: "${novelTitle}" → "${attributeText.substring(0, 50)}${attributeText.length > 50 ? '...' : ''}"`);
-        }
-        console.log('[자동 저장] 호출:', { novelTitle, attributeText, dataText });
+        console.log('[자동 저장] 호출:', { novelTitle, attributeText, dataText, dataText길이: dataText ? dataText.length : 0 });
         
-        // 입력값이 비어있으면 저장하지 않음
-        if (!novelTitle || !attributeText || !dataText) {
-            console.log('[자동 저장] 입력값 부족 - 저장하지 않음');
+        // 소설 제목과 속성 텍스트는 필수, 데이터 텍스트는 선택 (속성만 저장 가능)
+        if (!novelTitle) {
+            console.log('[자동 저장] 소설 제목이 없음 - 저장하지 않음');
+            updateSaveStatus('⚠️ 소설 제목을 입력해주세요.', 'warning');
             return;
+        }
+        
+        // 속성 텍스트가 비어있으면 추가 검색 키워드(현재 챕터 제목)를 사용
+        let attributeTextToUse = attributeText.trim();
+        if (!attributeTextToUse || attributeTextToUse.length === 0) {
+            // 현재 챕터 제목 찾기 (여러 소스에서 확인)
+            let currentChapterTitle = ($additionalSearchInput && $additionalSearchInput.value || '').trim();
+            
+            // 속성 필터에서도 챕터 정보 추출 시도
+            if (!currentChapterTitle && $attributeFilterInput) {
+                const filterText = ($attributeFilterInput.value || '').trim();
+                // "소설 제목 → 챕터 N: 제목" 형식에서 챕터 부분 추출
+                const filterParts = filterText.split(' → ').map(p => p.trim()).filter(p => p && p.length > 0);
+                if (filterParts.length >= 2) {
+                    const chapterPart = filterParts[1];
+                    const chapterMatch = chapterPart.match(/챕터\s*(\d+)(?:\s*[:：]\s*(.+))?/i);
+                    if (chapterMatch) {
+                        const chapterNum = chapterMatch[1];
+                        const chapterTitleOnly = (chapterMatch[2] || '').trim() || `제${chapterNum}장`;
+                        currentChapterTitle = `챕터 ${chapterNum}: ${chapterTitleOnly}`;
+                    }
+                }
+            }
+            
+            if (currentChapterTitle) {
+                // 현재 챕터 제목을 속성 필드에 자동 설정 (소설 제목 포함)
+                attributeTextToUse = currentChapterTitle;
+                const fullAttributeTextForInput = `${novelTitle} → ${currentChapterTitle}`;
+                if ($attributeInput) {
+                    $attributeInput.value = fullAttributeTextForInput;
+                    localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, fullAttributeTextForInput);
+                    // additionalSearchInput도 업데이트
+                    if ($additionalSearchInput) {
+                        $additionalSearchInput.value = currentChapterTitle;
+                    }
+                    console.log('[자동 저장] 속성 필드가 비어있어서 현재 챕터 제목으로 자동 설정 (소설 제목 포함):', fullAttributeTextForInput);
+                }
+            } else {
+                console.log('[자동 저장] 속성 텍스트가 비어있고 현재 챕터 정보도 없음 - 저장하지 않음', {
+                    additionalSearchInput: $additionalSearchInput?.value,
+                    attributeFilterInput: $attributeFilterInput?.value
+                });
+                updateSaveStatus('⚠️ 속성 텍스트를 입력해주세요.', 'warning');
+                return;
+            }
         }
         
         // 속성은 1개만 사용 (여러 줄로 나뉘어 있으면 첫 번째만 사용)
         // 속성 텍스트가 여러 줄로 나뉘어 있는지 확인 (줄바꿈으로 구분)
-        const attributeLines = attributeText.split('\n').map(p => (p || '').trim()).filter(p => p && p.length > 0);
-        let finalAttributeText = attributeText;
+        const attributeLines = attributeTextToUse.split('\n').map(p => (p || '').trim()).filter(p => p && p.length > 0);
+        let finalAttributeText = attributeTextToUse.trim();
+        
+        // 속성 텍스트가 여전히 비어있으면 저장하지 않음
+        if (!finalAttributeText || finalAttributeText.length === 0) {
+            console.log('[자동 저장] 속성 텍스트가 비어있음 - 저장하지 않음');
+            updateSaveStatus('⚠️ 속성 텍스트를 입력해주세요.', 'warning');
+            return;
+        }
+        
         if (attributeLines.length > 1) {
             // 여러 줄이 있으면 첫 번째 줄만 사용
             finalAttributeText = attributeLines[0].trim();
@@ -293,21 +388,68 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 실제 저장할 속성 텍스트: 소설 제목 + 속성 텍스트
-        const fullAttributeText = `${novelTitle} → ${finalAttributeText}`;
+        // 실제 저장할 속성 텍스트: 소설 제목 + 속성 텍스트 (BIT 계산용)
+        // 속성 텍스트가 이미 소설 제목으로 시작하는지 확인하여 중복 방지
+        let fullAttributeText;
+        if (finalAttributeText.startsWith(`${novelTitle} → `)) {
+            // 이미 소설 제목이 포함되어 있으면 그대로 사용
+            fullAttributeText = finalAttributeText;
+        } else if (finalAttributeText.length > 0) {
+            // 소설 제목이 없고 속성 텍스트가 있으면 추가
+            fullAttributeText = `${novelTitle} → ${finalAttributeText}`;
+        } else {
+            // 속성 텍스트가 비어있으면 저장하지 않음
+            console.log('[자동 저장] 속성 텍스트가 비어있음 - 저장하지 않음');
+            updateSaveStatus('⚠️ 속성 텍스트를 입력해주세요.', 'warning');
+            return;
+        }
+        
+        // 저장할 속성 텍스트 (소설 제목 제외): 서버에 전송할 때 사용
+        // fullAttributeText에서 소설 제목 부분을 제거
+        let attributeTextOnly = finalAttributeText;
+        if (fullAttributeText.startsWith(`${novelTitle} → `)) {
+            // 소설 제목으로 시작하면 제거
+            attributeTextOnly = fullAttributeText.substring(`${novelTitle} → `.length).trim();
+        } else {
+            // 소설 제목이 없으면 그대로 사용
+            attributeTextOnly = fullAttributeText;
+        }
         
         // 디버깅: 저장 전 속성 텍스트 확인
         console.log('[자동 저장] 저장할 속성 텍스트:', {
             novelTitle,
-            attributeText,
+            원래속성텍스트: attributeText,
+            사용할속성텍스트: attributeTextToUse,
             finalAttributeText,
-            fullAttributeText
+            fullAttributeText: fullAttributeText, // BIT 계산용 (소설 제목 포함)
+            attributeTextOnly: attributeTextOnly, // 저장용 (소설 제목 제외)
+            중복제거: finalAttributeText.startsWith(`${novelTitle} → `),
+            속성필드값: $attributeInput?.value,
+            현재챕터제목_추가검색: $additionalSearchInput?.value,
+            현재챕터제목_속성필터: $attributeFilterInput?.value,
+            fullAttributeText에서챕터추출: fullAttributeText.split(' → ').length >= 2 ? fullAttributeText.split(' → ')[1] : '없음'
         });
+        
+        if (typeof window.addRightLog === 'function') {
+            window.addRightLog('info', `[우측 저장] 자동 저장 시작: "${novelTitle}" → "${finalAttributeText.substring(0, 50)}${finalAttributeText.length > 50 ? '...' : ''}"`);
+        }
+        
+        // 속성 텍스트가 여전히 비어있으면 경고
+        if (!finalAttributeText || finalAttributeText.trim().length === 0) {
+            console.error('[자동 저장] 오류: finalAttributeText가 비어있습니다!', {
+                attributeText,
+                attributeTextToUse,
+                attributeLines,
+                finalAttributeText
+            });
+            updateSaveStatus('⚠️ 속성 텍스트가 비어있습니다. 속성 필드를 확인해주세요.', 'warning');
+            return;
+        }
         
         // "→"로 연결된 속성(예: "소설 제목 → 챕터 1: 제1장")은 1개 속성으로 봄
         
-        // 이미 저장된 것과 동일하면 저장하지 않음
-        if (fullAttributeText === lastSavedAttribute && dataText === lastSavedData) {
+        // 이미 저장된 것과 동일하면 저장하지 않음 (속성 텍스트만 비교)
+        if (attributeTextOnly === lastSavedAttribute && dataText === lastSavedData) {
             return;
         }
         
@@ -324,48 +466,39 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // BIT 값 계산 (전체 속성 텍스트로 계산)
         const attributeBits = calculateBitValues(fullAttributeText);
-        const dataBits = calculateBitValues(dataText);
         
-        if (!attributeBits.max || !attributeBits.min || !dataBits.max || !dataBits.min) {
+        // 데이터 텍스트가 비어있으면 dataBits는 null이어도 허용 (속성만 저장)
+        let dataBits = { max: null, min: null };
+        if (dataText && dataText.trim().length > 0) {
+            dataBits = calculateBitValues(dataText);
+        }
+        
+        // 속성 BIT는 필수, 데이터 BIT는 선택 (데이터가 있을 때만 필요)
+        if (!attributeBits.max || !attributeBits.min) {
             updateSaveStatus('⚠️ BIT 값 계산 중...', 'warning');
             return;
         }
         
-        // 중복 체크
-        const isDuplicate = await checkDuplicate(fullAttributeText, dataText, attributeBits, dataBits);
+        // 데이터가 있을 때는 dataBits도 필요
+        if (dataText && dataText.trim().length > 0 && (!dataBits.max || !dataBits.min)) {
+            updateSaveStatus('⚠️ 데이터 BIT 값 계산 중...', 'warning');
+            return;
+        }
+        
+        // 중복 체크: dataText가 빈 문자열이어도 체크 가능
+        const isDuplicate = await checkDuplicate(fullAttributeText, dataText || '', attributeBits, dataBits);
         if (isDuplicate) {
             if (typeof window.addRightLog === 'function') {
-                window.addRightLog('info', `[우측 저장] 중복 데이터로 저장 건너뜀: "${fullAttributeText.substring(0, 50)}${fullAttributeText.length > 50 ? '...' : ''}"`);
+                window.addRightLog('info', `[우측 저장] 중복 데이터로 저장 건너뜀: "${attributeTextOnly.substring(0, 50)}${attributeTextOnly.length > 50 ? '...' : ''}"`);
             }
             updateSaveStatus('ℹ️ 이미 저장된 데이터입니다 (중복 방지)', 'info');
-            lastSavedAttribute = fullAttributeText;
+            lastSavedAttribute = attributeTextOnly; // 소설 제목 제외한 속성 텍스트만 저장
             lastSavedData = dataText;
-            // 조회 목록 새로고침 (저장된 속성 텍스트 기반으로 필터 업데이트)
+            // 조회 목록 새로고침 (속성 필터는 변경하지 않고 현재 필터 유지)
             setTimeout(() => {
                 if ($attributeFilterInput) {
-                    // 저장된 속성 텍스트에서 챕터까지 포함한 부분 추출
-                    const parts = fullAttributeText.split(' → ');
-                    let filterText = '';
-                    
-                    if (parts.length >= 2) {
-                        // "소설 제목 → 챕터 N: 제목"까지 포함
-                        filterText = parts.slice(0, 2).join(' → ');
-                    } else if (parts.length === 1) {
-                        // 소설 제목만 있는 경우
-                        filterText = parts[0];
-                    } else {
-                        // 소설 제목으로 기본 설정
-                        filterText = novelTitle || '';
-                    }
-                    
-                    // 필터 입력 필드 업데이트 (저장된 속성과 일치하도록)
-                    if (filterText) {
-                        $attributeFilterInput.value = filterText;
-                        // 필터 저장
-                        saveFilterValues();
-                        loadAttributes();
-                    } else if ($attributeFilterInput.value.trim()) {
-                        // 필터가 이미 있으면 그대로 사용
+                    // 필터가 이미 있으면 그대로 사용하여 새로고침만 함
+                    if ($attributeFilterInput.value.trim()) {
                         loadAttributes();
                     }
                 }
@@ -374,18 +507,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // 챕터 정보 추출 (속성 구조에서 정확히 찾기)
-        // fullAttributeText 형식: "소설 제목 → 챕터 N: 제목 → 속성명"
+        // fullAttributeText 형식: "소설 제목 → 챕터 N: 제목 → 속성명" 또는 "소설 제목 → 챕터 N: 제목"
         // 두 번째 부분(인덱스 1)에서만 챕터 정보를 찾아야 정확함
         let chapter = null;
         const parts = fullAttributeText.split(' → ').map(p => (p || '').trim()).filter(p => p && p.length > 0);
         
+        console.log('[자동 저장] 챕터 정보 추출 시작:', {
+            fullAttributeText,
+            parts,
+            partsLength: parts.length,
+            parts_1: parts[1],
+            parts_2: parts[2]
+        });
+        
         // 두 번째 부분(소설 제목 다음)에서 챕터 정보 찾기
         if (parts.length >= 2) {
-            const chapterPart = parts[1]; // "챕터 1: 제1장" 또는 "챕터 1"
+            const chapterPart = parts[1]; // "챕터 2: 제2장" 또는 "챕터 2"
             const chapterMatch = chapterPart.match(/챕터\s*(\d+)(?:\s*[:：]\s*(.+))?/i);
+            
+            console.log('[자동 저장] 챕터 파싱 시도:', {
+                chapterPart,
+                chapterMatch,
+                match_1: chapterMatch?.[1],
+                match_2: chapterMatch?.[2]
+            });
+            
             if (chapterMatch) {
                 // 정규식 매칭 결과 확인: chapterMatch[0] = 전체 매칭, chapterMatch[1] = 챕터 번호, chapterMatch[2] = 제목
-                const chapterNumber = chapterMatch[1]; // 문자열 "1"
+                const chapterNumber = chapterMatch[1]; // 문자열 "2"
                 const chapterTitle = (chapterMatch[2] || '').trim();
                 
                 // 디버깅: 정규식 매칭 결과 확인
@@ -393,21 +542,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     전체매칭: chapterMatch[0],
                     챕터번호_매칭: chapterMatch[1],
                     제목_매칭: chapterMatch[2],
-                    chapterPart: chapterPart
+                    chapterPart: chapterPart,
+                    추출된번호: chapterNumber,
+                    추출된제목: chapterTitle
                 });
                 
                 chapter = {
                     number: chapterNumber, // 문자열 그대로 사용 (서버에서 문자열로 저장)
                     title: chapterTitle || `제${chapterNumber}장`
                 };
-                console.log('[자동 저장] 챕터 정보 추출 (속성 구조에서):', { 
+                console.log('[자동 저장] 챕터 정보 추출 완료 (속성 구조에서):', { 
                     fullAttributeText,
                     chapterPart,
                     chapterNumber: chapter.number, 
                     chapterTitle: chapter.title,
+                    chapter객체: chapter,
                     타입_확인: typeof chapter.number
                 });
+            } else {
+                console.warn('[자동 저장] 챕터 정보 추출 실패 - 정규식 매칭 안됨:', {
+                    chapterPart,
+                    fullAttributeText,
+                    parts
+                });
             }
+        } else {
+            console.warn('[자동 저장] 챕터 정보 추출 실패 - parts.length < 2:', {
+                fullAttributeText,
+                parts,
+                partsLength: parts.length
+            });
         }
         
         // 위에서 찾지 못했으면 fallback: 속성 텍스트 부분에서만 찾기 (데이터 텍스트는 제외)
@@ -446,6 +610,26 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!chapter) {
             console.warn('[자동 저장] 챕터 정보를 찾을 수 없습니다:', { fullAttributeText, finalAttributeText });
+        } else {
+            // 챕터 정보가 추출되었는지 최종 확인
+            console.log('[자동 저장] 챕터 정보 최종 확인:', {
+                chapter객체: chapter,
+                chapterNumber: chapter.number,
+                chapterTitle: chapter.title,
+                fullAttributeText에서_확인: fullAttributeText.split(' → ')[1],
+                일치여부: fullAttributeText.split(' → ')[1]?.includes(`챕터 ${chapter.number}`)
+            });
+            
+            // 만약 fullAttributeText와 chapter 정보가 일치하지 않으면 경고
+            const extractedChapterFromText = fullAttributeText.split(' → ')[1];
+            if (extractedChapterFromText && !extractedChapterFromText.includes(`챕터 ${chapter.number}`)) {
+                console.error('[자동 저장] ⚠️ 챕터 정보 불일치!', {
+                    fullAttributeText,
+                    extractedChapterFromText,
+                    chapter객체: chapter,
+                    chapterNumber: chapter.number
+                });
+            }
         }
         
         const chapterText = chapter ? `챕터 ${chapter.number}${chapter.title ? `: ${chapter.title}` : ''}` : '';
@@ -458,23 +642,98 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = getServerUrl('/api/attributes/data');
             console.log('[자동 저장] URL:', url);
             
+            // chapter 객체 최종 검증 및 재추출 (혹시 모를 경우를 대비)
+            if (!chapter || !chapter.number) {
+                // fullAttributeText에서 다시 추출 시도
+                const finalParts = fullAttributeText.split(' → ').map(p => (p || '').trim()).filter(p => p && p.length > 0);
+                if (finalParts.length >= 2) {
+                    const finalChapterPart = finalParts[1];
+                    const finalChapterMatch = finalChapterPart.match(/챕터\s*(\d+)(?:\s*[:：]\s*(.+))?/i);
+                    if (finalChapterMatch) {
+                        const finalChapterNumber = finalChapterMatch[1];
+                        const finalChapterTitle = (finalChapterMatch[2] || '').trim();
+                        chapter = {
+                            number: finalChapterNumber,
+                            title: finalChapterTitle || `제${finalChapterNumber}장`
+                        };
+                        console.warn('[자동 저장] chapter 객체 재추출:', {
+                            재추출chapter: chapter,
+                            fullAttributeText,
+                            finalChapterPart
+                        });
+                    }
+                }
+            }
+            
+            // chapter 객체가 여전히 없거나 잘못된 경우 경고
+            if (!chapter || !chapter.number) {
+                console.error('[자동 저장] ⚠️ chapter 객체가 없거나 잘못됨!', {
+                    fullAttributeText,
+                    finalAttributeText,
+                    chapter,
+                    parts: fullAttributeText.split(' → ')
+                });
+            } else if (chapter.number === '1' && fullAttributeText.includes('챕터 2')) {
+                console.error('[자동 저장] ⚠️ 챕터 번호 불일치 감지!', {
+                    fullAttributeText,
+                    chapter객체: chapter,
+                    chapterNumber: chapter.number,
+                    fullAttributeText에_챕터2_포함: fullAttributeText.includes('챕터 2')
+                });
+                // fullAttributeText에서 챕터 2 정보를 다시 추출
+                const recheckParts = fullAttributeText.split(' → ');
+                if (recheckParts.length >= 2) {
+                    const recheckChapterPart = recheckParts[1].trim();
+                    const recheckMatch = recheckChapterPart.match(/챕터\s*(\d+)(?:\s*[:：]\s*(.+))?/i);
+                    if (recheckMatch && recheckMatch[1] !== '1') {
+                        chapter = {
+                            number: recheckMatch[1],
+                            title: (recheckMatch[2] || '').trim() || `제${recheckMatch[1]}장`
+                        };
+                        console.log('[자동 저장] 챕터 정보 수정:', {
+                            수정후: chapter,
+                            fullAttributeText
+                        });
+                    }
+                }
+            }
+            
+            // text 필드: dataText가 비어있으면 null을 보내서 속성만 저장
+            // dataText가 있으면 해당 값을 사용
+            const textValue = (dataText && dataText.trim().length > 0) ? String(dataText) : null;
+            
+            const requestBody = {
+                attributeText: attributeTextOnly, // 속성 텍스트만 (소설 제목 제외)
+                attributeBitMax: attributeBits.max, // BIT는 전체 경로로 계산한 값 사용
+                attributeBitMin: attributeBits.min, // BIT는 전체 경로로 계산한 값 사용
+                text: textValue, // null이면 속성만 저장, 값이 있으면 데이터도 저장
+                dataBitMax: dataBits.max, // null이어도 허용
+                dataBitMin: dataBits.min, // null이어도 허용
+                novelTitle: novelTitle,
+                chapter: chapter,
+                chapterBitMax: chapterBits.max,
+                chapterBitMin: chapterBits.min
+            };
+            
+            // 디버깅: 서버에 전송할 데이터 확인
+            console.log('[자동 저장] 서버에 전송할 데이터 (최종):', {
+                attributeText: requestBody.attributeText, // 소설 제목 제외한 속성 텍스트
+                fullAttributeText: fullAttributeText, // BIT 계산용 전체 경로
+                attributeBits: `${attributeBits.max}, ${attributeBits.min}`, // 전체 경로로 계산한 BIT
+                chapter: requestBody.chapter,
+                chapterNumber: requestBody.chapter?.number,
+                chapterTitle: requestBody.chapter?.title,
+                novelTitle: requestBody.novelTitle,
+                chapter객체_타입: typeof requestBody.chapter?.number,
+                chapter객체_값: JSON.stringify(requestBody.chapter)
+            });
+            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    attributeText: fullAttributeText, // 전체 속성 텍스트 (소설 제목 포함)
-                    attributeBitMax: attributeBits.max,
-                    attributeBitMin: attributeBits.min,
-                    text: dataText,
-                    dataBitMax: dataBits.max,
-                    dataBitMin: dataBits.min,
-                    novelTitle: novelTitle,
-                    chapter: chapter,
-                    chapterBitMax: chapterBits.max,
-                    chapterBitMin: chapterBits.min
-                }),
+                body: JSON.stringify(requestBody),
             });
             
             console.log('[자동 저장] 응답 상태:', response.status);
@@ -500,21 +759,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     저장된_속성: savedAttribute.text,
                     저장한_속성: fullAttributeText,
                     저장된_챕터: savedChapter,
+                    저장된_챕터_번호: savedChapter.number,
+                    저장된_챕터_제목: savedChapter.title,
                     추출한_챕터: chapter,
+                    추출한_챕터_번호: chapter?.number,
+                    추출한_챕터_제목: chapter?.title,
                     일치여부_속성: savedAttribute.text === fullAttributeText,
-                    일치여부_챕터: savedChapter.number === chapter?.number
+                    일치여부_챕터번호: savedChapter.number === chapter?.number,
+                    일치여부_챕터제목: savedChapter.title === chapter?.title,
+                    전체_서버응답_record: JSON.stringify(savedRecord, null, 2)
                 });
+                
+                // 챕터 정보가 일치하지 않으면 경고
+                if (chapter && savedChapter.number !== chapter.number) {
+                    console.error('[자동 저장] ⚠️ 챕터 번호 불일치!', {
+                        클라이언트에서_보낸_챕터: chapter,
+                        서버에서_저장된_챕터: savedChapter,
+                        attributeText에서_추출된_챕터: fullAttributeText.split(' → ')[1]
+                    });
+                }
             }
             
             if (result.ok) {
                 if (typeof window.addRightLog === 'function') {
                     // 저장된 속성 텍스트를 정확히 표시 (서버 응답의 record.attribute.text 사용)
-                    const savedAttributeText = savedAttribute.text || fullAttributeText;
+                    const savedAttributeText = savedAttribute.text || attributeTextOnly;
                     const savedChapterInfo = savedChapter.number ? ` (챕터 ${savedChapter.number})` : '';
                     window.addRightLog('info', `[우측 저장] 저장 완료: "${savedAttributeText.substring(0, 50)}${savedAttributeText.length > 50 ? '...' : ''}"${savedChapterInfo}`);
                 }
                 updateSaveStatus('✓ 저장 완료!', 'success');
-                lastSavedAttribute = fullAttributeText;
+                lastSavedAttribute = attributeTextOnly; // 소설 제목 제외한 속성 텍스트만 저장
                 lastSavedData = dataText;
                 
                 // 챗봇 상단에 Novel AI 상태 업데이트
@@ -544,53 +818,163 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('[자동 저장] 데이터 입력란 초기화 완료');
                 }
                 
+                // 저장 완료 후 서버에서 데이터 조회하여 저장 확인
+                setTimeout(async () => {
+                    try {
+                        const verifyUrl = getServerUrl(`/api/attributes/data?bitMax=${attributeBits.max}&bitMin=${attributeBits.min}&limit=10`);
+                        const verifyResponse = await fetch(verifyUrl);
+                        
+                        if (verifyResponse.ok) {
+                            const verifyResult = await verifyResponse.json();
+                            
+                            if (verifyResult.ok && verifyResult.items && verifyResult.items.length > 0) {
+                                // 저장된 데이터 중에서 방금 저장한 데이터 찾기 (데이터 텍스트로 비교)
+                                // 서버 응답 구조: { s: "데이터 텍스트", attribute: { text: "속성 텍스트" }, chapter: { number, title } }
+                                const foundItem = verifyResult.items.find(item => {
+                                    // 데이터 텍스트가 일치하는지 확인 (record.s 사용)
+                                    const itemText = (item.s || item.data?.text || '').trim();
+                                    const savedText = (dataText || '').trim();
+                                    
+                                    // 챕터 정보도 확인
+                                    const itemChapter = item.chapter || {};
+                                    const savedChapterNumber = chapter?.number || savedChapter?.number;
+                                    
+                                    return itemText === savedText && 
+                                           (itemChapter.number === savedChapterNumber || !savedChapterNumber);
+                                });
+                                
+                                if (foundItem) {
+                                    const foundChapter = foundItem.chapter || {};
+                                    const foundDataText = foundItem.s || foundItem.data?.text || '없음';
+                                    const foundAttributeText = foundItem.attribute?.text || '없음';
+                                    
+                                    console.log('[자동 저장] ✅ 저장 확인 성공:', {
+                                        조회된_속성: foundAttributeText,
+                                        조회된_데이터: foundDataText,
+                                        조회된_챕터: foundChapter.number ? `챕터 ${foundChapter.number}: ${foundChapter.title || ''}` : '없음',
+                                        저장한_속성: attributeTextOnly, // 소설 제목 제외한 속성 텍스트
+                                        저장한_데이터: dataText,
+                                        저장한_챕터: chapter?.number ? `챕터 ${chapter.number}: ${chapter.title || ''}` : '없음',
+                                        속성_일치: foundAttributeText === attributeTextOnly,
+                                        데이터_일치: foundDataText === dataText,
+                                        챕터_일치: foundChapter.number === (chapter?.number || savedChapter?.number)
+                                    });
+                                    
+                                    if (typeof window.addRightLog === 'function') {
+                                        const chapterInfo = foundChapter.number ? ` (챕터 ${foundChapter.number})` : '';
+                                        const attributeMatch = foundAttributeText === attributeTextOnly ? '✓' : '⚠';
+                                        const dataMatch = foundDataText === dataText ? '✓' : '⚠';
+                                        const chapterMatch = foundChapter.number === (chapter?.number || savedChapter?.number) ? '✓' : '⚠';
+                                        
+                                        // 조회된 속성과 데이터를 상세히 출력
+                                        const attributeDisplay = foundAttributeText.length > 60 ? foundAttributeText.substring(0, 60) + '...' : foundAttributeText;
+                                        const dataDisplay = foundDataText.length > 80 ? foundDataText.substring(0, 80) + '...' : foundDataText;
+                                        
+                                        // 일치 여부 요약
+                                        window.addRightLog('info', `[우측 저장] 확인 완료: 속성${attributeMatch} 데이터${dataMatch} 챕터${chapterMatch}${chapterInfo}`);
+                                        
+                                        // 조회된 속성 출력
+                                        window.addRightLog('info', `[조회] 속성: "${attributeDisplay}"`);
+                                        
+                                        // 저장한 속성과 비교 (소설 제목 제외한 속성 텍스트와 비교)
+                                        if (foundAttributeText === attributeTextOnly) {
+                                            window.addRightLog('success', `[확인] 속성 일치 ✓`);
+                        } else {
+                                            const savedAttributeDisplay = attributeTextOnly.length > 60 ? attributeTextOnly.substring(0, 60) + '...' : attributeTextOnly;
+                                            window.addRightLog('warn', `[확인] 속성 불일치 ⚠ 저장: "${savedAttributeDisplay}"`);
+                                        }
+                                        
+                                        // 조회된 데이터 출력
+                                        window.addRightLog('info', `[조회] 데이터: "${dataDisplay}"`);
+                                        
+                                        // 저장한 데이터와 비교
+                                        if (foundDataText === dataText) {
+                                            window.addRightLog('success', `[확인] 데이터 일치 ✓`);
+                                        } else {
+                                            const savedDataDisplay = dataText.length > 80 ? dataText.substring(0, 80) + '...' : dataText;
+                                            window.addRightLog('warn', `[확인] 데이터 불일치 ⚠ 저장: "${savedDataDisplay}"`);
+                                        }
+                                        
+                                        // 챕터 정보 비교
+                                        if (foundChapter.number) {
+                                            const foundChapterText = `챕터 ${foundChapter.number}: ${foundChapter.title || ''}`;
+                                            const savedChapterText = chapter?.number ? `챕터 ${chapter.number}: ${chapter.title || ''}` : (savedChapter?.number ? `챕터 ${savedChapter.number}: ${savedChapter.title || ''}` : '없음');
+                                            window.addRightLog('info', `[조회] 챕터: ${foundChapterText}`);
+                                            if (foundChapter.number === (chapter?.number || savedChapter?.number)) {
+                                                window.addRightLog('success', `[확인] 챕터 일치 ✓`);
+                                            } else {
+                                                window.addRightLog('warn', `[확인] 챕터 불일치 ⚠ 저장: ${savedChapterText}`);
+                                            }
+                                        }
+                                    }
+                                    
+                                    // 불일치가 있는 경우 경고
+                                    if (foundAttributeText !== attributeTextOnly) {
+                                        console.warn('[자동 저장] ⚠️ 속성 텍스트 불일치:', {
+                                            저장한_속성: attributeTextOnly, // 소설 제목 제외
+                                            조회된_속성: foundAttributeText
+                                        });
+                                    }
+                                    if (foundDataText !== dataText) {
+                                        console.warn('[자동 저장] ⚠️ 데이터 텍스트 불일치:', {
+                                            저장한_데이터: dataText,
+                                            조회된_데이터: foundDataText
+                                        });
+                                    }
+                                    if (foundChapter.number !== (chapter?.number || savedChapter?.number)) {
+                                        console.warn('[자동 저장] ⚠️ 챕터 번호 불일치:', {
+                                            저장한_챕터: chapter?.number || savedChapter?.number,
+                                            조회된_챕터: foundChapter.number
+                                        });
+                                    }
+                                } else {
+                                    console.warn('[자동 저장] ⚠️ 저장 확인 실패: 조회된 데이터 중에서 저장한 데이터를 찾을 수 없음', {
+                                        조회된_항목수: verifyResult.items.length,
+                                        조회된_항목들: verifyResult.items.map(item => ({
+                                            속성: item.attribute?.text || '없음',
+                                            데이터: item.s || item.data?.text || '없음',
+                                            챕터: item.chapter?.number || '없음'
+                                        })),
+                                        저장한_데이터: dataText,
+                                        저장한_챕터: chapter?.number || savedChapter?.number
+                                    });
+                                    
+                                    if (typeof window.addRightLog === 'function') {
+                                        window.addRightLog('warn', '[우측 저장] ⚠️ 저장 확인 실패: 데이터를 찾을 수 없음');
+                                    }
+                                }
+                            } else {
+                                console.warn('[자동 저장] ⚠️ 저장 확인 실패: 조회된 데이터가 없음', {
+                                    조회결과: verifyResult
+                                });
+                                
+                                if (typeof window.addRightLog === 'function') {
+                                    window.addRightLog('warn', '[우측 저장] ⚠️ 저장 확인 실패: 조회된 데이터 없음');
+                                }
+                            }
+                        } else {
+                            const errorText = await verifyResponse.text().catch(() => 'Unknown error');
+                            console.error('[자동 저장] 저장 확인 오류:', errorText);
+                        }
+                    } catch (verifyError) {
+                        console.error('[자동 저장] 저장 확인 중 오류 발생:', verifyError);
+                    }
+                }, 500); // 저장 후 0.5초 후에 확인
+                
                 // 저장 완료 후 상태만 업데이트
                 setTimeout(() => {
                     updateSaveStatus('', '');
                 }, 2000);
                 
-                // 자동 호출: 좌측 목록 새로고침 (저장 완료 후)
+                // 자동 호출: 좌측 목록 새로고침 (저장 완료 후, 속성 필터는 변경하지 않음)
                 setTimeout(() => {
-                    // 저장된 속성 텍스트를 기반으로 필터 업데이트
-                    // 서버 응답에서 저장된 속성 텍스트 사용 (가장 정확함)
-                    // 서버 응답 구조: result.record.attribute.text
-                    const savedAttributeText = savedAttribute.text || fullAttributeText;
-                    
-                    // savedAttributeText 형식: "소설 제목 → 챕터 N: 제목 → 속성명"
-                    // 필터에는 "소설 제목 → 챕터 N: 제목"까지 포함하도록 설정
+                    // 속성 필터는 변경하지 않고 현재 필터 유지하면서 새로고침만 함
                     if ($attributeFilterInput) {
-                        // 저장된 속성 텍스트에서 챕터까지 포함한 부분 추출
-                        const parts = savedAttributeText.split(' → ');
-                        let filterText = '';
-                        
-                        if (parts.length >= 2) {
-                            // "소설 제목 → 챕터 N: 제목"까지 포함
-                            filterText = parts.slice(0, 2).join(' → ');
-                        } else if (parts.length === 1) {
-                            // 소설 제목만 있는 경우
-                            filterText = parts[0];
-                        } else {
-                            // 소설 제목으로 기본 설정
-                            filterText = novelTitle || '';
-                        }
-                        
-                        // 디버깅: 필터 설정 확인
-                        console.log('[자동 저장] 좌측 필터 설정:', {
-                            저장된_속성: savedAttributeText,
-                            설정할_필터: filterText
-                        });
-                        
-                        // 필터 입력 필드 업데이트 (저장된 속성과 일치하도록)
-                        if (filterText) {
-                            $attributeFilterInput.value = filterText;
-                            // 필터 저장
-                            saveFilterValues();
-                            loadAttributes();
-                        } else if ($attributeFilterInput.value.trim()) {
-                            // 필터가 이미 있으면 그대로 사용
+                        // 필터가 이미 있으면 그대로 사용하여 새로고침만 함
+                        if ($attributeFilterInput.value.trim()) {
                             loadAttributes();
                         } else {
-                            // 소설 목록 표시
+                            // 필터가 없으면 소설 목록 표시
                             loadNovelList();
                         }
                     } else {
@@ -621,39 +1005,453 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // 속성 입력 시 BIT 값 표시 및 자동 저장 트리거
+    // 속성 입력 시 BIT 값 표시 및 자동 저장 트리거 (스위치 알고리즘 사용)
     if ($attributeInput) {
-        let attributeTimer = null;
-        $attributeInput.addEventListener('input', () => {
-            // 로컬 스토리지에 저장
-            const value = $attributeInput.value || '';
-            localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, value);
+        let attributeValue1 = ''; // 현재 입력값
+        let attributeValue2 = ''; // 이전 입력값
+        let attributeValue3 = ''; // 정리된 텍스트
+        let attributeSwitch = 0; // 스위치 상태
+        
+        // 초기값 설정
+        attributeValue2 = $attributeInput.value || '';
+        
+        // setInterval로 입력값 변경 감지 및 BIT 계산
+        setInterval(function() {
+            attributeValue1 = $attributeInput.value || '';
             
-            clearTimeout(attributeTimer);
-            attributeTimer = setTimeout(() => {
+            switch (attributeSwitch) {
+                case 0:
+                    // 현재값과 이전값 비교
+                    if (attributeValue1 === attributeValue2) {
+                        attributeSwitch = 0;
+                    } else {
+                        attributeSwitch = 1;
+                    }
+                    break;
+                    
+                case 1:
+                    // 이전값 업데이트 및 정리된 텍스트 초기화
+                    attributeSwitch = 2;
+                    attributeValue2 = attributeValue1;
+                    attributeValue3 = '';
+            // 로컬 스토리지에 저장
+                    localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, attributeValue2);
+                    break;
+                    
+                case 2:
+                    // 텍스트 정리 (공백 제거, trim)
+                    attributeValue2 = attributeValue2.trim();
+                    // 필요시 추가 정리 작업 수행
+                    attributeValue3 = attributeValue2;
+                    attributeSwitch = 3;
+                    break;
+                    
+                case 3:
+                    // BIT 값 계산 및 표시
+                    if (attributeValue3) {
                 const novelTitle = ($novelTitleInput && $novelTitleInput.value || '').trim();
-                const attributeText = $attributeInput.value.trim();
                 
                 // 전체 속성 텍스트로 BIT 계산 (저장 시와 동일하게)
-                const fullAttributeText = novelTitle && attributeText 
-                    ? `${novelTitle} → ${attributeText}` 
-                    : attributeText;
+                        const fullAttributeText = novelTitle && attributeValue3 
+                            ? `${novelTitle} → ${attributeValue3}` 
+                            : attributeValue3;
                 
                 if (fullAttributeText) {
                     const bits = calculateBitValues(fullAttributeText);
                     if (bits.max !== null && bits.min !== null) {
-                        $attributeBitInfo.textContent = `BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}`;
-                    } else {
+                                // BIT 값과 조회된 데이터 개수 표시 (비동기로 조회)
+                                // 먼저 "BIT: 계산 중..." 표시
+                                if ($attributeBitInfo) {
+                                    $attributeBitInfo.innerHTML = `
+                                        <div>BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}</div>
+                                        <div style="font-size: 0.9em; color: #666; margin-top: 4px;">조회 중...</div>
+                                    `;
+                                }
+                                
+                                // 조회된 데이터 개수 표시 및 자동 저장 (비동기)
+                                (async () => {
+                                    try {
+                                        const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${bits.max}&bitMin=${bits.min}&limit=100`);
+                                        console.log('[속성 BIT 조회] 조회 시작:', {
+                                            url: dataUrl,
+                                            bitMax: bits.max,
+                                            bitMin: bits.min,
+                                            fullAttributeText: fullAttributeText
+                                        });
+                                        
+                                        const dataResponse = await fetch(dataUrl);
+                                        
+                                        if (dataResponse.ok) {
+                                            const dataResult = await dataResponse.json();
+                                            console.log('[속성 BIT 조회] 서버 응답:', {
+                                                ok: dataResult.ok,
+                                                count: dataResult.count,
+                                                itemsLength: dataResult.items ? dataResult.items.length : 0,
+                                                items: dataResult.items ? dataResult.items.slice(0, 3).map(item => ({
+                                                    attribute: item.attribute?.text || '없음',
+                                                    data: (item.s || item.data?.text || '').substring(0, 30),
+                                                    bitMax: item.attribute?.bitMax || item.max || '없음',
+                                                    bitMin: item.attribute?.bitMin || item.min || '없음'
+                                                })) : []
+                                            });
+                                            
+                                            if (dataResult.ok) {
+                                                const dataCount = dataResult.count || (dataResult.items ? dataResult.items.length : 0);
+                                                
+                                                // BIT 값과 조회된 데이터 개수 함께 표시
+                                                if ($attributeBitInfo) {
+                                                    $attributeBitInfo.innerHTML = `
+                                                        <div>BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}</div>
+                                                        <div style="font-size: 0.9em; color: #666; margin-top: 4px;">조회된 데이터: ${dataCount}개</div>
+                                                    `;
+                                                }
+                                                
+                                                console.log('[속성 BIT 조회] 조회된 데이터 개수:', dataCount, {
+                                                    countFromServer: dataResult.count,
+                                                    itemsLength: dataResult.items ? dataResult.items.length : 0,
+                                                    finalCount: dataCount
+                                                });
+                                                
+                                                // 조회된 데이터가 0개이면 저장 (데이터 입력값 유무에 따라 다르게 처리)
+                                                if (dataCount === 0) {
+                                                    const currentDataText = ($dataInput && $dataInput.value || '').trim();
+                                                    
+                                                    console.log('[자동 저장] 조회된 데이터 0개 - 저장 시작:', {
+                                                        속성: attributeValue3,
+                                                        fullAttributeText: fullAttributeText,
+                                                        데이터입력값있음: !!currentDataText
+                                                    });
+                                                    
+                                                    // 속성 텍스트에서 소설 제목 제거 (저장용)
+                                                    let attributeTextOnly = attributeValue3;
+                                                    if (fullAttributeText.startsWith(`${novelTitle} → `)) {
+                                                        attributeTextOnly = fullAttributeText.substring(`${novelTitle} → `.length).trim();
+                                                    }
+                                                    
+                                                    // 챕터 정보 추출
+                                                    let chapter = null;
+                                                    const parts = fullAttributeText.split(' → ').map(p => (p || '').trim()).filter(p => p && p.length > 0);
+                                                    if (parts.length >= 2) {
+                                                        const chapterPart = parts[1];
+                                                        const chapterMatch = chapterPart.match(/챕터\s*(\d+)(?:\s*[:：]\s*(.+))?/i);
+                                                        if (chapterMatch) {
+                                                            const chapterNumber = chapterMatch[1];
+                                                            const chapterTitle = (chapterMatch[2] || '').trim();
+                                                            chapter = {
+                                                                number: chapterNumber,
+                                                                title: chapterTitle || `제${chapterNumber}장`
+                                                            };
+                                                        }
+                                                    }
+                                                    
+                                                    const chapterText = chapter ? `챕터 ${chapter.number}${chapter.title ? `: ${chapter.title}` : ''}` : '';
+                                                    const chapterBits = chapterText ? calculateBitValues(chapterText) : { max: null, min: null };
+                                                    
+                                                    try {
+                                                        const url = getServerUrl('/api/attributes/data');
+                                                        const novelTitleBits = novelTitle ? calculateBitValues(novelTitle) : { max: null, min: null };
+                                                        
+                                                        // 데이터 입력값이 있으면 데이터와 함께 저장, 없으면 데이터 없이 저장
+                                                        // text 필드는 항상 문자열로 보장 (빈 문자열도 허용)
+                                                        let saveText = '';
+                                                        let saveDataBitMax = null;
+                                                        let saveDataBitMin = null;
+                                                        
+                                                        if (currentDataText && currentDataText.length > 0) {
+                                                            // 데이터 입력값이 있으면 데이터와 함께 저장
+                                                            saveText = String(currentDataText);
+                                                            const dataBits = calculateBitValues(currentDataText);
+                                                            saveDataBitMax = dataBits.max;
+                                                            saveDataBitMin = dataBits.min;
+                                                        } else {
+                                                            // 데이터 입력값이 없으면 데이터 없이 저장 (빈 문자열)
+                                                            saveText = ''; // 명시적으로 빈 문자열
+                                                            saveDataBitMax = null;
+                                                            saveDataBitMin = null;
+                                                        }
+                                                        
+                                                        const requestBody = {
+                                                            attributeText: attributeTextOnly,
+                                                            attributeBitMax: bits.max,
+                                                            attributeBitMin: bits.min,
+                                                            text: saveText, // 항상 문자열 (빈 문자열 포함)
+                                                            dataBitMax: saveDataBitMax,
+                                                            dataBitMin: saveDataBitMin,
+                                                            novelTitle: novelTitle,
+                                                            novelTitleBitMax: novelTitleBits.max,
+                                                            novelTitleBitMin: novelTitleBits.min,
+                                                            chapter: chapter,
+                                                            chapterBitMax: chapterBits.max,
+                                                            chapterBitMin: chapterBits.min
+                                                        };
+                                                        
+                                                        console.log('[자동 저장] attribute_data.js에서 저장 요청:', {
+                                                            attributeText: requestBody.attributeText,
+                                                            text: requestBody.text,
+                                                            textType: typeof requestBody.text,
+                                                            textLength: requestBody.text.length,
+                                                            currentDataText: currentDataText,
+                                                            currentDataTextType: typeof currentDataText,
+                                                            requestBodyJSON: JSON.stringify(requestBody).substring(0, 300)
+                                                        });
+                                                        
+                                                        const response = await fetch(url, {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                            },
+                                                            body: JSON.stringify(requestBody),
+                                                        });
+                                                        
+                                                        if (!response.ok) {
+                                                            const errorText = await response.text().catch(() => 'Unknown error');
+                                                            console.error('[자동 저장] attribute_data.js 저장 실패:', {
+                                                                status: response.status,
+                                                                errorText: errorText,
+                                                                requestBody: requestBody,
+                                                                textValue: requestBody.text,
+                                                                textType: typeof requestBody.text
+                                                            });
+                                                            if (typeof window.addRightLog === 'function') {
+                                                                window.addRightLog('error', `[자동 저장] 저장 실패: ${errorText.substring(0, 100)}`);
+                                                            }
+                                                            return;
+                                                        }
+                                                        
+                                                        const result = await response.json().catch(() => ({}));
+                                                        if (result.ok) {
+                                                                if (currentDataText) {
+                                                                    console.log('[자동 저장] 저장 완료 (속성+데이터):', attributeTextOnly);
+                                                                    if (typeof window.addRightLog === 'function') {
+                                                                        window.addRightLog('info', `[자동 저장] 저장 완료 (속성+데이터): "${attributeTextOnly}"`);
+                                                                    }
+                                                                    
+                                                                    // 저장 후 데이터 입력값 초기화
+                                                                    if ($dataInput) {
+                                                                        $dataInput.value = '';
+                                                                        $dataInput.style.height = 'auto';
+                                                                        if ($dataBitInfo) {
+                                                                            $dataBitInfo.textContent = 'BIT: 계산 중...';
+                                                                        }
+                                                                        localStorage.removeItem(STORAGE_KEY_DATA_TEXT);
+                                                                    }
+                                                                } else {
+                                                                    console.log('[자동 저장] 저장 완료 (속성만):', attributeTextOnly);
+                                                                    if (typeof window.addRightLog === 'function') {
+                                                                        window.addRightLog('info', `[자동 저장] 저장 완료 (속성만): "${attributeTextOnly}"`);
+                                                                    }
+                                                                }
+                                                                
+                                                                // BIT 정보 업데이트 (조회된 데이터 개수 갱신)
+                                                                setTimeout(async () => {
+                                                                    try {
+                                                                        const refreshUrl = getServerUrl(`/api/attributes/data?bitMax=${bits.max}&bitMin=${bits.min}&limit=100`);
+                                                                        const refreshResponse = await fetch(refreshUrl);
+                                                                        if (refreshResponse.ok) {
+                                                                            const refreshResult = await refreshResponse.json();
+                                                                            if (refreshResult.ok) {
+                                                                                const refreshCount = refreshResult.count || (refreshResult.items ? refreshResult.items.length : 0);
+                                                                                if ($attributeBitInfo) {
+                                                                                    $attributeBitInfo.innerHTML = `
+                                                                                        <div>BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}</div>
+                                                                                        <div style="font-size: 0.9em; color: #666; margin-top: 4px;">조회된 데이터: ${refreshCount}개</div>
+                                                                                    `;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    } catch (e) {
+                                                                        console.error('[자동 저장] 개수 갱신 오류:', e);
+                                                                    }
+                                                                }, 500);
+                                                            }
+                                                        else {
+                                                            console.error('[자동 저장] attribute_data.js 저장 실패: result.ok가 false', result);
+                                                            if (typeof window.addRightLog === 'function') {
+                                                                window.addRightLog('error', `[자동 저장] 저장 실패: ${result.error || 'Unknown error'}`);
+                                                            }
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('[자동 저장] 저장 오류:', error);
+                                                        if (typeof window.addRightLog === 'function') {
+                                                            window.addRightLog('error', `[자동 저장] 저장 오류: ${error.message || error}`);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.error('[속성 BIT 조회] 데이터 개수 조회 오류:', error, {
+                                            bitMax: bits.max,
+                                            bitMin: bits.min,
+                                            fullAttributeText: fullAttributeText,
+                                            errorMessage: error.message,
+                                            errorStack: error.stack
+                                        });
+                                        // 오류 시 BIT 값과 오류 메시지 표시
+                                        if ($attributeBitInfo) {
+                                            $attributeBitInfo.innerHTML = `
+                                                <div>BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}</div>
+                                                <div style="font-size: 0.9em; color: #f00; margin-top: 4px;">조회 오류: ${error.message || '알 수 없는 오류'}</div>
+                                            `;
+                                        }
+                                    }
+                                })();
+                            } else {
+                                if ($attributeBitInfo) {
                         $attributeBitInfo.textContent = 'BIT: 계산 중...';
+                                }
                     }
                 } else {
+                            if ($attributeBitInfo) {
                     $attributeBitInfo.textContent = 'BIT: 계산 중...';
-                }
-                
-                // 자동 저장 트리거 (속성과 데이터가 모두 입력되어 있을 때)
-                triggerAutoSave();
-            }, 300);
-        });
+                            }
+                        }
+                        
+                    }
+                    attributeSwitch = 0;
+                    break;
+            }
+        }, 500); // 500ms마다 체크
+    }
+    
+    // 속성 텍스트와 데이터 텍스트 모두 입력되었을 때 자동 조회 및 저장 (스위치 알고리즘 사용)
+    if ($attributeInput && $dataInput) {
+        let saveValue1Attr = ''; // 현재 속성 입력값
+        let saveValue2Attr = ''; // 이전 속성 입력값
+        let saveValue1Data = ''; // 현재 데이터 입력값
+        let saveValue2Data = ''; // 이전 데이터 입력값
+        let saveValue3Attr = ''; // 정리된 속성 텍스트
+        let saveValue3Data = ''; // 정리된 데이터 텍스트
+        let saveSwitch = 0; // 스위치 상태
+        
+        // 초기값 설정
+        saveValue2Attr = $attributeInput.value || '';
+        saveValue2Data = $dataInput.value || '';
+        
+        // setInterval로 입력값 변경 감지 및 자동 조회/저장
+        setInterval(async function() {
+            saveValue1Attr = $attributeInput.value || '';
+            saveValue1Data = $dataInput.value || '';
+            
+            switch (saveSwitch) {
+                case 0:
+                    // 속성과 데이터 모두 현재값과 이전값 비교
+                    if (saveValue1Attr === saveValue2Attr && saveValue1Data === saveValue2Data) {
+                        saveSwitch = 0;
+                    } else {
+                        // 둘 다 입력되어 있고 변경되었으면 진행
+                        if (saveValue1Attr.trim() && saveValue1Data.trim()) {
+                            saveSwitch = 1;
+                        } else {
+                            saveSwitch = 0;
+                        }
+                    }
+                    break;
+                    
+                case 1:
+                    // 이전값 업데이트 및 정리된 텍스트 초기화
+                    saveSwitch = 2;
+                    saveValue2Attr = saveValue1Attr;
+                    saveValue2Data = saveValue1Data;
+                    saveValue3Attr = '';
+                    saveValue3Data = '';
+                    break;
+                    
+                case 2:
+                    // 텍스트 정리 (공백 제거, trim)
+                    saveValue2Attr = saveValue2Attr.trim();
+                    saveValue2Data = saveValue2Data.trim();
+                    saveValue3Attr = saveValue2Attr;
+                    saveValue3Data = saveValue2Data;
+                    saveSwitch = 3;
+                    break;
+                    
+                case 3:
+                    // 조회 후 없으면 저장
+                    if (saveValue3Attr && saveValue3Data) {
+                        try {
+                            const novelTitle = ($novelTitleInput && $novelTitleInput.value || '').trim();
+                            
+                            // 전체 속성 텍스트로 BIT 계산 (저장 시와 동일하게)
+                            const fullAttributeText = novelTitle && saveValue3Attr 
+                                ? `${novelTitle} → ${saveValue3Attr}` 
+                                : saveValue3Attr;
+                            
+                            // 속성 텍스트에서 소설 제목 제거 (저장용)
+                            let attributeTextOnly = saveValue3Attr;
+                            if (fullAttributeText.startsWith(`${novelTitle} → `)) {
+                                attributeTextOnly = fullAttributeText.substring(`${novelTitle} → `.length).trim();
+                            }
+                            
+                            // BIT 값 계산
+                            const attributeBits = calculateBitValues(fullAttributeText);
+                            const dataBits = calculateBitValues(saveValue3Data);
+                            
+                            if (attributeBits.max && attributeBits.min && dataBits.max && dataBits.min) {
+                                // 조회 수행
+                                const checkUrl = getServerUrl(`/api/attributes/data?bitMax=${attributeBits.max}&bitMin=${attributeBits.min}&limit=10`);
+                                const checkResponse = await fetch(checkUrl);
+                                
+                                if (checkResponse.ok) {
+                                    const checkResult = await checkResponse.json();
+                                    
+                                    // 저장된 데이터 중에서 동일한 속성과 데이터가 있는지 확인
+                                    const foundItem = checkResult.items?.find(item => {
+                                        const itemAttribute = (item.attribute?.text || '').trim();
+                                        const itemData = (item.s || item.data?.text || '').trim();
+                                        return itemAttribute === attributeTextOnly && itemData === saveValue3Data;
+                                    });
+                                    
+                                    if (!foundItem) {
+                                        // 조회 결과 없으면 저장
+                                        console.log('[자동 조회/저장] 조회 결과 없음 - 저장 시작:', {
+                                            속성: attributeTextOnly,
+                                            데이터: saveValue3Data.substring(0, 50)
+                                        });
+                                        
+                                        // 저장 수행 (기존 autoSave 로직 활용)
+                                        await autoSave();
+                                        
+                                        // 저장 후 데이터 입력값 초기화
+                                        if ($dataInput) {
+                                            $dataInput.value = '';
+                                            $dataInput.style.height = 'auto';
+                                            // BIT 정보 초기화
+                                            if ($dataBitInfo) {
+                                                $dataBitInfo.textContent = 'BIT: 계산 중...';
+                                            }
+                                            // 로컬 스토리지에서도 제거
+                                            localStorage.removeItem(STORAGE_KEY_DATA_TEXT);
+                                            
+                                            // 이전값도 초기화하여 다시 저장되지 않도록
+                                            saveValue2Data = '';
+                                            
+                                            console.log('[자동 조회/저장] 저장 완료 후 데이터 입력값 초기화');
+                                            
+                                            if (typeof window.addRightLog === 'function') {
+                                                window.addRightLog('info', `[자동 조회/저장] 저장 완료 및 데이터 입력값 초기화`);
+                                            }
+                                        }
+                                    } else {
+                                        console.log('[자동 조회/저장] 조회 결과 있음 - 저장 건너뜀:', {
+                                            속성: attributeTextOnly,
+                                            데이터: saveValue3Data.substring(0, 50)
+                                        });
+                                        
+                                        if (typeof window.addRightLog === 'function') {
+                                            window.addRightLog('info', `[자동 조회/저장] 이미 저장된 데이터입니다`);
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (error) {
+                            console.error('[자동 조회/저장] 오류:', error);
+                        }
+                    }
+                    saveSwitch = 0;
+                    break;
+            }
+        }, 500); // 500ms마다 체크
     }
     
     // 챕터 목록 컨테이너 및 소설 제목 입력 필드
@@ -809,9 +1607,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }, 100);
                     
-                    // 속성 필드에 속성 입력 (다음 챕터의 과거 줄거리 속성)
+                    // 속성 필드에 속성 입력 (다음 챕터의 과거 줄거리 속성, 소설 제목 포함)
                     const pastSummaryAttribute = `${novelTitle} → ${chapterFullTitle} → 과거 줄거리`;
                     if ($attributeInput) {
+                        // 속성 필드에 소설 제목 포함하여 전체 경로 입력
                         $attributeInput.value = pastSummaryAttribute;
                         localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, pastSummaryAttribute);
                         // 속성 입력 이벤트 트리거
@@ -867,9 +1666,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }, 100);
                         
-                        // 속성 필드에 속성 입력 (다음 챕터의 과거 줄거리 속성)
+                        // 속성 필드에 속성 입력 (다음 챕터의 과거 줄거리 속성, 소설 제목 포함)
                         const pastSummaryAttribute = `${novelTitle} → ${chapterFullTitle} → 과거 줄거리`;
                         if ($attributeInput) {
+                            // 속성 필드에 소설 제목 포함하여 전체 경로 입력
                             $attributeInput.value = pastSummaryAttribute;
                             localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, pastSummaryAttribute);
                             // 속성 입력 이벤트 트리거
@@ -926,16 +1726,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const chapterTitleOnly = chapterMatch[2] || `제${chapterNum}장`;
         const chapterFullTitle = `챕터 ${chapterNum}: ${chapterTitleOnly}`;
         
-        // 챕터 제목 클릭 시에는 "챕터 N: 제목"까지만 입력 (구성 항목 제외)
-        // 속성 입력란에 챕터 제목만 입력 (소설 제목 제외)
+        // 챕터 제목 클릭 시에는 "소설 제목 → 챕터 N: 제목" 형식으로 입력 (소설 제목 포함)
+        // 속성 입력란에 소설 제목 포함하여 전체 경로 입력
+        const fullAttributeTextForInput = `${novelTitle} → ${chapterFullTitle}`;
         if ($attributeInput) {
-            $attributeInput.value = chapterFullTitle;
+            $attributeInput.value = fullAttributeTextForInput;
             // 로컬 스토리지에 저장
-            localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, chapterFullTitle);
+            localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, fullAttributeTextForInput);
             
             // BIT 값 재계산 및 표시 (일관성 있게 처리)
-            const fullAttributeText = `${novelTitle} → ${chapterFullTitle}`;
-            const attributeBits = calculateBitValues(fullAttributeText);
+            const attributeBits = calculateBitValues(fullAttributeTextForInput);
             if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
                 $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
             }
@@ -950,10 +1750,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // 대화 상자에 챕터의 모든 속성과 데이터 추가
         await appendChapterAllDataToChatInput(novelTitle, chapterFullTitle, chapterNum);
         
-        // 챕터 데이터 로드 후에도 속성 입력란에 챕터 제목만 유지되도록 보장
-        if ($attributeInput && $attributeInput.value !== chapterFullTitle) {
-            $attributeInput.value = chapterFullTitle;
-            localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, chapterFullTitle);
+        // 챕터 데이터 로드 후에도 속성 입력란에 소설 제목 포함하여 유지되도록 보장
+        if ($attributeInput && $attributeInput.value !== fullAttributeTextForInput) {
+            $attributeInput.value = fullAttributeTextForInput;
+            localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, fullAttributeTextForInput);
         }
         
         // 좌측 속성 필터에 소설 제목 입력
@@ -1153,18 +1953,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     
-                    // 속성 텍스트 필드에 입력
+                    // 속성 텍스트 필드에 입력 (소설 제목 포함)
                     // 챕터 구성 목록에서 클릭한 장면 텍스트를 직접 사용 (저장된 경로 무시)
                     if ($attributeInput) {
-                        // 챕터 제목과 클릭한 장면 텍스트를 직접 연결
-                        // 예: "챕터 1: 제1장 → 감정/분위기"
+                        // 소설 제목, 챕터 제목, 장면 텍스트를 모두 포함
+                        // 예: "다크 판타지 → 챕터 1: 제1장 → 감정/분위기"
                         let finalValue = sceneText;
                         if (currentChapterTitle) {
-                            // 챕터 제목이 있으면 "챕터 제목 → 장면" 형태로 입력
-                            finalValue = `${currentChapterTitle} → ${sceneText}`;
+                            // 챕터 제목이 있으면 "소설 제목 → 챕터 제목 → 장면" 형태로 입력
+                            finalValue = `${novelTitle} → ${currentChapterTitle} → ${sceneText}`;
                         } else if (currentChapterNum) {
-                            // 챕터 번호만 있으면 "챕터 N → 장면" 형태로 입력
-                            finalValue = `챕터 ${currentChapterNum} → ${sceneText}`;
+                            // 챕터 번호만 있으면 "소설 제목 → 챕터 N → 장면" 형태로 입력
+                            finalValue = `${novelTitle} → 챕터 ${currentChapterNum} → ${sceneText}`;
+                        } else {
+                            // 챕터 정보가 없으면 "소설 제목 → 장면" 형태로 입력
+                            finalValue = `${novelTitle} → ${sceneText}`;
                         }
                         
                         $attributeInput.value = finalValue;
@@ -1172,8 +1975,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, finalValue);
                         
                         // BIT 값 재계산 및 표시 (일관성 있게 처리)
-                        const fullAttributeText = `${novelTitle} → ${finalValue}`;
-                        const attributeBits = calculateBitValues(fullAttributeText);
+                        const attributeBits = calculateBitValues(finalValue);
                         if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
                             $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                         }
@@ -1238,14 +2040,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log('[장면 선택] 전체 경로 입력:', { novelTitle, sceneText, currentChapterNum, currentChapterTitle, fullPath });
                 } else {
-                            // 속성을 찾을 수 없으면 장면 텍스트만 입력
+                            // 속성을 찾을 수 없으면 소설 제목 포함하여 장면 텍스트 입력
                             if ($attributeInput) {
-                                $attributeInput.value = sceneText;
+                                const fullAttributeText = `${novelTitle} → ${sceneText}`;
+                                $attributeInput.value = fullAttributeText;
                                 // 로컬 스토리지에 저장
-                                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, sceneText);
+                                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, fullAttributeText);
                                 
                                 // BIT 값 재계산 및 표시 (일관성 있게 처리)
-                                const fullAttributeText = `${novelTitle} → ${sceneText}`;
                                 const attributeBits = calculateBitValues(fullAttributeText);
                                 if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
                                     $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
@@ -1289,11 +2091,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('[장면 선택] 오류:', error);
-                    // 오류 시 장면 텍스트만 입력
+                    // 오류 시 소설 제목 포함하여 장면 텍스트 입력
                     if ($attributeInput) {
-                        $attributeInput.value = sceneText;
+                        const fullAttributeText = `${novelTitle} → ${sceneText}`;
+                        $attributeInput.value = fullAttributeText;
                         // 로컬 스토리지에 저장
-                        localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, sceneText);
+                        localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, fullAttributeText);
                         const inputEvent = new Event('input', { bubbles: true });
                         $attributeInput.dispatchEvent(inputEvent);
                     }
@@ -1662,8 +2465,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 자동 저장 트리거 함수 (debounce)
+    // 자동 저장 트리거 함수 (debounce) - right_data_manager.js로 이동
+    // 주의: right_data_manager.js의 triggerAutoSave를 직접 참조하여 순환 참조 방지
+    let rightDataManagerTriggerAutoSave = null;
     function triggerAutoSave() {
+        // right_data_manager.js의 함수 사용 (순환 참조 방지를 위해 직접 참조)
+        if (rightDataManagerTriggerAutoSave) {
+            return rightDataManagerTriggerAutoSave();
+        }
+        if (typeof window.triggerAutoSave === 'function' && window.triggerAutoSave !== triggerAutoSave) {
+            // right_data_manager.js의 triggerAutoSave를 캐시
+            rightDataManagerTriggerAutoSave = window.triggerAutoSave;
+            return rightDataManagerTriggerAutoSave();
+        }
+        // fallback
         console.log('[자동 저장 트리거] 호출됨');
         clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => {
@@ -1775,7 +2590,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <button class="btn-icon btn-delete" onclick="event.stopPropagation(); deleteNovel('${escapeHtml(novel.title)}', '${novel.bitMax}', '${novel.bitMin}')" title="소설 삭제">🗑️</button>
                             </div>
                         </div>
-                        <div class="attribute-bit">BIT: ${novel.bitMax !== undefined ? novel.bitMax.toFixed(15) : '-'}, ${novel.bitMin !== undefined ? novel.bitMin.toFixed(15) : '-'} | 데이터 ${novel.dataCount}개</div>
+                        <div class="attribute-bit">BIT: ${novel.bitMax !== undefined && novel.bitMax !== null ? novel.bitMax.toFixed(15) : '-'}, ${novel.bitMin !== undefined && novel.bitMin !== null ? novel.bitMin.toFixed(15) : '-'} | 데이터 ${novel.dataCount}개</div>
                     </div>
                 `;
             });
@@ -1888,11 +2703,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             
                             // BIT 값 유효성 검사
                             if (!Number.isFinite(deleteDataMax) || !Number.isFinite(deleteDataMin)) {
-                                console.warn('[소설 삭제] 유효하지 않은 데이터 BIT 값:', {
-                                    item,
-                                    deleteDataMax,
-                                    deleteDataMin
-                                });
+                                // 디버깅을 위한 상세 정보 수집
+                                const debugInfo = {
+                                    메시지: 'BIT 값이 모두 null이거나 유효하지 않은 데이터 항목입니다. 이 항목은 삭제에서 제외됩니다.',
+                                    속성정보: {
+                                        text: attr.text,
+                                        bitMax: attr.bitMax,
+                                        bitMin: attr.bitMin
+                                    },
+                                    데이터항목정보: {
+                                        id: item.id || 'ID 없음',
+                                        text: item.text || item.data?.text || '텍스트 없음',
+                                        textLength: (item.text || item.data?.text || '').length,
+                                        전체구조: {
+                                            max: item.max,
+                                            min: item.min,
+                                            dataBitMax: item.dataBitMax,
+                                            dataBitMin: item.dataBitMin,
+                                            data: item.data
+                                        },
+                                        추출시도결과: { 
+                                            max: deleteDataMax, 
+                                            min: deleteDataMin,
+                                            max유효성: Number.isFinite(deleteDataMax) ? '유효' : '무효',
+                                            min유효성: Number.isFinite(deleteDataMin) ? '유효' : '무효'
+                                        }
+                                    },
+                                    권장사항: '이 데이터는 서버에서 수동으로 확인하거나 정리해야 할 수 있습니다.'
+                                };
+                                
+                                console.warn('[소설 삭제] 유효하지 않은 데이터 BIT 값 - 건너뜀:', debugInfo);
                                 continue;
                             }
                             
@@ -2048,8 +2888,25 @@ document.addEventListener('DOMContentLoaded', () => {
         $attributesList.innerHTML = '<div class="text-muted text-center">로딩 중...</div>';
         
         try {
-            // BIT 값 계산
-            const filterBits = calculateBitValues(filterText);
+            // BIT 값 계산: 속성 필터에서는 소설 제목만 사용
+            // 필터 텍스트가 "소설 제목 → 챕터..." 형식이면 소설 제목만 추출
+            let filterTextForBit = filterText;
+            if (filterText.includes(' → ')) {
+                const parts = filterText.split(' → ').map(p => p.trim()).filter(p => p && p.length > 0);
+                if (parts.length > 0) {
+                    // 첫 번째 부분(소설 제목)만 사용
+                    filterTextForBit = parts[0];
+                }
+            }
+            
+            console.log('[속성 필터] BIT 계산용 텍스트:', {
+                원본필터: filterText,
+                BIT계산용: filterTextForBit,
+                소설제목추출: filterText !== filterTextForBit ? 'Y' : 'N'
+            });
+            
+            // BIT 값 계산 (소설 제목만 사용)
+            const filterBits = calculateBitValues(filterTextForBit);
             
             if (!filterBits.max || !filterBits.min) {
                 $attributesList.innerHTML = `
@@ -2288,9 +3145,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const dataItemsHtml = dataItems.map((item, itemIndex) => {
                             const text = item.s || item.text || item.data?.text || '';
                             const displayText = text.length > 200 ? text.substring(0, 200) + '...' : text;
-                            const itemBits = item.max !== undefined && item.min !== undefined 
+                            // itemBits 설정: null 체크 포함
+                            const itemBits = (item.max !== undefined && item.max !== null && item.min !== undefined && item.min !== null)
                                 ? { max: item.max, min: item.min }
-                                : { max: item.dataBitMax, min: item.dataBitMin };
+                                : { max: item.dataBitMax !== undefined ? item.dataBitMax : null, min: item.dataBitMin !== undefined ? item.dataBitMin : null };
                             
                             const dataId = `data-${attr.bitMax}-${attr.bitMin}-${itemBits.max}-${itemBits.min}`;
                             
@@ -2318,7 +3176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div class="data-text" data-text-id="${uniqueDataId}" onclick="event.stopPropagation(); const textId = this.getAttribute('data-text-id'); if (textId && window.dataTextStorage && window.dataTextStorage[textId]) { window.showDataModal(window.dataTextStorage[textId]); }" style="cursor: pointer; flex: 1; padding: 5px; border-radius: 3px; transition: background 0.2s;" onmouseover="this.style.background='rgba(124, 92, 255, 0.1)'" onmouseout="this.style.background='transparent'" title="클릭하여 전체 내용 보기">${escapeHtml(displayText)}</div>
                                         <button class="btn-icon btn-delete" onclick="event.stopPropagation(); deleteDataItem('${attr.bitMax}', '${attr.bitMin}', '${itemBits.max}', '${itemBits.min}', '${textEscaped}')" title="삭제">🗑️</button>
                                     </div>
-                                    <div class="data-bit">BIT: ${itemBits.max !== undefined ? itemBits.max.toFixed(15) : '-'}, ${itemBits.min !== undefined ? itemBits.min.toFixed(15) : '-'}</div>
+                                    <div class="data-bit">BIT: ${itemBits.max !== undefined && itemBits.max !== null ? itemBits.max.toFixed(15) : '-'}, ${itemBits.min !== undefined && itemBits.min !== null ? itemBits.min.toFixed(15) : '-'}</div>
                                     <button class="btn btn-sm btn-outline-success mt-2" onclick="event.stopPropagation(); copyToClipboard('${textEscaped}')">📋 복사</button>
                                 </div>
                             `;
@@ -2335,7 +3193,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div class="toggle-icon" id="toggle-${attrId}" onclick="toggleData('${attrId}')" style="cursor: pointer; padding: 5px;">▼</div>
                                     </div>
                                 </div>
-                                <div class="attribute-bit">BIT: ${attr.bitMax !== undefined ? attr.bitMax.toFixed(15) : '-'}, ${attr.bitMin !== undefined ? attr.bitMin.toFixed(15) : '-'} | 유사도: ${(attr.similarity * 100).toFixed(1)}% | 데이터 ${dataItems.length}개</div>
+                                <div class="attribute-bit">BIT: ${attr.bitMax !== undefined && attr.bitMax !== null ? attr.bitMax.toFixed(15) : '-'}, ${attr.bitMin !== undefined && attr.bitMin !== null ? attr.bitMin.toFixed(15) : '-'} | 유사도: ${attr.similarity !== undefined && attr.similarity !== null ? (attr.similarity * 100).toFixed(1) : '-'}% | 데이터 ${dataItems.length}개</div>
                                 <div class="data-list" id="${attrId}" style="display: none;">${dataItemsHtml}</div>
                             </div>
                         `;
@@ -2549,29 +3407,30 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 필터와 추가 검색 키워드가 모두 비어있을 때는 제목만 입력
         if (!filterText && !additionalSearch) {
-            // 속성 텍스트 필드는 비워두기
+            // 속성 텍스트 필드에 소설 제목만 입력
             if ($attributeInput) {
-                $attributeInput.value = '';
-                // 로컬 스토리지에도 빈 값 저장
-                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, '');
+                $attributeInput.value = novelTitle;
+                // 로컬 스토리지에도 저장
+                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, novelTitle);
             }
             console.log('[속성 선택] 필터 비어있음 - 제목만 입력:', { novelTitle, fullText: attributeText });
         } else {
-            // 필터나 추가 검색 키워드가 있으면 속성 텍스트도 입력
-            if ($attributeInput && attributePart) {
-                $attributeInput.value = attributePart;
+            // 필터나 추가 검색 키워드가 있으면 전체 속성 텍스트 입력 (소설 제목 포함)
+            if ($attributeInput && attributeText) {
+                // 전체 속성 텍스트를 입력 (소설 제목 포함)
+                $attributeInput.value = attributeText;
                 // 로컬 스토리지에 저장
-                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, attributePart);
+                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, attributeText);
                 // 이벤트 트리거하여 BIT 값 재계산
                 const inputEvent = new Event('input', { bubbles: true });
                 $attributeInput.dispatchEvent(inputEvent);
             } else if ($attributeInput && parts.length === 1) {
-                // 속성 텍스트가 하나만 있으면 (소설 제목만 있는 경우)
-                $attributeInput.value = '';
-                // 로컬 스토리지에도 빈 값 저장
-                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, '');
+                // 속성 텍스트가 하나만 있으면 (소설 제목만 있는 경우) 소설 제목 입력
+                $attributeInput.value = novelTitle;
+                // 로컬 스토리지에도 저장
+                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, novelTitle);
             }
-            console.log('[속성 선택] 필터 있음 - 전체 입력:', { novelTitle, attributePart, fullText: attributeText });
+            console.log('[속성 선택] 필터 있음 - 전체 입력:', { novelTitle, attributeText });
         }
         
         // 대화 상자에 속성 정보 추가 (데이터 포함)
@@ -2793,7 +3652,20 @@ ${chapterData.data.map((data, i) => `- ${chapterData.attribute}: ${data.substrin
 ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.map((char, idx) => `  ${idx + 1}. ${char}`).join('\n')}` : '- 등장인물 정보가 없습니다.'}
 
 **작성 형식:**
-위 4개 섹션을 순서대로 작성해주세요. 각 섹션은 명확하게 구분되어야 합니다.`;
+반드시 위 4개 섹션을 모두 순서대로 작성해주세요. 각 섹션은 명확하게 구분되어야 하며, 섹션 제목(예: **1. 이야기 끝나는 장면**)을 반드시 포함해야 합니다. 어떤 섹션도 생략하지 마세요.
+
+**작성 예시:**
+**1. 이야기 끝나는 장면**
+[챕터의 마지막 장면 묘사]
+
+**2. 주요 대사**
+[주요 대사 목록]
+
+**3. 과거 줄거리**
+[과거 줄거리 내용]
+
+**4. 과거 등장인물**
+[등장인물 목록]`;
 
             // GPT API 호출
             const gptUrl = getServerUrl('/api/gpt/chat');
@@ -2806,8 +3678,8 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
                     prompt: summaryPrompt,
                     model: window.API_CONFIG?.defaultModel || 'gpt-4o-mini',
                     temperature: 0.7,
-                    maxTokens: 2000,
-                    systemMessage: '당신은 소설 작성을 돕는 AI 어시스턴트입니다. 주어진 내용을 바탕으로 명확하고 간결한 줄거리 요약을 작성해주세요. 특히 등장인물들의 주요 대사들을 자연스럽게 포함하여 작성해야 합니다. 대사는 따옴표로 표시하여 구분하고, 줄거리 흐름에 자연스럽게 녹아들도록 작성해주세요.'
+                    maxTokens: 2500,
+                    systemMessage: '당신은 소설 작성을 돕는 AI 어시스턴트입니다. 주어진 내용을 바탕으로 명확하고 간결한 줄거리 요약을 작성해주세요. 특히 등장인물들의 주요 대사들을 자연스럽게 포함하여 작성해야 합니다. 대사는 따옴표로 표시하여 구분하고, 줄거리 흐름에 자연스럽게 녹아들도록 작성해주세요. 반드시 다음 4개 섹션을 모두 순서대로 작성해야 합니다: 1. 이야기 끝나는 장면, 2. 주요 대사, 3. 과거 줄거리, 4. 과거 등장인물. 어떤 섹션도 생략하지 마세요.'
                 }),
             });
             
@@ -2861,14 +3733,11 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
                 localStorage.setItem(STORAGE_KEY_NOVEL_TITLE, novelTitle);
             }
             
-            // 속성 입력 필드에 값 설정
+            // 속성 입력 필드에 값 설정 (소설 제목 포함)
             if ($attributeInput) {
-                // pastSummaryAttribute에서 소설 제목 제거 (속성 필드에는 소설 제목 제외)
-                const attributePart = pastSummaryAttribute.includes(' → ') 
-                    ? pastSummaryAttribute.split(' → ').slice(1).join(' → ')
-                    : pastSummaryAttribute;
-                $attributeInput.value = attributePart;
-                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, attributePart);
+                // 속성 필드에 소설 제목 포함하여 전체 경로 입력
+                $attributeInput.value = pastSummaryAttribute;
+                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, pastSummaryAttribute);
                 
                 // 속성 입력 이벤트 트리거
                 const attributeInputEvent = new Event('input', { bubbles: true });
@@ -3150,7 +4019,20 @@ ${allCharacters.length > 0 ? `\n\n**과거 등장인물 정보:**\n${allCharacte
 ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.map((char, idx) => `  ${idx + 1}. ${char}`).join('\n')}` : '- 등장인물 정보가 없습니다.'}
 
 **작성 형식:**
-위 4개 섹션을 순서대로 작성해주세요. 각 섹션은 명확하게 구분되어야 합니다.`;
+반드시 위 4개 섹션을 모두 순서대로 작성해주세요. 각 섹션은 명확하게 구분되어야 하며, 섹션 제목(예: **1. 이야기 끝나는 장면**)을 반드시 포함해야 합니다. 어떤 섹션도 생략하지 마세요.
+
+**작성 예시:**
+**1. 이야기 끝나는 장면**
+[챕터의 마지막 장면 묘사]
+
+**2. 주요 대사**
+[주요 대사 목록]
+
+**3. 과거 줄거리**
+[과거 줄거리 내용]
+
+**4. 과거 등장인물**
+[등장인물 목록]`;
 
             // GPT API 호출
             const gptUrl = getServerUrl('/api/gpt/chat');
@@ -3163,8 +4045,8 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
                     prompt: summaryPrompt,
                     model: window.API_CONFIG?.defaultModel || 'gpt-4o-mini',
                     temperature: 0.7,
-                    maxTokens: 2000,
-                    systemMessage: '당신은 소설 작성을 돕는 AI 어시스턴트입니다. 주어진 내용을 바탕으로 명확하고 간결한 줄거리 요약을 작성해주세요. 특히 등장인물들의 주요 대사들을 자연스럽게 포함하여 작성해야 합니다. 대사는 따옴표로 표시하여 구분하고, 줄거리 흐름에 자연스럽게 녹아들도록 작성해주세요. 이야기 끝나는 장면, 주요 대사, 과거 줄거리, 과거 등장인물 순서로 작성해주세요.'
+                    maxTokens: 2500,
+                    systemMessage: '당신은 소설 작성을 돕는 AI 어시스턴트입니다. 주어진 내용을 바탕으로 명확하고 간결한 줄거리 요약을 작성해주세요. 특히 등장인물들의 주요 대사들을 자연스럽게 포함하여 작성해야 합니다. 대사는 따옴표로 표시하여 구분하고, 줄거리 흐름에 자연스럽게 녹아들도록 작성해주세요. 반드시 다음 4개 섹션을 모두 순서대로 작성해야 합니다: 1. 이야기 끝나는 장면, 2. 주요 대사, 3. 과거 줄거리, 4. 과거 등장인물. 어떤 섹션도 생략하지 마세요.'
                 }),
             });
             
@@ -3406,6 +4288,9 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
     };
     
     // 데이터 항목 삭제 함수
+    // 데이터 항목 삭제 함수 (right_data_manager.js로 이동)
+    // right_data_manager.js에서 이미 정의되었으므로 여기서는 주석 처리
+    /*
     window.deleteDataItem = async function(attrBitMax, attrBitMin, dataBitMax, dataBitMin, dataText) {
         try {
             // BIT 값 검증
@@ -3543,8 +4428,11 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
             }, 300);
         }
     };
+    */
+    // right_data_manager.js에서 제공하는 함수 사용
     
-    // 속성 삭제 함수 (속성의 모든 데이터 삭제)
+    // 속성 삭제 함수 (속성의 모든 데이터 삭제) - right_data_manager.js로 이동
+    /*
     window.deleteAttribute = async function(attrBitMax, attrBitMin, attrText) {
         try {
             // BIT 값 검증
@@ -3649,6 +4537,8 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
             }, 500);
         }
     };
+    */
+    // right_data_manager.js에서 제공하는 함수 사용
     
     // 로컬 스토리지 키
     const STORAGE_KEY_ATTRIBUTE_FILTER = 'novel_ai_attribute_filter';

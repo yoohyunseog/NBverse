@@ -15,11 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const $dataBitInfo = document.getElementById('dataBitInfo');
     const $saveStatus = document.getElementById('saveStatus');
     
-    // 자동 저장 관련 변수
-    let autoSaveTimer = null;
-    let lastSavedAttribute = '';
-    let lastSavedData = '';
-    let isSaving = false;
+    // 자동 저장 관련 변수는 auto_save.js 모듈에서 관리
     
     // 입력 필드 값 저장을 위한 키
     const STORAGE_KEY_NOVEL_TITLE = 'novel_ai_input_novel_title';
@@ -54,6 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         } catch (e) {
             console.error('BIT 계산 오류:', e);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[BIT 계산] 오류: ${e.message || e}`);
+            }
             return { max: null, min: null };
         }
     }
@@ -72,6 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return `${base}${path}`;
         } catch (e) {
             console.error('getServerUrl 오류:', e);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[서버 URL] 오류: ${e.message || e}`);
+            }
             return path;
         }
     }
@@ -116,6 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('[서버 연결 테스트] 실패:', error);
+            
+            const errorMessage = error.message === 'Failed to fetch' ? '서버 연결 실패' : error.message || 'Unknown error';
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[서버 연결 테스트] 실패: ${errorMessage}`);
+            }
             
             if (showStatus && $serverStatus) {
                 if (error.message === 'Failed to fetch') {
@@ -163,6 +170,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return duplicate;
         } catch (error) {
             console.error('[중복 체크] 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[중복 체크] 오류: ${error.message || error}`);
+            }
             return false;
         }
     }
@@ -230,6 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) {
                 const errorText = await response.text().catch(() => 'Unknown error');
                 console.error('[챕터 구성 저장] 저장 실패:', errorText);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[챕터 구성 저장] 저장 실패: ${errorText.substring(0, 100)}`);
+                }
                 return;
             }
             
@@ -241,19 +254,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 console.warn('[챕터 구성 저장] 저장 실패:', result);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[챕터 구성 저장] 저장 실패: ${result.error || 'Unknown error'}`);
+                }
             }
         } catch (error) {
             console.error('[챕터 구성 저장] 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[챕터 구성 저장] 오류: ${error.message || error}`);
+            }
         }
     }
     
-    // 자동 저장 함수
-    async function autoSave() {
-        // 중요: 저장 시에는 항상 현재 입력 필드의 실제 값을 사용해야 함
-        // 로컬 스토리지에서 값을 읽어오지 않고, DOM 요소의 .value를 직접 사용
-        const novelTitle = ($novelTitleInput && $novelTitleInput.value || '').trim();
-        const attributeText = ($attributeInput && $attributeInput.value || '').trim();
-        const dataText = ($dataInput && $dataInput.value || '').trim();
+    // 자동 저장 함수는 auto_save.js 모듈로 이동됨
+    // autoSave, saveAttributeAndData, triggerAutoSave 함수는 auto_save.js에서 제공됨
+        
+        // 자동 저장 시작 로그
+        console.log('💡 [자동 저장] 속성과 데이터를 입력하면 자동으로 저장됩니다. (입력 후 1초 대기)');
+        console.log('[자동 저장] 자동 저장 함수 호출됨');
+        if (typeof window.addRightLog === 'function') {
+            window.addRightLog('info', '💡 속성과 데이터를 입력하면 자동으로 저장됩니다. (입력 후 1초 대기)');
+        }
         
         // 디버깅: 저장 시점의 실제 입력 필드 값 확인 (로컬 스토리지와 비교)
         console.log('[자동 저장] 저장 시점 입력 필드 값:', {
@@ -267,20 +288,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         if (typeof window.addRightLog === 'function') {
-            window.addRightLog('info', `[우측 저장] 자동 저장 시작: "${novelTitle}" → "${attributeText.substring(0, 50)}${attributeText.length > 50 ? '...' : ''}"`);
+            window.addRightLog('info', `[자동 저장] 입력 필드 읽기 완료`);
+            window.addRightLog('info', `[입력] 소설 제목: "${novelTitle || '(없음)'}"`);
+            window.addRightLog('info', `[입력] 속성 텍스트: "${attributeText ? attributeText.substring(0, 60) + (attributeText.length > 60 ? '...' : '') : '(없음)'}"`);
+            window.addRightLog('info', `[입력] 데이터 텍스트: "${dataText ? dataText.substring(0, 100) + (dataText.length > 100 ? '...' : '') : '(없음)'}" (${dataText ? dataText.length : 0}자)${overrideData !== null ? ' [외부 제공]' : ''}`);
         }
-        console.log('[자동 저장] 호출:', { novelTitle, attributeText, dataText });
+        console.log('[자동 저장] 호출:', { novelTitle, attributeText, dataText, dataTextLength: dataText ? dataText.length : 0 });
         
-        // 입력값이 비어있으면 저장하지 않음
-        if (!novelTitle || !attributeText || !dataText) {
-            console.log('[자동 저장] 입력값 부족 - 저장하지 않음');
+        // 소설 제목과 속성 텍스트는 필수, 데이터 텍스트는 선택 (빈 문자열 허용)
+        if (!novelTitle || !attributeText) {
+            console.log('[자동 저장] 입력값 부족 - 저장하지 않음', { novelTitle: !!novelTitle, attributeText: !!attributeText, dataText: !!dataText });
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('warn', `[자동 저장] 입력값 부족 - 저장하지 않음 (소설제목: ${!!novelTitle}, 속성: ${!!attributeText})`);
+            }
             return;
+        }
+        
+        // 데이터 텍스트가 없으면 빈 문자열로 설정
+        if (!dataText) {
+            dataText = '';
         }
         
         // 속성은 1개만 사용 (여러 줄로 나뉘어 있으면 첫 번째만 사용)
         // 속성 텍스트가 여러 줄로 나뉘어 있는지 확인 (줄바꿈으로 구분)
+        // 중요: 속성 텍스트 입력 필드의 값을 직접 사용
         const attributeLines = attributeText.split('\n').map(p => (p || '').trim()).filter(p => p && p.length > 0);
-        let finalAttributeText = attributeText;
+        let finalAttributeText = attributeText; // 속성 텍스트 입력 필드의 값 그대로 사용
         if (attributeLines.length > 1) {
             // 여러 줄이 있으면 첫 번째 줄만 사용
             finalAttributeText = attributeLines[0].trim();
@@ -293,7 +326,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // 실제 저장할 속성 텍스트: 소설 제목 + 속성 텍스트
+        // 실제 저장할 속성 텍스트: 소설 제목 + 속성 텍스트 입력 필드의 값
+        // 속성 텍스트 입력 필드의 값을 정확히 사용 (변경 없이)
         const fullAttributeText = `${novelTitle} → ${finalAttributeText}`;
         
         // 디버깅: 저장 전 속성 텍스트 확인
@@ -324,18 +358,35 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // BIT 값 계산 (전체 속성 텍스트로 계산)
         const attributeBits = calculateBitValues(fullAttributeText);
-        const dataBits = calculateBitValues(dataText);
+        // 중요: 데이터 텍스트 BIT 값은 속성 텍스트 BIT 값을 사용
+        const dataBits = {
+            max: attributeBits.max,
+            min: attributeBits.min
+        };
         
-        if (!attributeBits.max || !attributeBits.min || !dataBits.max || !dataBits.min) {
+        if (typeof window.addRightLog === 'function') {
+            window.addRightLog('info', `[BIT 계산] 속성 BIT: MAX=${attributeBits.max ? attributeBits.max.toFixed(15) : 'null'}, MIN=${attributeBits.min ? attributeBits.min.toFixed(15) : 'null'}`);
+            window.addRightLog('info', `[BIT 계산] 데이터 BIT (속성 BIT 사용): MAX=${dataBits.max ? dataBits.max.toFixed(15) : 'null'}, MIN=${dataBits.min ? dataBits.min.toFixed(15) : 'null'}`);
+        }
+        
+        if (!attributeBits.max || !attributeBits.min) {
             updateSaveStatus('⚠️ BIT 값 계산 중...', 'warning');
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('warn', `[BIT 계산] BIT 값 계산 실패 - 저장 중단`);
+            }
             return;
         }
         
         // 중복 체크
+        if (typeof window.addRightLog === 'function') {
+            window.addRightLog('info', `[중복 체크] 중복 여부 확인 중...`);
+        }
         const isDuplicate = await checkDuplicate(fullAttributeText, dataText, attributeBits, dataBits);
         if (isDuplicate) {
             if (typeof window.addRightLog === 'function') {
-                window.addRightLog('info', `[우측 저장] 중복 데이터로 저장 건너뜀: "${fullAttributeText.substring(0, 50)}${fullAttributeText.length > 50 ? '...' : ''}"`);
+                window.addRightLog('info', `[중복 체크] 중복 데이터 발견 - 저장 건너뜀`);
+                window.addRightLog('info', `[중복 체크] 속성: "${fullAttributeText.substring(0, 60) + (fullAttributeText.length > 60 ? '...' : '')}"`);
+                window.addRightLog('info', `[중복 체크] 데이터: "${dataText ? dataText.substring(0, 80) + (dataText.length > 80 ? '...' : '') : '(빈 문자열)'}"`);
             }
             updateSaveStatus('ℹ️ 이미 저장된 데이터입니다 (중복 방지)', 'info');
             lastSavedAttribute = fullAttributeText;
@@ -451,12 +502,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const chapterText = chapter ? `챕터 ${chapter.number}${chapter.title ? `: ${chapter.title}` : ''}` : '';
         const chapterBits = chapterText ? calculateBitValues(chapterText) : { max: null, min: null };
         
+        if (typeof window.addRightLog === 'function') {
+            if (chapter) {
+                window.addRightLog('info', `[챕터 추출] 챕터 정보: ${chapterText}`);
+                window.addRightLog('info', `[BIT 계산] 챕터 BIT: MAX=${chapterBits.max ? chapterBits.max.toFixed(15) : 'null'}, MIN=${chapterBits.min ? chapterBits.min.toFixed(15) : 'null'}`);
+            } else {
+                window.addRightLog('warn', `[챕터 추출] 챕터 정보를 찾을 수 없음`);
+            }
+        }
+        
         isSaving = true;
         updateSaveStatus('💾 저장 중...', 'info');
         
         try {
             const url = getServerUrl('/api/attributes/data');
             console.log('[자동 저장] URL:', url);
+            console.log('[자동 저장] 전송할 데이터:', { 
+                attributeText: fullAttributeText.substring(0, 50), 
+                dataText: dataText ? dataText.substring(0, 50) + '...' : '(빈 문자열)',
+                dataTextLength: dataText ? dataText.length : 0,
+                dataBitMax: dataBits.max,
+                dataBitMin: dataBits.min
+            });
+            
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('info', `[서버 전송] 저장 요청 시작`);
+                window.addRightLog('info', `[서버 전송] URL: ${url}`);
+                window.addRightLog('info', `[서버 전송] 속성: "${fullAttributeText.substring(0, 60) + (fullAttributeText.length > 60 ? '...' : '')}"`);
+                window.addRightLog('info', `[서버 전송] 데이터: "${dataText ? dataText.substring(0, 100) + (dataText.length > 100 ? '...' : '') : '(빈 문자열)'}" (${dataText ? dataText.length : 0}자)`);
+                window.addRightLog('info', `[서버 전송] 속성 BIT: MAX=${attributeBits.max.toFixed(15)}, MIN=${attributeBits.min.toFixed(15)}`);
+                window.addRightLog('info', `[서버 전송] 데이터 BIT: MAX=${dataBits.max.toFixed(15)}, MIN=${dataBits.min.toFixed(15)}`);
+                if (chapter) {
+                    window.addRightLog('info', `[서버 전송] 챕터: ${chapterText} (BIT: MAX=${chapterBits.max ? chapterBits.max.toFixed(15) : 'null'}, MIN=${chapterBits.min ? chapterBits.min.toFixed(15) : 'null'})`);
+                }
+            }
             
             const response = await fetch(url, {
                 method: 'POST',
@@ -467,7 +546,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     attributeText: fullAttributeText, // 전체 속성 텍스트 (소설 제목 포함)
                     attributeBitMax: attributeBits.max,
                     attributeBitMin: attributeBits.min,
-                    text: dataText,
+                    text: dataText || '', // 빈 문자열도 명시적으로 전달
                     dataBitMax: dataBits.max,
                     dataBitMin: dataBits.min,
                     novelTitle: novelTitle,
@@ -479,15 +558,80 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log('[자동 저장] 응답 상태:', response.status);
             
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('info', `[서버 응답] HTTP 상태: ${response.status}`);
+            }
+            
             if (!response.ok) {
                 const errorText = await response.text().catch(() => 'Unknown error');
-                console.error('[자동 저장] 오류:', errorText);
-                updateSaveStatus(`✗ 저장 실패: ${errorText.substring(0, 50)}`, 'danger');
+                console.error('[자동 저장] HTTP 오류:', response.status, errorText);
+                
+                // JSON 파싱 시도
+                let errorMessage = errorText;
+                try {
+                    // 잘린 JSON 문자열도 처리 시도
+                    const trimmedText = errorText.trim();
+                    if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+                        try {
+                            const errorJson = JSON.parse(trimmedText);
+                            errorMessage = errorJson.error || errorJson.message || JSON.stringify(errorJson);
+                            console.error('[자동 저장] 파싱된 에러:', errorJson);
+                        } catch (parseError) {
+                            // JSON 파싱 실패 시 원본 텍스트에서 error 필드 추출 시도
+                            const errorMatch = trimmedText.match(/"error"\s*:\s*"([^"]+)"/);
+                            if (errorMatch) {
+                                errorMessage = errorMatch[1];
+                            } else {
+                                errorMessage = trimmedText;
+                            }
+                            console.error('[자동 저장] JSON 파싱 실패, 원본 텍스트 사용:', parseError);
+                        }
+                    }
+                } catch (e) {
+                    // JSON이 아니면 원본 텍스트 사용
+                    console.error('[자동 저장] 에러 텍스트 (JSON 아님):', errorText);
+                }
+                
+                // 에러 메시지가 객체인 경우 문자열로 변환
+                if (typeof errorMessage === 'object') {
+                    errorMessage = JSON.stringify(errorMessage);
+                }
+                
+                // 최종적으로 문자열로 변환
+                errorMessage = String(errorMessage || errorText || '알 수 없는 오류');
+                const displayMessage = errorMessage.substring(0, 200);
+                
+                console.error('[자동 저장] 최종 에러 메시지:', displayMessage);
+                updateSaveStatus(`✗ 저장 실패: ${displayMessage}`, 'danger');
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[자동 저장 실패] ${displayMessage}`);
+                }
                 return;
             }
             
             const result = await response.json().catch(() => ({}));
             console.log('[자동 저장] 결과:', result);
+            
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('info', `[서버 응답] JSON 파싱 완료: ok=${result.ok}`);
+            }
+            
+            if (!result.ok) {
+                let errorMessage = result.error || '알 수 없는 오류';
+                console.error('[자동 저장] 서버 응답 오류:', result);
+                
+                // 에러 메시지가 객체인 경우 문자열로 변환
+                if (typeof errorMessage === 'object') {
+                    errorMessage = JSON.stringify(errorMessage);
+                }
+                
+                const displayMessage = String(errorMessage).substring(0, 200);
+                updateSaveStatus(`✗ 저장 실패: ${displayMessage}`, 'danger');
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[자동 저장 실패] ${displayMessage}`);
+                }
+                return;
+            }
             
             // 디버깅: 서버 응답에서 저장된 속성 확인
             // 서버 응답 구조: { ok: true, record: { attribute: { text: ... }, chapter: {...} }, files: {...} }
@@ -496,14 +640,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const savedChapter = savedRecord.chapter || {};
             
             if (result.ok && savedAttribute.text) {
-                console.log('[자동 저장] 서버에 저장된 속성:', {
+                const savedDataText = savedRecord.data?.text || savedRecord.s || '';
+                console.log('[자동 저장] 서버에 저장된 데이터:', {
                     저장된_속성: savedAttribute.text,
                     저장한_속성: fullAttributeText,
+                    저장된_데이터: savedDataText ? savedDataText.substring(0, 50) + '...' : '(빈 문자열)',
+                    저장한_데이터: dataText ? dataText.substring(0, 50) + '...' : '(빈 문자열)',
+                    저장된_데이터_길이: savedDataText ? savedDataText.length : 0,
+                    저장한_데이터_길이: dataText ? dataText.length : 0,
                     저장된_챕터: savedChapter,
                     추출한_챕터: chapter,
                     일치여부_속성: savedAttribute.text === fullAttributeText,
+                    일치여부_데이터: (savedDataText || '') === (dataText || ''),
                     일치여부_챕터: savedChapter.number === chapter?.number
                 });
+                
+                // 저장된 데이터 확인 로그
+                if (typeof window.addRightLog === 'function') {
+                    const dataMatch = (savedDataText || '') === (dataText || '') ? '✓' : '⚠';
+                    window.addRightLog('info', `[저장 확인] 데이터 일치: ${dataMatch} (저장: ${savedDataText ? savedDataText.length : 0}자, 전송: ${dataText ? dataText.length : 0}자)`);
+                    if (dataMatch === '⚠') {
+                        window.addRightLog('warn', `[저장 확인] 데이터 불일치 상세:`);
+                        window.addRightLog('warn', `  저장된 데이터: "${savedDataText ? savedDataText.substring(0, 100) + (savedDataText.length > 100 ? '...' : '') : '(빈 문자열)'}"`);
+                        window.addRightLog('warn', `  전송한 데이터: "${dataText ? dataText.substring(0, 100) + (dataText.length > 100 ? '...' : '') : '(빈 문자열)'}"`);
+                    }
+                }
             }
             
             if (result.ok) {
@@ -511,7 +672,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     // 저장된 속성 텍스트를 정확히 표시 (서버 응답의 record.attribute.text 사용)
                     const savedAttributeText = savedAttribute.text || fullAttributeText;
                     const savedChapterInfo = savedChapter.number ? ` (챕터 ${savedChapter.number})` : '';
-                    window.addRightLog('info', `[우측 저장] 저장 완료: "${savedAttributeText.substring(0, 50)}${savedAttributeText.length > 50 ? '...' : ''}"${savedChapterInfo}`);
+                    window.addRightLog('success', `[저장 완료] 속성: "${savedAttributeText.substring(0, 60) + (savedAttributeText.length > 60 ? '...' : '')}"${savedChapterInfo}`);
+                    
+                    // 저장된 파일 정보 표시
+                    if (result.files) {
+                        const files = result.files;
+                        const fileCount = Object.values(files).filter(f => f !== null).length;
+                        window.addRightLog('info', `[저장 완료] ${fileCount}개 파일에 저장됨`);
+                        if (files.attributeMax) window.addRightLog('info', `  - 속성 MAX: ${files.attributeMax}`);
+                        if (files.attributeMin) window.addRightLog('info', `  - 속성 MIN: ${files.attributeMin}`);
+                        if (files.dataMax) window.addRightLog('info', `  - 데이터 MAX: ${files.dataMax}`);
+                        if (files.dataMin) window.addRightLog('info', `  - 데이터 MIN: ${files.dataMin}`);
+                        if (files.attributeAsDataMax) window.addRightLog('info', `  - 속성(데이터) MAX: ${files.attributeAsDataMax}`);
+                        if (files.attributeAsDataMin) window.addRightLog('info', `  - 속성(데이터) MIN: ${files.attributeAsDataMin}`);
+                    }
                 }
                 updateSaveStatus('✓ 저장 완료!', 'success');
                 lastSavedAttribute = fullAttributeText;
@@ -537,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     $dataInput.style.height = 'auto';
                     // BIT 정보 초기화
                     if ($dataBitInfo) {
-                        $dataBitInfo.textContent = 'BIT: 계산 중...';
+                        $dataBitInfo.textContent = '(속성 BIT 값을 사용합니다)';
                     }
                     // 로컬 스토리지에서도 제거
                     localStorage.removeItem(STORAGE_KEY_DATA_TEXT);
@@ -599,10 +773,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }, 500);
             } else {
-                if (typeof window.addRightLog === 'function') {
-                    window.addRightLog('error', `[우측 저장] 저장 실패: ${result.error || 'Unknown error'}`);
+                let errorMessage = result.error || 'Unknown error';
+                // 에러 메시지가 객체인 경우 문자열로 변환
+                if (typeof errorMessage === 'object') {
+                    errorMessage = JSON.stringify(errorMessage);
                 }
-                updateSaveStatus(`✗ 저장 실패: ${result.error || 'Unknown error'}`, 'danger');
+                const displayMessage = String(errorMessage).substring(0, 200);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[우측 저장] 저장 실패: ${displayMessage}`);
+                }
+                updateSaveStatus(`✗ 저장 실패: ${displayMessage}`, 'danger');
             }
         } catch (error) {
             console.error('[자동 저장] 오류:', error);
@@ -650,9 +830,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     $attributeBitInfo.textContent = 'BIT: 계산 중...';
                 }
                 
-                // 자동 저장 트리거 (속성과 데이터가 모두 입력되어 있을 때)
-                triggerAutoSave();
-            }, 300);
+                // 속성 텍스트 입력 시 1회 자동 저장 (속성만 있어도 저장)
+                // 속성과 데이터가 모두 있으면 저장, 속성만 있어도 저장
+                const dataText = ($dataInput && $dataInput.value || '').trim();
+                if (novelTitle && attributeText) {
+                    // 속성 텍스트만 있어도 저장 (데이터는 빈 문자열로)
+                    saveAttributeAndData();
+                }
+            }, 1000); // 1초 대기 후 저장
         });
     }
     
@@ -686,6 +871,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!novelTitle) {
             console.error('[요약 챕터] 소설 제목이 없습니다.');
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', '[요약 챕터] 소설 제목이 없습니다.');
+            }
             return;
         }
         
@@ -743,6 +931,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 chapterStructureData = JSON.parse(dataData.items[0].s || dataData.items[0].text || '{}');
             } catch (parseError) {
                 console.error('[요약 챕터] JSON 파싱 오류:', parseError);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('error', `[요약 챕터] JSON 파싱 오류: ${parseError.message || parseError}`);
+                }
                 return;
             }
             
@@ -940,11 +1131,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
             }
             
-            // 자동 저장 트리거 (속성과 데이터가 모두 있으면)
-            // 데이터 입력란에 값이 있으면 자동 저장 호출
-            if ($dataInput && $dataInput.value.trim()) {
-                triggerAutoSave();
-            }
+            // 자동 저장은 우측 입력값을 통해서만 실행됨
+            // 여기서는 자동 저장하지 않음
         }
         
         // 대화 상자에 챕터의 모든 속성과 데이터 추가
@@ -1001,6 +1189,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.warn('[챕터 선택] 챕터 수 조회 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('warn', `[챕터 선택] 챕터 수 조회 오류: ${error.message || error}`);
+            }
         }
         
         // 챗봇 상단에 상태 표시
@@ -1097,6 +1288,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.warn('[장면 선택] 챕터 제목 찾기 오류:', error);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('warn', `[장면 선택] 챕터 제목 찾기 오류: ${error.message || error}`);
+                }
                 // 오류 발생 시 기본값 사용
                 if (currentChapterNum) {
                     currentChapterTitle = `챕터 ${currentChapterNum}: 제${currentChapterNum}장`;
@@ -1178,11 +1372,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                         }
                         
-                        // 자동 저장 트리거 (속성과 데이터가 모두 있으면)
-                        // 데이터 입력란에 값이 있으면 자동 저장 호출
-                        if ($dataInput && $dataInput.value.trim()) {
-                            triggerAutoSave();
-                        }
+                        // 자동 저장은 우측 입력값을 통해서만 실행됨
+                        // 여기서는 자동 저장하지 않음
                     }
                     
                     // 대화 상자에 장면 정보 추가
@@ -1251,11 +1442,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                     $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                                 }
                                 
-                                // 자동 저장 트리거 (속성과 데이터가 모두 있으면)
-                                // 데이터 입력란에 값이 있으면 자동 저장 호출
-                                if ($dataInput && $dataInput.value.trim()) {
-                                    triggerAutoSave();
-                                }
+                                // 자동 저장은 우측 입력값을 통해서만 실행됨
+                                // 여기서는 자동 저장하지 않음
                             }
                             
                             // 대화 상자에 장면 정보 추가 (else 블록)
@@ -1289,15 +1477,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('[장면 선택] 오류:', error);
-                    // 오류 시 장면 텍스트만 입력
-                    if ($attributeInput) {
-                        $attributeInput.value = sceneText;
-                        // 로컬 스토리지에 저장
-                        localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, sceneText);
-                        const inputEvent = new Event('input', { bubbles: true });
-                        $attributeInput.dispatchEvent(inputEvent);
-                    }
-            
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[장면 선택] 오류: ${error.message || error}`);
+            }
+            // 오류 시 장면 텍스트만 입력
+            if ($attributeInput) {
+                $attributeInput.value = sceneText;
+                // 로컬 스토리지에 저장
+                localStorage.setItem(STORAGE_KEY_ATTRIBUTE_TEXT, sceneText);
+                const inputEvent = new Event('input', { bubbles: true });
+                $attributeInput.dispatchEvent(inputEvent);
+            }
+        }
             // 좌측 필터도 설정
             if ($attributeFilterInput) {
                 $attributeFilterInput.value = novelTitle;
@@ -1585,6 +1776,9 @@ document.addEventListener('DOMContentLoaded', () => {
             $chapterListContainer.innerHTML = html;
         } catch (error) {
             console.error('[챕터 목록 로드] 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[챕터 목록 로드] 오류: ${error.message || error}`);
+            }
             $chapterListContainer.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">⚠️</div>
@@ -1634,43 +1828,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 데이터 입력 시 BIT 값 표시 및 자동 저장 트리거
-    if ($dataInput) {
-        let dataTimer = null;
-        $dataInput.addEventListener('input', () => {
-            // 로컬 스토리지에 저장
-            const value = $dataInput.value || '';
-            localStorage.setItem(STORAGE_KEY_DATA_TEXT, value);
-            
-            clearTimeout(dataTimer);
-            dataTimer = setTimeout(() => {
-                const text = $dataInput.value.trim();
-                if (text) {
-                    const bits = calculateBitValues(text);
-                    if (bits.max !== null && bits.min !== null) {
-                        $dataBitInfo.textContent = `BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}`;
-                    } else {
-                        $dataBitInfo.textContent = 'BIT: 계산 중...';
-                    }
-                } else {
-                    $dataBitInfo.textContent = 'BIT: 계산 중...';
-                }
-                
-                // 자동 저장 트리거
-                triggerAutoSave();
-            }, 300);
-        });
-    }
-    
-    // 자동 저장 트리거 함수 (debounce)
-    function triggerAutoSave() {
-        console.log('[자동 저장 트리거] 호출됨');
-        clearTimeout(autoSaveTimer);
-        autoSaveTimer = setTimeout(() => {
-            console.log('[자동 저장 트리거] 실제 저장 실행');
-            autoSave();
-        }, 1000); // 1초 대기 후 저장
-    }
+    // saveAttributeAndData, triggerAutoSave 함수는 auto_save.js 모듈로 이동됨
+    // 데이터 입력 이벤트 리스너는 auto_save.js의 initAutoSave에서 처리됨
     
     
     // 상태 메시지 업데이트
@@ -1783,6 +1942,9 @@ document.addEventListener('DOMContentLoaded', () => {
             $attributesList.innerHTML = html;
         } catch (error) {
             console.error('소설 목록 로드 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[소설 목록 로드] 오류: ${error.message || error}`);
+            }
             $attributesList.innerHTML = `
                 <div class="text-danger text-center">✗ 소설 목록 로드 실패: ${error.message}</div>
             `;
@@ -1955,6 +2117,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             } catch (e) {
                                 console.error('[소설 삭제] 데이터 삭제 오류:', e);
+                                if (typeof window.addRightLog === 'function') {
+                                    window.addRightLog('error', `[소설 삭제] 데이터 삭제 오류: ${e.message || e}`);
+                                }
                                 errorCount++;
                             }
                         }
@@ -1990,10 +2155,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } catch (e) {
                         console.error(`[소설 삭제] 속성 "${attr.text}" 삭제 오류:`, e);
+                        if (typeof window.addRightLog === 'function') {
+                            window.addRightLog('error', `[소설 삭제] 속성 "${attr.text}" 삭제 오류: ${e.message || e}`);
+                        }
                         errorCount++;
                     }
                 } catch (e) {
                     console.error('[소설 삭제] 속성 데이터 조회 오류:', e);
+                    if (typeof window.addRightLog === 'function') {
+                        window.addRightLog('error', `[소설 삭제] 속성 데이터 조회 오류: ${e.message || e}`);
+                    }
                     errorCount++;
                 }
             }
@@ -2250,21 +2421,67 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=20`);
                     let dataItems = [];
                     
+                    if (typeof window.addLeftLog === 'function') {
+                        window.addLeftLog('info', `[데이터 조회] 속성: "${attr.text ? attr.text.substring(0, 50) + (attr.text.length > 50 ? '...' : '') : '(없음)'}" (BIT: ${attr.bitMax}, ${attr.bitMin})`);
+                    }
+                    
                     try {
                         const dataResponse = await fetch(dataUrl);
+                        
+                        if (typeof window.addLeftLog === 'function') {
+                            window.addLeftLog('info', `[데이터 조회] HTTP 상태: ${dataResponse.status} (URL: ${dataUrl.substring(0, 100)}...)`);
+                        }
+                        
                         if (dataResponse.ok) {
                             const dataData = await dataResponse.json();
+                            
+                            if (typeof window.addLeftLog === 'function') {
+                                window.addLeftLog('info', `[데이터 조회] 응답: ok=${dataData.ok}, count=${dataData.count || 0}, items=${dataData.items ? dataData.items.length : 0}`);
+                            }
+                            
                             if (dataData.ok && dataData.items) {
-                                dataItems = dataData.items || [];
+                                const allItems = dataData.items || [];
+                                
+                                // 빈 문자열 데이터 필터링 (실제 텍스트가 있는 데이터만)
+                                dataItems = allItems.filter(item => {
+                                    const text = item.s || item.text || item.data?.text || '';
+                                    return text && text.trim().length > 0;
+                                });
+                                
+                                if (typeof window.addLeftLog === 'function') {
+                                    if (dataItems.length > 0) {
+                                        window.addLeftLog('success', `[데이터 조회] ${dataItems.length}개 데이터 발견 (전체: ${allItems.length}개, 빈 데이터: ${allItems.length - dataItems.length}개 제외)`);
+                                    } else if (allItems.length > 0) {
+                                        window.addLeftLog('warn', `[데이터 조회] 빈 데이터만 있음 (전체: ${allItems.length}개, 모두 빈 문자열)`);
+                                    } else {
+                                        window.addLeftLog('warn', `[데이터 조회] 데이터 없음 (속성: "${attr.text ? attr.text.substring(0, 40) + '...' : '(없음)'}")`);
+                                    }
+                                }
+                            } else {
+                                if (typeof window.addLeftLog === 'function') {
+                                    window.addLeftLog('warn', `[데이터 조회] 응답 오류: ok=${dataData.ok}, error=${dataData.error || '없음'}`);
+                                }
+                            }
+                        } else {
+                            const errorText = await dataResponse.text().catch(() => 'Unknown error');
+                            if (typeof window.addLeftLog === 'function') {
+                                window.addLeftLog('error', `[데이터 조회] HTTP 오류: ${dataResponse.status} - ${errorText.substring(0, 100)}`);
                             }
                         }
                     } catch (e) {
-                        console.warn('데이터 조회 오류:', e);
+                        console.error('[데이터 조회] 오류:', e);
+                        if (typeof window.addLeftLog === 'function') {
+                            window.addLeftLog('error', `[데이터 조회] 예외 발생: ${e.message || e}`);
+                        }
                     }
                     
                     // 데이터가 있는 속성만 추가
                     if (dataItems.length > 0) {
                         attributesWithData.push({ attr, dataItems });
+                    } else {
+                        if (typeof window.addLeftLog === 'function') {
+                            window.addLeftLog('warn', `[데이터 조회] 속성 "${attr.text ? attr.text.substring(0, 40) + '...' : '(없음)'}"에 데이터 없음 - 목록에서 제외`);
+                        }
                     }
                 }
                 
@@ -2612,6 +2829,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.warn('[속성 선택] 데이터 조회 오류:', error);
+                if (typeof window.addRightLog === 'function') {
+                    window.addRightLog('warn', `[속성 선택] 데이터 조회 오류: ${error.message || error}`);
+                }
                 // 오류가 있어도 속성만 입력
             }
         }
@@ -2965,6 +3185,9 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
             
         } catch (error) {
             console.error('[과거 줄거리] 오류:', error);
+            if (typeof window.addRightLog === 'function') {
+                window.addRightLog('error', `[과거 줄거리] 오류: ${error.message || error}`);
+            }
         }
     }
     
@@ -3823,6 +4046,66 @@ ${allCharacters.length > 0 ? `- 제공된 등장인물 정보:\n${allCharacters.
                 }, 500);
             }
         }
+    }
+    
+    // 자동 저장 모듈 초기화
+    if (typeof window.initAutoSave === 'function') {
+        window.initAutoSave({
+            novelTitleInput: $novelTitleInput,
+            attributeInput: $attributeInput,
+            dataInput: $dataInput,
+            attributeBitInfo: $attributeBitInfo,
+            dataBitInfo: $dataBitInfo,
+            saveStatus: $saveStatus,
+            attributeFilterInput: $attributeFilterInput,
+            calculateBitValues: calculateBitValues,
+            checkDuplicate: checkDuplicate,
+            getServerUrl: getServerUrl,
+            updateSaveStatus: updateSaveStatus,
+            updateNovelAIStatus: typeof window.updateNovelAIStatus === 'function' ? window.updateNovelAIStatus : null,
+            saveFilterValues: saveFilterValues,
+            loadAttributes: loadAttributes,
+            loadNovelList: loadNovelList
+        });
+    }
+    
+    // 속성 텍스트 자동 저장 모듈 초기화
+    if (typeof window.initAttributeAutoSave === 'function') {
+        window.initAttributeAutoSave({
+            novelTitleInput: $novelTitleInput,
+            attributeInput: $attributeInput,
+            attributeBitInfo: $attributeBitInfo,
+            saveStatus: $saveStatus,
+            attributeFilterInput: $attributeFilterInput,
+            calculateBitValues: calculateBitValues,
+            checkDuplicate: checkDuplicate,
+            getServerUrl: getServerUrl,
+            updateSaveStatus: updateSaveStatus,
+            updateNovelAIStatus: updateNovelAIStatus,
+            saveFilterValues: saveFilterValues,
+            loadAttributes: loadAttributes,
+            loadNovelList: loadNovelList
+        });
+    }
+    
+    // 데이터 텍스트 자동 저장 모듈 초기화
+    if (typeof window.initDataAutoSave === 'function') {
+        window.initDataAutoSave({
+            novelTitleInput: $novelTitleInput,
+            attributeInput: $attributeInput,
+            dataInput: $dataInput,
+            dataBitInfo: $dataBitInfo,
+            saveStatus: $saveStatus,
+            attributeFilterInput: $attributeFilterInput,
+            calculateBitValues: calculateBitValues,
+            checkDuplicate: checkDuplicate,
+            getServerUrl: getServerUrl,
+            updateSaveStatus: updateSaveStatus,
+            updateNovelAIStatus: updateNovelAIStatus,
+            saveFilterValues: saveFilterValues,
+            loadAttributes: loadAttributes,
+            loadNovelList: loadNovelList
+        });
     }
     
     // 저장된 필터 값이 있으면 자동으로 속성 목록 로드

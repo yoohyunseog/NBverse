@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Data files (optional - uncomment to exclude)
+# server/data/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backups
+backups/
+
+# Environment
+.env
+.env.local
+
+# API Keys and sensitive data
+server/data/gpt_api_key.txt
+server/data/**/*.txt
+

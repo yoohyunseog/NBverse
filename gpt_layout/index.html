@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Louis GPT - AI Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="assets/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- 상단 헤더 -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="brand-section">
+                    <div class="brand-logo">
+                        <div class="brand-dot"></div>
+                        <span class="brand-pulse"></span>
+                    </div>
+                    <div class="brand-text">
+                        <h4 class="brand-title">Louis GPT</h4>
+                        <span class="brand-subtitle">GPT-4 Family</span>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <div class="model-selector">
+                        <label class="model-label">Model</label>
+                        <select id="chatModel" class="model-select">
+                            <option value="gpt-4o" selected>gpt-4o</option>
+                            <option value="gpt-4o-mini">gpt-4o-mini</option>
+                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                            <option value="gpt-4">gpt-4</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="app-main">
+            <!-- 좌측 사이드바 -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <button id="newChatBtn" class="new-chat-btn">
+                        <span class="btn-icon">+</span>
+                        <span class="btn-text">새 대화</span>
+                    </button>
+                    <div class="search-wrapper">
+                        <input id="listSearch" type="text" class="search-input" placeholder="대화 검색...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                </div>
+                <div id="convList" class="conversation-list">
+                    <div class="conv-item active">
+                        <div class="conv-item-content">
+                            <div class="conv-title">새 대화</div>
+                            <div class="conv-preview">메시지를 입력해 시작하세요</div>
+                        </div>
+                        <div class="conv-actions">
+                            <button class="conv-action-btn" title="삭제">×</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- 우측 챗 영역 -->
+            <main class="chat-main">
+                <div class="chat-container">
+                    <div id="chatMessages" class="chat-messages">
+                        <div class="welcome-message">
+                            <div class="welcome-icon">💬</div>
+                            <div class="welcome-text">안녕하세요! 무엇을 도와드릴까요?</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-wrapper">
+                        <div class="input-container">
+                            <textarea 
+                                id="chatInput" 
+                                class="chat-input" 
+                                rows="1"
+                                placeholder="메시지를 입력하세요... (Shift+Enter 줄바꿈)"
+                                autocomplete="off"
+                                spellcheck="false"></textarea>
+                            <button id="chatSendBtn" class="send-btn" title="전송 (Enter)">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="input-footer">
+                            <span class="input-hint">Shift+Enter 줄바꿈</span>
+                            <button id="chatClearBtn" class="clear-btn">대화 지우기</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>챕터 구성 전용</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="js/searchAlgorithm.js"></script>
+    <style>
+        :root {
+            --bg: #0e1116;
+            --surface: #131825;
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #e8edf7;
+            --muted: #a9b3c7;
+            --primary: #7c5cff;
+            --warning: #ffc857;
+            --success: #2bd576;
+            --shadow: 0 8px 24px rgba(0,0,0,0.35);
+            --radius: 14px;
+        }
+        body { background: var(--bg); color: var(--text); }
+        .card { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--text); }
+        .card-header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); }
+        .chapter-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; transition: transform 0.18s ease, box-shadow 0.18s ease; cursor: pointer; }
+        .chapter-item:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.35); }
+        .btn-sm { border-radius: 9px; }
+        .badge { vertical-align: middle; }
+        .floating-save { position: fixed; bottom: 20px; right: 20px; z-index: 1050; box-shadow: 0 10px 26px rgba(0,0,0,0.35); border-radius: 999px; }
+        .text-muted { color: var(--muted) !important; }
+        /* Form controls */
+        .form-control, .form-select, textarea { background-color: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+        .form-control::placeholder, textarea::placeholder { color: var(--muted) !important; }
+        /* Modal theming */
+        .modal-content, .modal-header, .modal-footer, .modal-body { background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
+        .btn-close { filter: invert(1); opacity: 0.85; }
+        .btn-close:hover { opacity: 1; }
+        /* ===== 추가 UI (속성/로그/GPT 섹션) 스타일 ===== */
+        .attribute-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; background: var(--surface) !important; box-shadow: var(--shadow); transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
+        .attribute-item:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,0.35); border-color: rgba(124, 92, 255, 0.45); }
+        .attribute-item.highlighted { background: linear-gradient(180deg, rgba(255, 200, 87, 0.1), rgba(255,255,255,0)); border: 2px solid var(--warning); box-shadow: 0 0 0 4px rgba(255, 200, 87, 0.15), 0 10px 26px rgba(0,0,0,0.35); }
+        .attribute-name { font-size: 1.06em; font-weight: 700; color: var(--text); letter-spacing: 0.2px; }
+        .data-item { background: var(--surface) !important; padding: 12px; margin: 8px 0; border-left: 4px solid var(--success); border-radius: 8px; }
+        .log-container { width: 100%; background: var(--surface) !important; color: #b9f6ca; font-family: 'Courier New', monospace; font-size: 12px; padding: 10px; max-height: 300px; overflow-y: auto; border-top: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.02); }
+        .log-entry { margin-bottom: 4px; padding: 6px 8px; border-bottom: 1px dashed rgba(255,255,255,0.06); cursor: pointer; border-radius: 6px; }
+        .log-time { color: #7e8696; margin-right: 8px; }
+        .log-message { color: #b9f6ca; }
+        .log-error { color: #ff8a80; }
+        .log-warn { color: #ffe57f; }
+        .log-info { color: #80d8ff; }
+
+        /* Bootstrap bg variants unify to dark surface for readability */
+        .bg-primary, .bg-success, .bg-info, .bg-warning, .bg-danger, .bg-gradient,
+        .bg-light, .bg-white,
+        .card-header.bg-primary, .card-header.bg-success,
+        .card-header.bg-info, .card-header.bg-warning, .card-header.bg-danger {
+            background-color: var(--surface) !important;
+            background-image: none !important;
+        }
+        .bg-light, .bg-white { border: 1px solid var(--border) !important; }
+        .bg-light *, .bg-white * { color: var(--text) !important; }
+
+        /* Selected chapter emphasis on dark theme */
+        .chapter-item.bg-primary {
+            border-color: rgba(124, 92, 255, 0.6) !important;
+            box-shadow: 0 10px 26px rgba(124,92,255,0.18);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-3">
+        <h3 class="mb-3">📖 챕터 구성 전용 (Title → Chapters)</h3>
+
+        <div class="row g-3">
+            <!-- 좌측: 소설 구성 트리 구조 -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">📖 소설 구성</span>
+                        <div class="d-flex gap-1">
+                            <button id="saveAllBtn" class="btn btn-sm btn-primary">💾 저장</button>
+                            <button id="refreshStructureBtn" class="btn btn-sm btn-outline-light">🔄 새로고침</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <input type="text" id="novelTitle" list="novelTitleList" class="form-control form-control-sm" placeholder="제목 입력 또는 선택">
+                            <datalist id="novelTitleList"></datalist>
+                        </div>
+                        <div class="mb-2 d-flex gap-2">
+                            <button id="newTitleBtn" class="btn btn-sm btn-success">➕ 새 제목</button>
+                            <button id="deleteTitleBtn" class="btn btn-sm btn-outline-danger">🗑️ 삭제</button>
+                            <button id="addChapterBtn" class="btn btn-sm btn-outline-success">➕ 챕터</button>
+                        </div>
+                        <hr>
+                        <div class="mb-2">
+                            <input type="text" id="chapterSearchInput" class="form-control form-control-sm" placeholder="챕터 검색...">
+                        </div>
+                        <!-- 소설 구성 트리 목록 -->
+                        <div id="novelStructureTree" class="border rounded p-2" style="min-height: 300px; max-height: calc(100vh - 400px); overflow-y: auto; font-size: 0.9em;">
+                            <div class="text-muted text-center">소설 제목을 입력하세요</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: 챕터 상세 편집 -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">챕터 상세</span>
+                        <div class="d-flex gap-2">
+                            <button id="exportBtn" class="btn btn-sm btn-outline-light">⬇️ 내보내기</button>
+                            <label class="btn btn-sm btn-outline-light mb-0">⬆️ 불러오기
+                                <input id="importInput" type="file" accept="application/json" hidden>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="chaptersList" class="border rounded p-2" style="min-height: 200px; max-height: 60vh; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ===== 속성 목록 / GPT 결과 / GPT 입력 섹션 ===== -->
+    <div class="container-fluid py-0">
+        <div class="row g-3">
+            <!-- 좌측: 저장된 속성 목록 -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">📋 저장된 속성 목록</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <button id="collectAllDataBtn" class="btn btn-sm btn-warning">📥 분석 입력</button>
+                            <button id="refreshBtn" class="btn btn-sm btn-outline-light">🔄 새로고침</button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="max-height: calc(100vh - 220px); overflow-y: auto;">
+                        <div class="mb-3 pb-2 border-bottom">
+                            <label class="form-label fw-bold small mb-1">속성 N/B AI 필터</label>
+                            <input id="attributeFilterInput" class="form-control form-control-sm" placeholder="예: 소설 → 챕터 1: 제1장">
+                            <small class="text-muted">입력하면 자동으로 속성 목록이 불러옵니다.</small>
+                        </div>
+                        <div class="mb-3 pb-2 border-bottom">
+                            <label class="form-label fw-bold small mb-1">➕ 추가 검색 (선택)</label>
+                            <input id="additionalSearchInput" class="form-control form-control-sm" placeholder="쉼표로 구분된 키워드">
+                        </div>
+                        <div class="mb-3 pb-2 border-bottom">
+                            <label class="form-label fw-bold small mb-1">🔍 검색 결과 필터링</label>
+                            <input id="searchFilterInput" class="form-control form-control-sm" placeholder="표시할 데이터의 키워드">
+                        </div>
+                        <div id="attributesList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 가운데: GPT 분석 결과 -->
+            <div class="col-md-6">
+                <div class="card" id="gptResultCard" style="display: none;">
+                    <div class="card-header">
+                        <span class="fw-bold">📋 GPT 분석 결과</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="gptResponse" class="mb-3 p-3 border rounded" style="white-space: pre-wrap;"></div>
+                        <div id="extractedAttributes" class="mb-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 우측: GPT 분석 입력 -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="fw-bold">🤖 GPT AI 자동 속성 추출</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">분석할 텍스트</label>
+                            <textarea id="gptInput" class="form-control" rows="6" placeholder="소설 관련 텍스트를 입력"></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">GPT 모델</label>
+                            <select id="gptModelSelect" class="form-select form-select-sm">
+                                <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+                                <option value="gpt-4o">gpt-4o</option>
+                                <option value="gpt-4-turbo">gpt-4-turbo</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">프롬프트 입력 1</label>
+                            <textarea id="gptPrompt1" class="form-control form-control-sm" rows="2" placeholder="추가 지시사항"></textarea>
+                        </div>
+                        <button id="analyzeBtn1" class="btn btn-primary w-100 mb-2">🔍 GPT AI로 분석 (프롬프트 1)</button>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold">프롬프트 입력 2</label>
+                            <textarea id="gptPrompt2" class="form-control form-control-sm" rows="2" placeholder="개요/이어쓰기 지시"></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small mb-1">속성 (자동)</label>
+                            <input id="selectedAttributeInput" class="form-control form-control-sm" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold small mb-1">GPT 프롬프트 로그</label>
+                            <textarea id="gptPromptLog" class="form-control form-control-sm" rows="4" readonly style="font-family: monospace;"></textarea>
+                        </div>
+                        <button id="analyzeBtn2" class="btn btn-success w-100">🔍 GPT AI로 분석 (프롬프트 2)</button>
+                        <div id="gptStatus" class="mt-2 small"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="log-container mt-3" id="logContainer"></div>
+    </div>
+
+    <!-- 챕터 추가/편집 모달 -->
+    <div class="modal fade" id="chapterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="chapterModalTitle">챕터 추가</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 번호 또는 이름</label>
+                        <input id="chapterNumberInput" class="form-control" placeholder="예: 챕터 1">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 제목</label>
+                        <input id="chapterTitleInput" class="form-control" placeholder="예: 제1장">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 설명</label>
+                        <textarea id="chapterDescriptionInput" class="form-control" rows="4" placeholder="챕터에 대한 설명"></textarea>
+                    </div>
+                    <div id="chapterModalStatus" class="small text-danger"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" id="chapterModalSaveBtn" class="btn btn-primary">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 데이터 수정 모달 (속성 목록 편집용) -->
+    <div class="modal fade" id="editDataModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">데이터 수정</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">속성:</label>
+                        <div id="editModalAttributeName" class="fw-bold text-primary"></div>
+                        <small class="text-muted">속성 BIT MAX: <span id="editModalAttributeMax">-</span> | 속성 BIT MIN: <span id="editModalAttributeMin">-</span></small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">기존 데이터 BIT:</label>
+                        <small class="text-muted">BIT MAX: <span id="editModalDataBitMax">-</span> | BIT MIN: <span id="editModalDataBitMin">-</span></small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">데이터 수정</label>
+                        <textarea id="editDataInput" class="form-control" rows="5" placeholder="수정할 내용을 입력하세요..."></textarea>
+                        <div class="row mt-2">
+                            <div class="col-md-6">
+                                <div class="bit-display"><strong>새 데이터 BIT MAX:</strong> <span id="editDataMax">-</span></div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="bit-display"><strong>새 데이터 BIT MIN:</strong> <span id="editDataMin">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="updateDataBtn" class="btn btn-primary">데이터 수정</button>
+                    <span id="updateDataStatus" class="ms-2 small"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="quickSaveBtn" class="btn btn-primary btn-lg floating-save">💾 저장</button>
+    <button id="resetAllBtn" class="btn btn-outline-danger btn-lg floating-save" style="right: 100px;">🗑 초기화</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script>
+        // DOM
+        const $novelTitle = document.getElementById('novelTitle');
+        const $novelTitleList = document.getElementById('novelTitleList');
+        const $chapterSearchInput = document.getElementById('chapterSearchInput');
+        const $addChapterBtn = document.getElementById('addChapterBtn');
+        const $chaptersList = document.getElementById('chaptersList');
+        const $saveAllBtn = document.getElementById('saveAllBtn');
+        const $quickSaveBtn = document.getElementById('quickSaveBtn');
+        const $newTitleBtn = document.getElementById('newTitleBtn');
+        const $deleteTitleBtn = document.getElementById('deleteTitleBtn');
+        const $exportBtn = document.getElementById('exportBtn');
+        const $importInput = document.getElementById('importInput');
+
+        // 추가 DOM (new4에서 포팅)
+        const $gptPrompt1 = document.getElementById('gptPrompt1');
+        const $gptPrompt2 = document.getElementById('gptPrompt2');
+        const $gptInput = document.getElementById('gptInput');
+        const $gptModelSelect = document.getElementById('gptModelSelect');
+        const $analyzeBtn1 = document.getElementById('analyzeBtn1');
+        const $analyzeBtn2 = document.getElementById('analyzeBtn2');
+        const $gptStatus = document.getElementById('gptStatus');
+        const $selectedAttributeInput = document.getElementById('selectedAttributeInput');
+        const $gptPromptLog = document.getElementById('gptPromptLog');
+        const $gptResultCard = document.getElementById('gptResultCard');
+        const $gptResponse = document.getElementById('gptResponse');
+        const $extractedAttributes = document.getElementById('extractedAttributes');
+        const $attributesList = document.getElementById('attributesList');
+        const $refreshBtn = document.getElementById('refreshBtn');
+        const $collectAllDataBtn = document.getElementById('collectAllDataBtn');
+        const $resetAllBtn = document.getElementById('resetAllBtn');
+        const $attributeFilterInput = document.getElementById('attributeFilterInput');
+        const $additionalSearchInput = document.getElementById('additionalSearchInput');
+        const $searchFilterInput = document.getElementById('searchFilterInput');
+        const $logContainer = document.getElementById('logContainer');
+        const $novelStructureTree = document.getElementById('novelStructureTree');
+        const $refreshStructureBtn = document.getElementById('refreshStructureBtn');
+
+        // 편집 모달 요소
+        const editDataModal = new bootstrap.Modal(document.getElementById('editDataModal'));
+        const $editModalAttributeName = document.getElementById('editModalAttributeName');
+        const $editModalAttributeMax = document.getElementById('editModalAttributeMax');
+        const $editModalAttributeMin = document.getElementById('editModalAttributeMin');
+        const $editModalDataBitMax = document.getElementById('editModalDataBitMax');
+        const $editModalDataBitMin = document.getElementById('editModalDataBitMin');
+        const $editDataInput = document.getElementById('editDataInput');
+        const $editDataMax = document.getElementById('editDataMax');
+        const $editDataMin = document.getElementById('editDataMin');
+        const $updateDataBtn = document.getElementById('updateDataBtn');
+        const $updateDataStatus = document.getElementById('updateDataStatus');
+
+        let currentEditData = null;
+        let extractedAttributesList = [];
+        const MAX_LOG_ENTRIES = 1000;
+
+        // 모달
+        const chapterModal = new bootstrap.Modal(document.getElementById('chapterModal'));
+        const $chapterModalTitle = document.getElementById('chapterModalTitle');
+        const $chapterNumberInput = document.getElementById('chapterNumberInput');
+        const $chapterTitleInput = document.getElementById('chapterTitleInput');
+        const $chapterDescriptionInput = document.getElementById('chapterDescriptionInput');
+        const $chapterModalSaveBtn = document.getElementById('chapterModalSaveBtn');
+        const $chapterModalStatus = document.getElementById('chapterModalStatus');
+
+        // 상태
+        let chapters = [];
+        let currentChapterIdx = null;
+
+        // 키
+        const STORAGE_KEY_TITLE = 'chapter_only_title';
+        const STORAGE_KEY_TITLES = 'chapter_only_title_list';
+        const STORAGE_KEY_MAP = 'chapter_only_map'; // { key(normalizedTitle): { title, chapters, currentChapterIdx } }
+        const STORAGE_KEY_FILTER = 'chapter_only_filter';
+
+        // 유틸
+        function deepClone(obj) { try { return JSON.parse(JSON.stringify(obj)); } catch { return obj; } }
+        function normalizeTitleKey(title) { return (title || '').toString().trim().replace(/\s+/g, ' '); }
+
+        function calculateBitValues(text) {
+            if (!text || typeof text !== 'string' || text.trim() === '') return { max: null, min: null };
+            try {
+                if (typeof wordNbUnicodeFormat === 'undefined' || typeof BIT_MAX_NB === 'undefined' || typeof BIT_MIN_NB === 'undefined') return { max: null, min: null };
+                const arr = wordNbUnicodeFormat(text);
+                const max = BIT_MAX_NB(arr); const min = BIT_MIN_NB(arr);
+                return { max: isFinite(max) ? max : null, min: isFinite(min) ? min : null };
+            } catch { return { max: null, min: null }; }
+        }
+        function calculateBitPairSimilarity(filterBits, targetBits) {
+            try {
+                if (!filterBits || !targetBits) return 0;
+                const fMax = Number(filterBits.max), fMin = Number(filterBits.min);
+                const tMax = Number(targetBits.max), tMin = Number(targetBits.min);
+                if (!isFinite(fMax) || !isFinite(fMin) || !isFinite(tMax) || !isFinite(tMin)) return 0;
+                const dMax = Math.abs(fMax - tMax), dMin = Math.abs(fMin - tMin);
+                const norm = 5; const simMax = Math.max(0, 1 - (dMax / norm)); const simMin = Math.max(0, 1 - (dMin / norm));
+                return Math.max(0, Math.min(1, (simMax * 0.6 + simMin * 0.4)));
+            } catch { return 0; }
+        }
+
+        // 서버 URL 유틸
+        function getServerUrl(path) {
+            try {
+                if (!path) return window.location.origin;
+                if (path.startsWith('http://') || path.startsWith('https://')) return path;
+                const base = window.location.origin || '';
+                return `${base}${path}`;
+            } catch { return path; }
+        }
+
+        // Chapters API
+        async function apiGetChaptersByTitle(title) {
+            try {
+                if (!title) return null;
+                const url = getServerUrl(`/api/chapters?title=${encodeURIComponent(title)}`);
+                const res = await fetch(url, { method: 'GET' });
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (data && data.ok) return { chapters: data.chapters || [], currentChapterIdx: data.currentChapterIdx ?? null };
+            } catch (e) { console.warn('apiGetChaptersByTitle 실패:', e); }
+            return null;
+        }
+        async function apiSaveChaptersByTitle(title, chaptersPayload, currentIdx) {
+            try {
+                if (!title) return false;
+                const url = getServerUrl('/api/chapters');
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, chapters: chaptersPayload || [], currentChapterIdx: currentIdx ?? null })
+                });
+                if (!res.ok) return false;
+                const data = await res.json().catch(() => ({}));
+                return !!(data && data.ok);
+            } catch (e) { console.warn('apiSaveChaptersByTitle 실패:', e); return false; }
+        }
+        async function apiDeleteChaptersByTitle(title) {
+            try {
+                if (!title) return false;
+                const url = getServerUrl(`/api/chapters?title=${encodeURIComponent(title)}`);
+                const res = await fetch(url, { method: 'DELETE' });
+                if (!res.ok) return false;
+                const data = await res.json().catch(() => ({}));
+                return !!(data && data.ok);
+            } catch (e) { console.warn('apiDeleteChaptersByTitle 실패:', e); return false; }
+        }
+        function computeNextChapterDefaults() {
+            let maxNum = 0;
+            chapters.forEach((ch, idx) => {
+                const m = (ch.number || '').toString().match(/(\d{1,6})/);
+                const n = m && m[1] ? parseInt(m[1], 10) : (idx + 1);
+                if (!isNaN(n)) maxNum = Math.max(maxNum, n);
+            });
+            if (maxNum === 0) maxNum = chapters.length;
+            const nextNumber = `챕터 ${maxNum + 1}`;
+
+            let highestIdx = -1; let highestNum = -1;
+            chapters.forEach((ch, idx) => {
+                const m = (ch.number || '').toString().match(/(\d{1,6})/);
+                const n = m && m[1] ? parseInt(m[1], 10) : (idx + 1);
+                if (!isNaN(n) && n > highestNum) { highestNum = n; highestIdx = idx; }
+            });
+            let baseOrdinal = 0;
+            if (highestIdx >= 0) {
+                const t = (chapters[highestIdx].title || '').toString();
+                const tm = t.match(/^\s*제\s*(\d{1,6})\s*장\s*$/);
+                if (tm && tm[1]) baseOrdinal = parseInt(tm[1], 10) || 0;
+            }
+            if (baseOrdinal === 0) {
+                chapters.forEach(ch => {
+                    const tm = (ch.title || '').toString().match(/^\s*제\s*(\d{1,6})\s*장\s*$/);
+                    if (tm && tm[1]) baseOrdinal = Math.max(baseOrdinal, parseInt(tm[1], 10) || 0);
+                });
+            }
+            const nextTitle = baseOrdinal > 0 ? `제${baseOrdinal + 1}장` : '';
+            return { number: nextNumber, title: nextTitle };
+        }
+
+        // 제목 목록 관리
+        function getTitle() { return ($novelTitle && $novelTitle.value || '').trim(); }
+        function getSavedTitleList() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_TITLES) || '[]') || []; } catch { return []; } }
+        function saveTitleList(list) {
+            const seen = new Set(); const deduped = [];
+            list.forEach(t => { const k = normalizeTitleKey(t); if (!seen.has(k)) { seen.add(k); deduped.push(t); } });
+            localStorage.setItem(STORAGE_KEY_TITLES, JSON.stringify(deduped));
+        }
+        function addTitleToList(title) {
+            const list = getSavedTitleList(); const k = normalizeTitleKey(title);
+            const i = list.findIndex(t => normalizeTitleKey(t) === k); if (i >= 0) list.splice(i, 1);
+            list.unshift(title); saveTitleList(list.slice(0, 100)); renderTitleDatalist();
+        }
+        function renderTitleDatalist() {
+            if (!$novelTitleList) return; const list = getSavedTitleList();
+            $novelTitleList.innerHTML = list.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+        }
+        function setActiveTitle(title) { localStorage.setItem(STORAGE_KEY_TITLE, title); addTitleToList(title); }
+        function getActiveTitle() { return localStorage.getItem(STORAGE_KEY_TITLE) || ''; }
+
+        // 저장/로드
+        function persistMapForTitle(titleKey) {
+            const t = normalizeTitleKey(titleKey); if (!t) return;
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            map[t] = { title: titleKey, chapters: deepClone(chapters), currentChapterIdx };
+            localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(map));
+            // 서버 저장 (비동기, 실패 무시)
+            apiSaveChaptersByTitle(titleKey, deepClone(chapters), currentChapterIdx).then((ok) => { if (!ok) console.warn('서버 챕터 저장 실패(무시)'); });
+        }
+        async function loadMapForTitleOrApi(titleKey) {
+            const t = normalizeTitleKey(titleKey);
+            if (!t) return null;
+            // 서버 우선 조회
+            const apiEntry = await apiGetChaptersByTitle(titleKey);
+            if (apiEntry) return { title: titleKey, chapters: apiEntry.chapters || [], currentChapterIdx: apiEntry.currentChapterIdx ?? null };
+            // 로컬 저장소 조회
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            return map[t] || null;
+        }
+
+        // 렌더링
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+        // 속성 검색 설정 키
+        const STORAGE_KEY_ATTRIBUTE_FILTER = 'novel_composition_new2_attribute_filter';
+        const STORAGE_KEY_ADDITIONAL_SEARCH = 'novel_composition_new2_additional_search';
+        const STORAGE_KEY_SEARCH_FILTER = 'novel_composition_new2_search_filter';
+        const DEFAULT_ADDITIONAL_SEARCH = '등장인물,테마/주제,주요 사건,배경 설정,감정/분위기';
+
+        // 경로 정확 일치 비교
+        function matchPathExact(filterPath, targetPath) {
+            if (!filterPath || !targetPath) return false;
+            const f = filterPath.toLowerCase().trim();
+            const t = targetPath.toLowerCase().trim();
+            if (f === t) return true;
+            if (f.includes(' → ') && t.includes(' → ')) {
+                const fp = f.split(' → ').map(p=>p.trim());
+                const tp = t.split(' → ').map(p=>p.trim());
+                if (fp.length <= tp.length) {
+                    for (let i=0;i<fp.length;i++){ if (fp[i] !== tp[i]) return false; }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 필터링 유틸 (new4와 동일)
+        function filterDataByKeyword(data, filterKeyword, attributeText) {
+            if (!filterKeyword || !filterKeyword.trim()) return true;
+            const filterLower = filterKeyword.toLowerCase().trim();
+            if (data.attribute) {
+                let dataAttributeText = '';
+                if (typeof data.attribute === 'object' && data.attribute !== null && data.attribute.text) {
+                    dataAttributeText = (data.attribute.text || '').toLowerCase().trim();
+                } else if (typeof data.attribute === 'string') {
+                    dataAttributeText = (data.attribute || '').toLowerCase().trim();
+                }
+                if (dataAttributeText) {
+                    if (filterLower.includes(' → ')) { if (matchPathExact(filterLower, dataAttributeText)) return true; }
+                    else { if (dataAttributeText.includes(filterLower)) return true; }
+                }
+            }
+            if (attributeText) {
+                const attrTextLower = attributeText.toLowerCase().trim();
+                if (filterLower.includes(' → ')) { if (matchPathExact(filterLower, attrTextLower)) return true; }
+                else { if (attrTextLower.includes(filterLower)) return true; }
+            }
+            return false;
+        }
+
+        function filterDataListByKeyword(dataList, filterKeyword, attributeText) {
+            if (!dataList || !Array.isArray(dataList)) return [];
+            if (!filterKeyword || !filterKeyword.trim()) return dataList;
+            const filterLower = filterKeyword.toLowerCase().trim();
+            return dataList.filter(data => {
+                if (data.attribute) {
+                    let dataAttributeText = '';
+                    if (typeof data.attribute === 'object' && data.attribute !== null && data.attribute.text) {
+                        dataAttributeText = (data.attribute.text || '').toLowerCase().trim();
+                    } else if (typeof data.attribute === 'string') {
+                        dataAttributeText = (data.attribute || '').toLowerCase().trim();
+                    }
+                    if (dataAttributeText) {
+                        if (filterLower.includes(' → ')) { if (matchPathExact(filterLower, dataAttributeText)) return true; else return false; }
+                        else { if (dataAttributeText.includes(filterLower)) return true; }
+                    }
+                }
+                if (attributeText) {
+                    const attrTextLower = attributeText.toLowerCase().trim();
+                    if (filterLower.includes(' → ')) { if (matchPathExact(filterLower, attrTextLower)) return true; else return false; }
+                    else { if (attrTextLower.includes(filterLower)) return true; }
+                }
+                return false;
+            });
+        }
+
+        function filterAttributeByKeyword(attr, filterKeyword) {
+            if (!filterKeyword || !filterKeyword.trim()) return true;
+            const filterLower = filterKeyword.toLowerCase().trim();
+            const attributeText = (attr.text || '').toLowerCase().trim();
+            if (attributeText === filterLower) return true;
+            if (filterLower.includes(' → ')) return matchPathExact(filterLower, attributeText);
+            return attributeText.includes(filterLower);
+        }
+
+        function filterAttributesByKeyword(attributes, filterKeyword) {
+            if (!attributes || !Array.isArray(attributes)) return [];
+            if (!filterKeyword || !filterKeyword.trim()) return attributes;
+            return attributes.filter(attr => filterAttributeByKeyword(attr, filterKeyword));
+        }
+
+        // 추가 검색 키워드 관리
+        function addKeywordToAdditionalSearch(keyword) {
+            try {
+                const k = (keyword || '').trim();
+                if (!k || !$additionalSearchInput) return;
+                const current = ($additionalSearchInput.value || '').split(',').map(s => s.trim()).filter(Boolean);
+                if (!current.some(x => x.toLowerCase() === k.toLowerCase())) {
+                    current.push(k);
+                    $additionalSearchInput.value = current.join(',');
+                    if (typeof saveSearchSettingsToStorage === 'function') saveSearchSettingsToStorage();
+                }
+            } catch {}
+        }
+
+        // 검색 설정 로드/저장 및 동기화
+        function loadSearchSettingsFromStorage() {
+            try {
+                const savedAttributeFilter = localStorage.getItem(STORAGE_KEY_ATTRIBUTE_FILTER);
+                if (savedAttributeFilter && $attributeFilterInput) {
+                    $attributeFilterInput.value = savedAttributeFilter;
+                }
+                const savedAdditionalSearch = localStorage.getItem(STORAGE_KEY_ADDITIONAL_SEARCH);
+                if ($additionalSearchInput) {
+                    $additionalSearchInput.value = savedAdditionalSearch || DEFAULT_ADDITIONAL_SEARCH;
+                    if (!savedAdditionalSearch) {
+                        localStorage.setItem(STORAGE_KEY_ADDITIONAL_SEARCH, DEFAULT_ADDITIONAL_SEARCH);
+                    }
+                }
+                const savedSearchFilter = localStorage.getItem(STORAGE_KEY_SEARCH_FILTER);
+                if ($searchFilterInput) {
+                    if ($attributeFilterInput && $attributeFilterInput.value.trim()) {
+                        $searchFilterInput.value = $attributeFilterInput.value.trim();
+                    } else if (savedSearchFilter) {
+                        $searchFilterInput.value = savedSearchFilter;
+                        if ($attributeFilterInput) $attributeFilterInput.value = savedSearchFilter;
+                    }
+                }
+            } catch (e) { console.warn('검색 설정 로드 오류:', e); }
+        }
+
+        function saveSearchSettingsToStorage() {
+            try {
+                if ($attributeFilterInput) localStorage.setItem(STORAGE_KEY_ATTRIBUTE_FILTER, $attributeFilterInput.value.trim());
+                if ($additionalSearchInput) localStorage.setItem(STORAGE_KEY_ADDITIONAL_SEARCH, $additionalSearchInput.value.trim());
+                if ($searchFilterInput) localStorage.setItem(STORAGE_KEY_SEARCH_FILTER, $searchFilterInput.value.trim());
+            } catch (e) { console.warn('검색 설정 저장 오류:', e); }
+        }
+
+        function syncAttributeFilterToSearchFilter() {
+            if ($attributeFilterInput && $searchFilterInput) {
+                const v = $attributeFilterInput.value.trim();
+                if ($searchFilterInput.value.trim() !== v) {
+                    $searchFilterInput.value = v;
+                    saveSearchSettingsToStorage();
+                }
+            }
+        }
+        // ======= GPT/속성 기능 (new4 포팅, 챕터 구성 제외) =======
+        function removeMarkdownChars(input) {
+            if (input === null || input === undefined) return '';
+            // 요구사항: *, # 문자만 제거하고 나머지는 유지
+            return String(input).replace(/[\*#]/g, '');
+        }
+
+        // 섹션 라벨/장식 제거 ("데이터:", "이유:" 등과 선행 구분자)
+        function stripSectionLabels(input) {
+            if (input === null || input === undefined) return '';
+            let t = String(input);
+            // 라벨 제거
+            t = t.replace(/\b데이터\s*:\s*/gi, '');
+            t = t.replace(/\b이유\s*:\s*/gi, '');
+            // 선행 장식 기호 제거(줄 단위)
+            t = t.replace(/^\s*[\/\-–•]\s*/gm, '');
+            // 양쪽 여분 공백 정리
+            return t.trim();
+        }
+
+        function normalizeExtractedText(input) {
+            return stripSectionLabels(removeMarkdownChars(input || ''));
+        }
+
+        function updatePromptLog1(systemMessage, userPrompt) {
+            if (!$gptPromptLog) return;
+            let cleaned = userPrompt || '';
+            cleaned = cleaned.replace(/\[분석할 텍스트\][\s\S]*?(?=\n\n|\n===|$)/g, '[분석할 텍스트]\n(데이터 제외)');
+            cleaned = cleaned.replace(/\[텍스트\][\s\S]*?(?=\n\n|\n===|$)/g, '[텍스트]\n(데이터 제외)');
+            const text = `=== 프롬프트 1 ===\n\n=== 시스템 메시지 ===\n${systemMessage}\n\n=== 사용자 프롬프트 ===\n${cleaned}`;
+            $gptPromptLog.value = text;
+        }
+
+        function updatePromptLog2(systemMessage, userPrompt) {
+            if (!$gptPromptLog) return;
+            let cleaned = userPrompt || '';
+            cleaned = cleaned.replace(/\[참고 텍스트\][\s\S]*?(?=\n\n위 정보|\n위 정보|$)/g, '[참고 텍스트]\n(데이터 제외)');
+            const text = systemMessage && systemMessage.trim() ? `=== 시스템 메시지 ===\n${systemMessage}\n\n=== 사용자 프롬프트 ===\n${cleaned}` : cleaned;
+            $gptPromptLog.value = text;
+        }
+
+        // 허용 속성 정의 및 정규화
+        const ALLOWED_STATIC_ATTRIBUTES = ['등장인물','테마/주제','주요 사건','배경 설정','감정/분위기','개요'];
+        function normalizeAttributeToAllowed(attribute) {
+            if (!attribute) return '';
+            let a = String(attribute).trim();
+            // 경로가 들어오면 마지막 조각만
+            if (a.includes(' → ')) {
+                const parts = a.split(' → ').map(s => s.trim()).filter(Boolean);
+                a = parts[parts.length - 1] || a;
+            }
+            // 정적 허용 목록 정확 매칭
+            if (ALLOWED_STATIC_ATTRIBUTES.includes(a)) return a;
+            // "제 N 장" 형식 허용 (공백 유연)
+            const m = a.match(/^제\s*(\d{1,6})\s*장$/i);
+            if (m && m[1]) return `제${parseInt(m[1], 10)}장`;
+            // "챕터 N" 또는 "챕터 N: ..." → 제N장 으로 변환
+            const c = a.match(/^챕터\s*(\d{1,6})(?::.*)?$/i);
+            if (c && c[1]) return `제${parseInt(c[1], 10)}장`;
+            return '';
+        }
+        // 속성 입력란 업데이트 (허용된 값만)
+        function updateSelectedAttributeInput(attribute) {
+            if (!$selectedAttributeInput) return;
+            const norm = normalizeAttributeToAllowed(attribute || '');
+            if (norm) { $selectedAttributeInput.value = norm; }
+        }
+
+        async function analyzeWithGPT(customPrompt = null) {
+            const text = ($gptInput && $gptInput.value || '').trim();
+            if (!text) { if ($gptStatus) { $gptStatus.textContent = '✗ 분석할 텍스트를 입력하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+            if (customPrompt === null && $gptPrompt1) customPrompt = $gptPrompt1.value.trim();
+            const lowerPrompt = (customPrompt || '').toLowerCase();
+            const isOutline = !!customPrompt && (lowerPrompt.includes('개요') || lowerPrompt.includes('outline') || lowerPrompt.includes('요약') || lowerPrompt.includes('정리'));
+            try {
+                if ($analyzeBtn1) $analyzeBtn1.disabled = true; if ($analyzeBtn2) $analyzeBtn2.disabled = true;
+                if ($gptStatus) { $gptStatus.textContent = 'GPT AI 분석 중...'; $gptStatus.style.color = '#007bff'; }
+                if ($gptResponse) $gptResponse.textContent = '분석 중...';
+                const outlineInstructions = isOutline ? `\n\n[개요 작성 모드 활성화]\n- 등장인물/배경/사건/감정/테마/스타일을 구조화된 개요로 작성` : '';
+                const systemMessage = `소설 텍스트를 분석하여 구성 요소(속성)를 추출하세요.${outlineInstructions}\n- 응답은 텍스트 형식으로, 속성 N: / 데이터: / 이유: / 속성 BIT: -, - / 데이터 BIT: -, - 구성을 따르세요.`;
+                let finalPrompt = customPrompt ? (customPrompt.includes('{text}') ? customPrompt.replace(/{text}/g, text) : `${customPrompt}\n\n[위 요청에 따라 아래 텍스트 분석]\n\n${text}`) : `다음 텍스트에서 속성들을 추출:\n\n"${text}"`;
+                updatePromptLog1(systemMessage, finalPrompt);
+                const url = getServerUrl('/api/gpt/chat');
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: finalPrompt, systemMessage, model: 'gpt-4o-mini', temperature: 0.3, maxTokens: 1500 }) });
+                if (!res.ok) { const raw = await res.text().catch(()=>''); throw new Error(raw || `HTTP ${res.status}`); }
+                const data = await res.json(); if (!data.ok) throw new Error(data.error || 'GPT 분석 실패');
+                const responseText = (data.response || '').trim();
+                let parsed = [];
+                // JSON 블록 허용
+                let jsonText = responseText.startsWith('```') ? responseText.replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'') : responseText;
+                try {
+                    const j = JSON.parse(jsonText);
+                    if (Array.isArray(j)) parsed = j.map(x=>({ attribute: (x.attribute||'').trim(), data: (x.data||'').trim(), reasoning: (x.reasoning||'').trim() }));
+                } catch { /* fallthrough */ }
+                if (!parsed.length) {
+                    const sections = responseText.split(/(?:^|\n)---+|\n\n(?=속성\s*\d+\s*:)/m);
+                    for (const section of sections) {
+                        const s = section.trim(); if (!s) continue;
+                        const am = s.match(/속성\s*\d+\s*:\s*(.+?)(?:\n|$)/); if (!am) continue;
+                        const attribute = (am[1]||'').trim();
+                        const dm = s.match(/데이터\s*:\s*(.+?)(?:\n\n이유:|\n이유:|\n\n속성\s*BIT:|\n속성\s*BIT:|$)/s);
+                        const rm = s.match(/이유\s*:\s*(.+?)(?:\n\n속성\s*BIT:|\n속성\s*BIT:|\n\n데이터\s*BIT:|\n데이터\s*BIT:|$)/s);
+                        const dataText = dm ? dm[1].trim() : '';
+                        const reasoning = rm ? rm[1].trim() : '';
+                        if (attribute && dataText) parsed.push({ attribute, data: dataText, reasoning });
+                    }
+                }
+                if (!parsed.length) throw new Error('추출된 속성이 없습니다.');
+                extractedAttributesList = parsed.map(item => {
+                    const rawAttr = (item.attribute||'').trim();
+                    const attr = removeMarkdownChars(rawAttr).trim();
+                    let dt = removeMarkdownChars(item.data||'');
+                    const rs = removeMarkdownChars(item.reasoning||'').trim();
+                    const ab = calculateBitValues(attr); const db = calculateBitValues(dt);
+                    return { attribute: attr, data: dt, reasoning: rs, attributeBitMax: ab.max, attributeBitMin: ab.min, dataBitMax: db.max, dataBitMin: db.min };
+                }).filter(Boolean);
+                if ($gptResponse) $gptResponse.textContent = removeMarkdownChars(responseText); if ($gptResultCard) $gptResultCard.style.display = 'block';
+                displayExtractedAttributes();
+                if ($gptStatus) { $gptStatus.textContent = `✓ 분석 완료: ${extractedAttributesList.length}개 추출. 자동 저장 중...`; $gptStatus.style.color = '#007bff'; }
+                await saveAllAttributes();
+            } catch (e) {
+                if ($gptStatus) { $gptStatus.textContent = `✗ 분석 실패: ${e.message}`; $gptStatus.style.color = '#dc3545'; }
+                if ($gptResponse) $gptResponse.textContent = `오류: ${e.message}`;
+            } finally { if ($analyzeBtn1) $analyzeBtn1.disabled = false; if ($analyzeBtn2) $analyzeBtn2.disabled = false; }
+        }
+
+        // 프롬프트 2: 속성 결정 후 이어쓰기/요청 수행 및 저장 (new4 동등)
+        async function analyzeWithGPT2() {
+            const text = ($gptInput && $gptInput.value || '').trim();
+            if (!text) { if ($gptStatus) { $gptStatus.textContent = '✗ 분석할 텍스트를 입력하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+            const prompt2 = ($gptPrompt2 && $gptPrompt2.value || '').trim();
+            if (!prompt2) { if ($gptStatus) { $gptStatus.textContent = '✗ 프롬프트 입력 2를 입력하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+
+            const novelTitle = ($novelTitle && $novelTitle.value || '').trim();
+            const currentChapter = (currentChapterIdx !== null && chapters[currentChapterIdx]) ? chapters[currentChapterIdx] : null;
+            if (!novelTitle) { if ($gptStatus) { $gptStatus.textContent = '✗ 소설 제목을 입력하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+            if (!currentChapter) { if ($gptStatus) { $gptStatus.textContent = '✗ 챕터를 선택하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+
+            try {
+                if ($analyzeBtn1) $analyzeBtn1.disabled = true; if ($analyzeBtn2) $analyzeBtn2.disabled = true;
+                if ($gptStatus) { $gptStatus.textContent = 'GPT AI 분석 중... (속성 결정 중)'; $gptStatus.style.color = '#007bff'; }
+                if ($gptResponse) $gptResponse.textContent = '분석 중...';
+
+                // 1) 저장된 속성 목록 중 해당 소설/챕터에 해당하는 속성 결정
+                const allAttrUrl = getServerUrl('/api/attributes/all');
+                const allAttrRes = await fetch(allAttrUrl);
+                let savedAttributes = [];
+                if (allAttrRes.ok) {
+                    const allAttrData = await allAttrRes.json();
+                    if (allAttrData.ok && allAttrData.attributes) {
+                        const chapterNumber = (currentChapter.number || '').trim();
+                        const chapterTitle = (currentChapter.title || '').trim();
+                        const chapterDisplay = `${chapterNumber}${chapterTitle ? `: ${chapterTitle}` : ''}`;
+                        const expectedPrefix = `${novelTitle} → ${chapterDisplay} → `;
+                        savedAttributes = allAttrData.attributes.filter(attr => (attr.text || '').trim().startsWith(expectedPrefix)).map(a => a.text.replace(expectedPrefix, '').trim());
+                    }
+                }
+
+                let attributeFromInput = ($selectedAttributeInput && $selectedAttributeInput.value || '').trim();
+                if (!attributeFromInput) {
+                    // 속성을 결정: 저장된 속성 중에서 prompt2와 가장 잘 맞는 것, 없으면 prompt2 자체 사용
+                    if (savedAttributes.length > 0) {
+                        const lowerP = prompt2.toLowerCase();
+                        const exact = savedAttributes.find(a => a.toLowerCase() === lowerP) || null;
+                        attributeFromInput = exact || savedAttributes[0];
+                    } else {
+                        attributeFromInput = prompt2;
+                    }
+                }
+                // 허용 속성으로 정규화(없으면 기본값 개요)
+                const normalizedAttr = normalizeAttributeToAllowed(attributeFromInput) || '개요';
+                updateSelectedAttributeInput(normalizedAttr);
+
+                // 2) 이어쓰기/작성 프롬프트 구성 및 GPT 호출
+                const analysisPrompt = `소설 작가로서 "${attributeFromInput}" 다음 이야기를 작성해주세요.\n\n요청: "${prompt2}"\n\n[참고 텍스트]\n${text}`;
+                updatePromptLog2('', analysisPrompt);
+                const analysisUrl = getServerUrl('/api/gpt/chat');
+                const analysisRes = await fetch(analysisUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: analysisPrompt, model: ($gptModelSelect && $gptModelSelect.value) || 'gpt-4o-mini', temperature: 0.7, maxTokens: 1500 }) });
+                if (!analysisRes.ok) { const raw = await analysisRes.text().catch(()=> ''); throw new Error(raw || `HTTP ${analysisRes.status}`); }
+            const analysisData = await analysisRes.json();
+            let responseText = (analysisData.response || '').trim();
+            // 라벨/장식 정리
+            responseText = normalizeExtractedText(responseText);
+            if ($gptResponse) { $gptResponse.textContent = responseText; if ($gptResultCard) $gptResultCard.style.display = 'block'; }
+
+                // 3) 저장: attribute 텍스트와 데이터 BIT 계산하여 서버에 저장
+                const chapterText = `${currentChapter.number || ''} ${currentChapter.title || ''}`.trim();
+                const chapterBits = calculateBitValues(chapterText);
+                const combinedAttributeText = `${novelTitle} → ${currentChapter.number || ''}${currentChapter.title?`: ${currentChapter.title}`:''} → ${normalizedAttr}`;
+                const combinedAttrBits = calculateBitValues(combinedAttributeText);
+                const dataBits = calculateBitValues(responseText);
+                const saveUrl = getServerUrl('/api/attributes/data');
+                const saveRes = await fetch(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attributeBitMax: combinedAttrBits.max, attributeBitMin: combinedAttrBits.min, attributeText: combinedAttributeText, text: responseText, dataBitMax: dataBits.max, dataBitMin: dataBits.min, novelTitle, chapter: currentChapter, chapterBitMax: chapterBits.max, chapterBitMin: chapterBits.min }) });
+                if (!saveRes.ok) { const raw = await saveRes.text().catch(()=> `HTTP ${saveRes.status}`); throw new Error(`저장 실패: ${raw}`); }
+                const saveData = await saveRes.json().catch(()=>({ ok: true }));
+                if (!saveData.ok) throw new Error(saveData.error || '저장 실패');
+
+                if ($gptStatus) { $gptStatus.textContent = '✓ 작성 완료 및 저장됨'; $gptStatus.style.color = '#28a745'; }
+                // 추가된 속성을 추가 검색에 자동 등록
+                addKeywordToAdditionalSearch(normalizedAttr);
+                if ($attributesList) { loadAttributes(); }
+                renderNovelStructure(); // 트리 구조 업데이트
+            } catch (e) {
+                if ($gptStatus) { $gptStatus.textContent = `✗ 분석 실패: ${e.message}`; $gptStatus.style.color = '#dc3545'; }
+            } finally {
+                if ($analyzeBtn1) $analyzeBtn1.disabled = false; if ($analyzeBtn2) $analyzeBtn2.disabled = false;
+            }
+        }
+
+        function displayExtractedAttributes() {
+            if (!$extractedAttributes) return;
+            let html = '<div class="row">';
+            extractedAttributesList.forEach((item, idx) => {
+                const attrMax = (item.attributeBitMax!=null)? item.attributeBitMax.toFixed(15) : '-';
+                const attrMin = (item.attributeBitMin!=null)? item.attributeBitMin.toFixed(15) : '-';
+                const dataMax = (item.dataBitMax!=null)? item.dataBitMax.toFixed(15) : '-';
+                const dataMin = (item.dataBitMin!=null)? item.dataBitMin.toFixed(15) : '-';
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3 attribute-card" onclick="handleAttributeCardClick(${idx})">
+                            <h6 class="text-primary">속성 ${idx+1}: ${escapeHtml(item.attribute)}</h6>
+                            <div class="mb-2"><strong>데이터:</strong> ${escapeHtml(item.data)}</div>
+                            ${item.reasoning ? `<div class="small text-muted mb-2"><strong>이유:</strong> ${escapeHtml(item.reasoning)}</div>` : ''}
+                            <div class="small text-muted"><strong>속성 BIT:</strong> MAX ${attrMax}, MIN ${attrMin}<br><strong>데이터 BIT:</strong> MAX ${dataMax}, MIN ${dataMin}</div>
+                        </div>
+                    </div>`;
+            });
+            html += '</div>';
+            $extractedAttributes.innerHTML = html;
+            window.handleAttributeCardClick = function(idx){
+                const it = extractedAttributesList[idx];
+                if (!it) return;
+                // 자동 속성 입력 업데이트
+                try { updateSelectedAttributeInput(it.attribute || ''); } catch {}
+                if (it.attributeBitMax!=null && it.attributeBitMin!=null) scrollToAttribute(it.attributeBitMax, it.attributeBitMin, it.attribute);
+            };
+        }
+
+        async function updateAttributeData(idx) { /* 간소화: 저장 시 다시 saveAllAttributes 경로 사용 */ }
+
+        async function saveAllAttributes() {
+            if (!extractedAttributesList.length) return;
+            try {
+                for (let i=0;i<extractedAttributesList.length;i++) {
+                    const item = extractedAttributesList[i];
+                    if (item.attributeBitMax==null || item.attributeBitMin==null || item.dataBitMax==null || item.dataBitMin==null) continue;
+                    const novelTitle = ($novelTitle && $novelTitle.value || '').trim();
+                    const currentChapter = (currentChapterIdx!=null && chapters[currentChapterIdx]) ? chapters[currentChapterIdx] : null;
+                    if (!novelTitle || !currentChapter) continue;
+                    const chapterText = `${currentChapter.number || ''} ${currentChapter.title || ''}`.trim();
+                    const chapterBits = calculateBitValues(chapterText);
+                    const combinedAttributeText = `${novelTitle} → ${currentChapter.number || ''}${currentChapter.title?`: ${currentChapter.title}`:''} → ${item.attribute}`;
+                    const combinedAttrBits = calculateBitValues(combinedAttributeText);
+                    const url = getServerUrl('/api/attributes/data');
+                    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attributeBitMax: combinedAttrBits.max, attributeBitMin: combinedAttrBits.min, attributeText: combinedAttributeText, text: item.data, dataBitMax: item.dataBitMax, dataBitMin: item.dataBitMin, novelTitle, chapter: currentChapter, chapterBitMax: chapterBits.max, chapterBitMin: chapterBits.min }) });
+                }
+        if ($attributesList) loadAttributes();
+            } catch (e) { /* ignore */ }
+        }
+
+        function scrollToAttribute(bitMax, bitMin, attributeText) {
+            const items = document.querySelectorAll('.attribute-item');
+            let target = null;
+            items.forEach(el => { const bMax = parseFloat(el.getAttribute('data-bit-max')); const bMin = parseFloat(el.getAttribute('data-bit-min')); if (isFinite(bMax)&&isFinite(bMin)&&Math.abs(bMax-bitMax)<0.0001&&Math.abs(bMin-bitMin)<0.0001) target = el; });
+            if (!target) { items.forEach(el=>{ const t = el.getAttribute('data-attribute-text')||''; if (t.trim()===String(attributeText).trim()) target=el; }); }
+            if (target) { target.classList.add('highlighted'); target.scrollIntoView({ behavior:'smooth', block:'center' }); setTimeout(()=>target&&target.classList.remove('highlighted'), 3000); }
+        }
+
+        // 속성 목록 로드 (요약버전)
+        async function loadAttributes() {
+            if (!$attributesList) return;
+            try {
+                $attributesList.innerHTML = '<div class="text-center text-muted">로딩 중...</div>';
+                const url = getServerUrl('/api/attributes/all');
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!data.ok || !Array.isArray(data.attributes) || !data.attributes.length) { $attributesList.innerHTML = '<div class="text-center text-muted">저장된 속성이 없습니다.</div>'; return; }
+                // 현재 소설/챕터 컨텍스트
+                let currentNovelTitle = ($novelTitle && $novelTitle.value || '').trim();
+                let currentChapter = (currentChapterIdx!=null && chapters[currentChapterIdx]) ? chapters[currentChapterIdx] : null;
+                if ($attributeFilterInput && $attributeFilterInput.value.trim()) {
+                    const filterText = $attributeFilterInput.value.trim();
+                    const arrow = filterText.match(/^(.+?)\s*→\s*(.+)$/);
+                    if (arrow) {
+                        currentNovelTitle = arrow[1].trim();
+                        const chapterPart = arrow[2].trim();
+                        const m = chapterPart.match(/^(.+?)(?::\s*(.+))?$/);
+                        currentChapter = { number: m? m[1].trim(): chapterPart, title: m && m[2] ? m[2].trim() : '', description: '' };
+                    } else { currentNovelTitle = filterText; currentChapter = null; }
+                }
+                const attrWithData = [];
+                for (const attr of data.attributes) {
+                    try {
+                        const durl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=100`);
+                        const dres = await fetch(durl);
+                        let dataList = [];
+                        if (dres.ok) {
+                            const dd = await dres.json();
+                            if (dd.ok && dd.items) {
+                                dataList = dd.items.filter(it => it.data && it.data.text && it.data.text !== attr.text);
+                                if (currentNovelTitle && currentChapter) {
+                                    dataList = dataList.filter(it => (it.novel?.title===currentNovelTitle) && (it.chapter?.number===currentChapter.number));
+                                } else if (currentNovelTitle) {
+                                    dataList = dataList.filter(it => (it.novel?.title===currentNovelTitle));
+                                } else { dataList = []; }
+                                dataList = dataList.map(it => ({ ...it.data, attribute: it.attribute || it.data?.attribute || null }));
+                            }
+                        }
+                        attrWithData.push({ ...attr, dataList, dataCount: dataList.length });
+                    } catch { attrWithData.push({ ...attr, dataList: [], dataCount: 0 }); }
+                }
+                // 검색 결과 필터링
+                const searchFilter = $searchFilterInput ? $searchFilterInput.value.trim() : '';
+                let displayAttrs = attrWithData;
+                if (searchFilter) {
+                    const kw = searchFilter.toLowerCase();
+                    displayAttrs = displayAttrs.map(a => ({
+                        ...a,
+                        dataList: (a.dataList||[]).filter(d => {
+                            const t = (d.text||'').toLowerCase();
+                            const at = (a.text||'').toLowerCase();
+                            return t.includes(kw) || at.includes(kw);
+                        })
+                    })).filter(a => (a.dataList||[]).length>0);
+                }
+                let html = '';
+                if (currentNovelTitle && currentChapter) html += `<div class="mb-2 p-2 bg-light rounded"><small class="text-muted">📖 ${escapeHtml(currentNovelTitle)} → ${escapeHtml(currentChapter.number||'챕터')}: ${escapeHtml(currentChapter.title||'제목 없음')}</small></div>`;
+                else if (currentNovelTitle) html += `<div class="mb-2 p-2 bg-light rounded"><small class="text-muted">📖 ${escapeHtml(currentNovelTitle)} (챕터 미선택)</small></div>`;
+                else html += `<div class="mb-2 p-2 bg-warning rounded"><small class="text-danger">⚠️ 소설 제목을 입력하고 챕터를 선택하세요.</small></div>`;
+                if (!displayAttrs.length) html += '<div class="text-muted">표시할 속성이 없습니다.</div>';
+                displayAttrs.forEach(attr => {
+                    const dataItems = (attr.dataList||[]).map((d, i) => {
+                        const full = d.text||''; const display = full.length>150? full.substring(0,150)+'...' : full;
+                        const uid = `data-${attr.bitMax}-${attr.bitMin}-${i}`;
+                        return `
+                        <div class="data-item">
+                            <strong style="word-break: break-word; display:block; margin-bottom:8px;">${escapeHtml(display)}</strong>
+                            <div class="d-flex justify-content-between align-items-start">
+                                <small class="text-muted">BIT: ${d.bitMax.toFixed(15)}, ${d.bitMin.toFixed(15)}</small>
+                                <div class="d-flex flex-column gap-1">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyDataTextFromHidden('${uid}'); return false;">📋 복사</button>
+                                    <button class="btn btn-sm btn-outline-success input-data-btn" data-text="${escapeHtml(full).replace(/\"/g,'&quot;')}">↘ 입력</button>
+                                </div>
+                            </div>
+                            <input type="hidden" id="${uid}" value="${escapeHtml(full).replace(/\"/g,'&quot;')}">
+                        </div>`;
+                    }).join('');
+                    html += `
+                    <div class="attribute-item" data-bit-max="${attr.bitMax}" data-bit-min="${attr.bitMin}" data-attribute-text="${escapeHtml(attr.text)}">
+                        <div class="attribute-header">
+                            <div style="text-align:left;">
+                                <span class="attribute-name">${escapeHtml(attr.text)}</span>
+                            </div>
+                            <div style="text-align:left; margin-top:5px;"><small class="text-muted">BIT: ${attr.bitMax.toFixed(15)}, ${attr.bitMin.toFixed(15)} | 데이터 ${attr.dataCount}개</small></div>
+                        </div>
+                        <div class="data-list">${dataItems || '<div class="text-muted small">데이터가 없습니다.</div>'}</div>
+                    </div>`;
+                });
+                $attributesList.innerHTML = html;
+                // 입력 버튼
+                $attributesList.querySelectorAll('.input-data-btn').forEach(btn=>{
+                    btn.addEventListener('click', (e)=>{ e.preventDefault(); const txt = btn.getAttribute('data-text')||''; const div=document.createElement('div'); div.innerHTML = txt.replace(/&quot;/g,'"'); const decoded = div.textContent||div.innerText||txt; if ($gptInput) { $gptInput.value = decoded; $gptInput.scrollIntoView({ behavior:'smooth', block:'center' }); } if ($gptStatus) { $gptStatus.textContent='✓ 데이터가 분석 입력란에 채워졌습니다.'; $gptStatus.style.color='#28a745'; } });
+                });
+            } catch (e) { $attributesList.innerHTML = `<div class="text-danger">✗ 로드 실패: ${e.message}</div>`; }
+        }
+
+        function copyDataTextFromHidden(id) { try { const el = document.getElementById(id); if (!el) return; const text = el.value.replace(/&quot;/g,'"').replace(/&#x27;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>'); navigator.clipboard.writeText(text).catch(()=>{}); } catch {}
+        }
+        
+        // 데이터 삭제 (전역에서 접근 가능)
+        async function deleteAttributeData(attrBitMax, attrBitMin, dataBitMax, dataBitMin, dataText) {
+            let previewText = '';
+            try {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = (dataText||'').replace(/&quot;/g,'"');
+                previewText = (tempDiv.textContent || tempDiv.innerText || dataText).substring(0,50);
+                if ((tempDiv.textContent||'').length>50) previewText+='...';
+            } catch {
+                previewText = (dataText||'').substring(0,50);
+            }
+            try {
+                // 속성 텍스트 동봉
+                let attributeText = '';
+                try {
+                    const attrItem = document.querySelector(`.attribute-item[data-bit-max="${attrBitMax}"][data-bit-min="${attrBitMin}"]`);
+                    attributeText = (attrItem && (attrItem.getAttribute('data-attribute-text') || '')) || '';
+                } catch {}
+                const url = getServerUrl('/api/attributes/data/delete');
+                let response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attributeBitMax: parseFloat(attrBitMax), attributeBitMin: parseFloat(attrBitMin), dataBitMax: parseFloat(dataBitMax), dataBitMin: parseFloat(dataBitMin), attributeText: attributeText, text: (dataText||'').replace(/&quot;/g,'"') }) });
+                if (!response.ok) { const raw = await response.text().catch(()=>`HTTP ${response.status}`); throw new Error(`HTTP ${response.status}: ${raw}`); }
+                const result = await response.json().catch(()=>({ ok: true }));
+                if (!(result && result.ok)) {
+                    // 호환: 텍스트만 재시도
+                    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: (dataText||'').replace(/&quot;/g,'"') }) });
+                    if (!response.ok) { const raw2 = await response.text().catch(()=>`HTTP ${response.status}`); throw new Error(`HTTP ${response.status}: ${raw2}`); }
+                    const result2 = await response.json().catch(()=>({ ok: true }));
+                    if (!(result2 && result2.ok)) throw new Error(result2?.message || result2?.error || '삭제 실패');
+                }
+                addLog('info', `데이터 삭제 완료: ${previewText}`);
+                if (typeof loadAttributes === 'function') loadAttributes();
+            } catch (error) {
+                const msg = error.message || String(error) || '알 수 없는 오류';
+                console.error('데이터 삭제 오류:', error);
+                addLog('error', `데이터 삭제 오류: ${msg}`);
+            }
+        }
+        window.deleteAttributeData = deleteAttributeData;
+        window.copyDataTextFromHidden = copyDataTextFromHidden;
+
+        // 로그
+        function addLog(type, ...args) {
+            if (!$logContainer) return;
+            const ts = new Date().toLocaleTimeString();
+            const full = args.map(a=>{ try { return typeof a==='object'? JSON.stringify(a): String(a); } catch { return String(a); } }).join(' ');
+            const entry = document.createElement('div'); entry.className='log-entry'; entry.setAttribute('data-full-message', full); entry.setAttribute('data-timestamp', ts); entry.setAttribute('data-type', type);
+            const timeSpan = document.createElement('span'); timeSpan.className='log-time'; timeSpan.textContent = `[${ts}]`;
+            const msgSpan = document.createElement('span'); msgSpan.className = `log-message log-${type}`; msgSpan.textContent = full.length>50? full.substring(0,47)+'...' : full;
+            entry.appendChild(timeSpan); entry.appendChild(msgSpan);
+            entry.addEventListener('click', ()=>{ const modal=document.createElement('div'); modal.className='modal fade'; modal.setAttribute('tabindex','-1'); const dlg=document.createElement('div'); dlg.className='modal-dialog modal-lg'; const content=document.createElement('div'); content.className='modal-content'; const header=document.createElement('div'); header.className='modal-header'; header.innerHTML = '<h5 class="modal-title">로그 상세 내용</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button>'; const body=document.createElement('div'); body.className='modal-body'; const pre=document.createElement('pre'); pre.style.cssText='max-height:400px;overflow-y:auto;white-space:pre-wrap;'; pre.textContent=full; body.appendChild(pre); const footer=document.createElement('div'); footer.className='modal-footer'; const close=document.createElement('button'); close.className='btn btn-secondary'; close.setAttribute('data-bs-dismiss','modal'); close.textContent='닫기'; footer.appendChild(close); content.appendChild(header); content.appendChild(body); content.appendChild(footer); dlg.appendChild(content); modal.appendChild(dlg); document.body.appendChild(modal); const bsModal=new bootstrap.Modal(modal); bsModal.show(); modal.addEventListener('hidden.bs.modal', ()=>{ document.body.removeChild(modal); }); });
+            const first = $logContainer.firstChild; if (first) $logContainer.insertBefore(entry, first); else $logContainer.appendChild(entry);
+            const all = $logContainer.querySelectorAll('.log-entry'); if (all.length>MAX_LOG_ENTRIES) { const oldest = all[all.length-1]; oldest && oldest.parentNode && oldest.parentNode.removeChild(oldest); }
+        }
+
+        // console 인터셉션 (new4와 동일 패턴)
+        (function(){
+            const origLog = console.log;
+            const origErr = console.error;
+            const origWarn = console.warn;
+            const origInfo = console.info;
+            console.log = function(...args){ try { addLog('message', ...args); } catch {} origLog.apply(console, args); };
+            console.error = function(...args){ try { addLog('error', ...args); } catch {} origErr.apply(console, args); };
+            console.warn = function(...args){ try { addLog('warn', ...args); } catch {} origWarn.apply(console, args); };
+            console.info = function(...args){ try { addLog('info', ...args); } catch {} origInfo.apply(console, args); };
+            // window.onerror & unhandledrejection
+            window.addEventListener('error', (e) => {
+                try {
+                    const msg = e && e.message ? e.message : 'Unknown error';
+                    const loc = e && e.filename ? `${e.filename}:${e.lineno || ''}:${e.colno || ''}` : '';
+                    const stack = e && e.error && e.error.stack ? e.error.stack : '';
+                    addLog('error', '[onerror]', msg, loc, stack);
+                } catch {}
+            });
+            window.addEventListener('unhandledrejection', (e) => {
+                try {
+                    const reason = e && (e.reason && (e.reason.stack || e.reason.message) ? (e.reason.stack || e.reason.message) : String(e.reason));
+                    addLog('error', '[unhandledrejection]', reason);
+                } catch {}
+            });
+            // fetch wrapper
+            if (window.fetch) {
+                const _fetch = window.fetch.bind(window);
+                window.fetch = async function(resource, init = {}) {
+                    try { addLog('info', '[fetch:start]', typeof resource === 'string' ? resource : (resource && resource.url) || '', JSON.stringify(init)); } catch {}
+                    try {
+                        const res = await _fetch(resource, init);
+                        try { addLog('info', '[fetch:done]', (res && res.url) || '', `status=${res.status}`); } catch {}
+                        return res;
+                    } catch (err) {
+                        try { addLog('error', '[fetch:error]', typeof resource === 'string' ? resource : (resource && resource.url) || '', String(err)); } catch {}
+                        throw err;
+                    }
+                };
+            }
+        })();
+
+        // === 속성 목록 전체 로더 (new4 동일) ===
+        async function loadAttributesFull() {
+            console.log('속성 목록 로드 시작');
+            try {
+                $attributesList.innerHTML = '<div class="text-center text-muted">로딩 중...</div>';
+                const url = getServerUrl('/api/attributes/all');
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!data.ok || !data.attributes || data.attributes.length === 0) { $attributesList.innerHTML = '<div class="text-center text-muted">저장된 속성이 없습니다.</div>'; return; }
+
+                let currentNovelTitle = ($novelTitle && $novelTitle.value || '').trim();
+                let currentChapter = (currentChapterIdx!=null && chapters[currentChapterIdx]) ? chapters[currentChapterIdx] : null;
+                if ($attributeFilterInput && $attributeFilterInput.value.trim()) {
+                    const filterText = $attributeFilterInput.value.trim();
+                    const arrowMatch = filterText.match(/^(.+?)\s*→\s*(.+)$/);
+                    if (arrowMatch) {
+                        currentNovelTitle = arrowMatch[1].trim();
+                        const chapterPart = arrowMatch[2].trim();
+                        const chapterMatch = chapterPart.match(/^(.+?)(?::\s*(.+))?$/);
+                        if (chapterMatch) { currentChapter = { number: chapterMatch[1].trim(), title: chapterMatch[2] ? chapterMatch[2].trim() : '', description: '' }; }
+                        else { currentChapter = { number: chapterPart, title: '', description: '' }; }
+                    } else { currentNovelTitle = filterText; currentChapter = null; }
+                }
+
+                const attributePromises = data.attributes.map(async (attr) => {
+                    try {
+                        const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=100`);
+                        const dataRes = await fetch(dataUrl);
+                        if (dataRes.ok) {
+                            const dataData = await dataRes.json();
+                            if (dataData.ok && dataData.items) {
+                                let dataList = dataData.items.filter(item => item.data && item.data.text && item.data.text !== attr.text);
+                                if (currentNovelTitle && currentChapter) dataList = dataList.filter(item => (item.novel?.title === currentNovelTitle) && (item.chapter?.number === currentChapter.number));
+                                else if (currentNovelTitle) dataList = dataList.filter(item => (item.novel?.title === currentNovelTitle));
+                                else dataList = [];
+                                const filteredDataList = dataList.map(item => ({ ...item.data, attribute: item.attribute || item.data?.attribute || null }));
+                                return { ...attr, dataList: filteredDataList, dataCount: filteredDataList.length };
+                            }
+                        }
+                    } catch {}
+                    return { ...attr, dataList: [], dataCount: 0 };
+                });
+                const attributesWithData = await Promise.all(attributePromises);
+
+                let filteredAttributes = attributesWithData;
+                if ($attributeFilterInput && $attributeFilterInput.value.trim()) {
+                    const filterText = $attributeFilterInput.value.trim();
+                    const filterBits = calculateBitValues(filterText);
+                    if (filterBits.max && filterBits.min) {
+                        try {
+                            let searchResults = [];
+                            const searchText = filterText;
+                            const searchAttributeText = searchText.trim();
+                            if (searchAttributeText) {
+                                const attrBits = calculateBitValues(searchAttributeText);
+                                if (attrBits.max && attrBits.min) {
+                                    const sUrl = getServerUrl(`/api/attributes/data?bitMax=${attrBits.max}&bitMin=${attrBits.min}&limit=20&similarity=true&threshold=0.1`);
+                                    const sRes = await fetch(sUrl);
+                                    if (sRes.ok) {
+                                        const sd = await sRes.json();
+                                        if (sd.ok && sd.items) {
+                                            searchResults.push(...sd.items.map(item => ({ ...item, source: 'attribute_data', input: item.attribute?.text || searchAttributeText, response: item.data?.text || item.s || '', similarity: window.SearchAlgorithm.calculateAttributeSimilarity(searchAttributeText, attrBits.max, attrBits.min, item) })));
+                                        }
+                                    }
+                                }
+                            }
+                            const allAttrUrl = getServerUrl('/api/attributes/all');
+                            const allAttrRes = await fetch(allAttrUrl);
+                            if (allAttrRes.ok) {
+                                const allAttrData = await allAttrRes.json();
+                                if (allAttrData.ok && allAttrData.attributes && allAttrData.attributes.length > 0) {
+                                    const similarAttributes = window.SearchAlgorithm.findSimilarAttributes(searchText, filterBits.max, filterBits.min, allAttrData.attributes, 0.1, 10);
+                                    for (const similarAttr of similarAttributes) {
+                                        try {
+                                            const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${similarAttr.bitMax}&bitMin=${similarAttr.bitMin}&limit=5`);
+                                            const dataRes = await fetch(dataUrl);
+                                            if (dataRes.ok) {
+                                                const dataData = await dataRes.json();
+                                                if (dataData.ok && dataData.items) {
+                                                    searchResults.push(...dataData.items.map(item => ({ ...item, source: 'attribute_similar', input: item.attribute?.text || similarAttr.text, response: item.data?.text || item.s || '', similarity: similarAttr.similarity * 0.9 })));
+                                                }
+                                            }
+                                        } catch {}
+                                    }
+                                }
+                            }
+                            let finalResults = window.SearchAlgorithm.processSearchResults(searchResults, filterBits.max, filterBits.min, 50);
+                            if (searchText && searchText.trim()) {
+                                const searchTextTrimmed = searchText.trim();
+                                finalResults = finalResults.sort((a, b) => {
+                                    const aAttrText = (a.attribute?.text || a.input || '').trim();
+                                    const bAttrText = (b.attribute?.text || b.input || '').trim();
+                                    const aExactMatch = aAttrText === searchTextTrimmed || aAttrText.includes(searchTextTrimmed);
+                                    const bExactMatch = bAttrText === searchTextTrimmed || bAttrText.includes(searchTextTrimmed);
+                                    if (aExactMatch && !bExactMatch) return -1;
+                                    if (!aExactMatch && bExactMatch) return 1;
+                                    return (b.similarity || 0) - (a.similarity || 0);
+                                });
+                            }
+                            const attributeMap = new Map();
+                            finalResults.forEach(item => {
+                                const attrText = item.attribute?.text || item.input || '';
+                                const attrBitMax = item.attribute?.bitMax || null;
+                                const attrBitMin = item.attribute?.bitMin || null;
+                                if (attrText && attrBitMax !== null && attrBitMin !== null) {
+                                    const key = `${attrBitMax}_${attrBitMin}`;
+                                    if (!attributeMap.has(key)) {
+                                        const dataList = item.data?.text ? [{ text: item.data.text, bitMax: item.data.bitMax || item.bitMax || null, bitMin: item.data.bitMin || item.bitMin || null, attribute: item.attribute || item.data?.attribute || null }] : [];
+                                        attributeMap.set(key, { text: attrText, bitMax: attrBitMax, bitMin: attrBitMin, dataList, dataCount: dataList.length, similarity: item.similarity || 0 });
+                                    } else {
+                                        const existing = attributeMap.get(key);
+                                        if (item.data?.text) { existing.dataList.push({ text: item.data.text, bitMax: item.data.bitMax || item.bitMax || null, bitMin: item.data.bitMin || item.bitMin || null, attribute: item.attribute || item.data?.attribute || null }); existing.dataCount = existing.dataList.length; }
+                                    }
+                                }
+                            });
+                            const similarAttributePromises = Array.from(attributeMap.values()).map(async (attr) => {
+                                try {
+                                    const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=100`);
+                                    const dataRes = await fetch(dataUrl);
+                                    if (dataRes.ok) {
+                                        const dataData = await dataRes.json();
+                                        if (dataData.ok && dataData.items) {
+                                            let dataList = dataData.items.filter(item => item.data && item.data.text && item.data.text !== attr.text).map(item => ({ ...item.data, attribute: item.attribute || item.data?.attribute || null }));
+                                            return { ...attr, dataList, dataCount: dataList.length, similarity: attr.similarity };
+                                        }
+                                    }
+                                } catch {}
+                                return { ...attr, dataList: attr.dataList || [], dataCount: attr.dataList?.length || 0, similarity: attr.similarity };
+                            });
+                            const similarAttributesWithData = await Promise.all(similarAttributePromises);
+                            const finalResultsOrder = new Map();
+                            finalResults.forEach((item, idx) => {
+                                const attrText = item.attribute?.text || item.input || '';
+                                const attrBitMax = item.attribute?.bitMax || null;
+                                const attrBitMin = item.attribute?.bitMin || null;
+                                if (attrText && attrBitMax !== null && attrBitMin !== null) {
+                                    const key = `${attrBitMax}_${attrBitMin}`;
+                                    if (!finalResultsOrder.has(key)) finalResultsOrder.set(key, idx);
+                                }
+                            });
+                            filteredAttributes = similarAttributesWithData.sort((a, b) => {
+                                const keyA = `${a.bitMax}_${a.bitMin}`; const keyB = `${b.bitMax}_${b.bitMin}`;
+                                const orderA = finalResultsOrder.get(keyA) ?? 999999; const orderB = finalResultsOrder.get(keyB) ?? 999999;
+                                if (orderA !== orderB) return orderA - orderB;
+                                return (b.similarity || 0) - (a.similarity || 0);
+                            });
+                        } catch (e) { console.warn('속성 유사도 검색 오류:', e); filteredAttributes = attributesWithData; }
+                    } else { filteredAttributes = []; }
+                }
+
+                const searchFilterValue = $searchFilterInput ? $searchFilterInput.value.trim() : '';
+                let displayAttributes = filteredAttributes;
+                if (searchFilterValue) displayAttributes = filterAttributesByKeyword(filteredAttributes, searchFilterValue);
+
+                let html = '';
+                if (currentNovelTitle && currentChapter) html += `<div class="mb-2 p-2 bg-light rounded"><small class="text-muted">📖 ${escapeHtml(currentNovelTitle)} → ${escapeHtml(currentChapter.number || '챕터')}: ${escapeHtml(currentChapter.title || '제목 없음')}</small></div>`;
+                else if (currentNovelTitle) html += `<div class="mb-2 p-2 bg-light rounded"><small class="text-muted">📖 ${escapeHtml(currentNovelTitle)} (챕터 미선택)</small></div>`;
+                else html += `<div class="mb-2 p-2 bg-warning rounded"><small class="text-danger">⚠️ 소설 제목을 입력하고 챕터를 입력하세요.</small></div>`;
+                if (displayAttributes.length === 0) { html += `<div class="mb-2 p-2 bg-light rounded"><small class="text-muted">표시할 속성이 없습니다.</small></div>`; }
+
+                displayAttributes.forEach((attr) => {
+                    let attributeText = attr.text || '';
+                    const arrowParts = attributeText.split(' → ');
+                    if (arrowParts.length < 2) return;
+                    let filteredDataList = attr.dataList || [];
+                    if (searchFilterValue && searchFilterValue.trim()) filteredDataList = filterDataListByKeyword(filteredDataList, searchFilterValue, attributeText);
+                    const uniqueParts = []; const seenParts = new Set();
+                    for (let i=0;i<arrowParts.length;i++){ const currentPart = arrowParts[i].trim(); if (!seenParts.has(currentPart)) { uniqueParts.push(currentPart); seenParts.add(currentPart); } }
+                    const fullAttributeText = uniqueParts.join(' → ');
+                    html += `
+                        <div class="attribute-item" data-bit-max="${attr.bitMax}" data-bit-min="${attr.bitMin}" data-attribute-text="${escapeHtml(attr.text)}">
+                            <div class="attribute-header">
+                                <div style="text-align:left;"><span class="attribute-name">${escapeHtml(fullAttributeText)}</span></div>
+                                <div style="text-align:left; margin-top: 5px;"><small class="text-muted">BIT: ${attr.bitMax.toFixed(15)}, ${attr.bitMin.toFixed(15)} | 데이터 ${attr.dataCount}개</small></div>
+                            </div>
+                            <div class="data-list">
+                                ${filteredDataList.length > 0 ? filteredDataList.map((data, dataIdx) => {
+                                    const fullText = data.text || '';
+                                    const displayText = fullText.length > 150 ? fullText.substring(0, 150) + '...' : fullText;
+                                    const uniqueId = `data-${attr.bitMax}-${attr.bitMin}-${dataIdx}`;
+                                    const dataAttributeText = (typeof data.attribute === 'object' && data.attribute) ? (data.attribute.text || '') : (typeof data.attribute === 'string' ? data.attribute : '');
+                                    const dataAttributeHtml = dataAttributeText ? `<div class=\"small text-info mb-2\" style=\"background-color: #e7f3ff; padding: 5px; border-radius: 3px; margin-bottom: 8px;\"><strong>속성:</strong> ${escapeHtml(dataAttributeText)}</div>` : '';
+                                    return `
+                                        <div class="data-item">
+                                            ${dataAttributeHtml}
+                                            <strong style="word-break: break-word; display: block; margin-bottom: 8px;">${escapeHtml(displayText)}</strong>
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <small class="text-muted">BIT: ${data.bitMax.toFixed(15)}, ${data.bitMin.toFixed(15)}</small>
+                                                <div class="d-flex flex-column gap-1">
+                                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyDataTextFromHidden('${uniqueId}'); return false;" title="전체 텍스트 복사">📋 복사</button>
+                                                    <button class="btn btn-sm btn-outline-success input-data-btn" data-text="${escapeHtml(fullText).replace(/\"/g, '&quot;')}" title="분석 입력으로 보내기">↘ 입력</button>
+                                                    <button class="btn btn-sm btn-outline-primary edit-data-btn" data-attr-bit-max="${attr.bitMax}" data-attr-bit-min="${attr.bitMin}" data-bit-max="${data.bitMax}" data-bit-min="${data.bitMin}" data-text="${escapeHtml(fullText).replace(/\"/g, '&quot;')}" title="데이터 수정">✏️ 수정</button>
+                                                    <button class="btn btn-sm btn-outline-danger delete-data-btn" data-attr-bit-max="${attr.bitMax}" data-attr-bit-min="${attr.bitMin}" data-bit-max="${data.bitMax}" data-bit-min="${data.bitMin}" data-text="${escapeHtml(fullText).replace(/\"/g, '&quot;')}" title="데이터 삭제">🗑️ 삭제</button>
+                                                </div>
+                                            </div>
+                                            <input type="hidden" id="${uniqueId}" value="${escapeHtml(fullText).replace(/\"/g, '&quot;')}">
+                                        </div>`;
+                                }).join('') : '<div class="text-muted small">데이터가 없습니다.</div>'}
+                            </div>
+                        </div>`;
+                });
+
+                $attributesList.innerHTML = html;
+                $attributesList.querySelectorAll('.edit-data-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.preventDefault(); const abm = parseFloat(this.getAttribute('data-attr-bit-max')); const abn = parseFloat(this.getAttribute('data-attr-bit-min')); const dbm = parseFloat(this.getAttribute('data-bit-max')); const dbn = parseFloat(this.getAttribute('data-bit-min')); const t = this.getAttribute('data-text')||''; const tmp=document.createElement('div'); tmp.innerHTML = t.replace(/&quot;/g,'"'); const decoded = tmp.textContent||tmp.innerText||t; openEditDataModal(abm, abn, dbm, dbn, decoded); }); });
+                $attributesList.querySelectorAll('.delete-data-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.preventDefault(); const abm = this.getAttribute('data-attr-bit-max'); const abn = this.getAttribute('data-attr-bit-min'); const dbm = this.getAttribute('data-bit-max'); const dbn = this.getAttribute('data-bit-min'); const t = this.getAttribute('data-text')||''; deleteAttributeData(abm, abn, dbm, dbn, t); }); });
+                $attributesList.querySelectorAll('.input-data-btn').forEach(btn => { btn.addEventListener('click', function(e) { e.preventDefault(); try { const t = this.getAttribute('data-text')||''; const div=document.createElement('div'); div.innerHTML = t.replace(/&quot;/g,'"'); const decoded = div.textContent||div.innerText||t; if ($gptInput) { $gptInput.value = decoded; $gptInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); } if ($gptStatus) { $gptStatus.textContent = '✓ 데이터가 분석 입력란에 채워졌습니다.'; $gptStatus.style.color = '#28a745'; } } catch (err) { if ($gptStatus) { $gptStatus.textContent = '✗ 입력 실패'; $gptStatus.style.color = '#dc3545'; } } }); });
+                // 속성 아이템 클릭 시 자동 속성 입력 업데이트 (leaf만 추출)
+                $attributesList.querySelectorAll('.attribute-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        // 버튼 영역 클릭은 무시
+                        if (e.target && (e.target.closest('button'))) return;
+                        const fullText = item.getAttribute('data-attribute-text') || '';
+                        const parts = fullText.split(' → ').map(s => s.trim()).filter(Boolean);
+                        // 형식: 소설 → 챕터 → 속성 (3개 이상일 때 마지막 조각을 속성으로 사용)
+                        const leaf = parts.length >= 3 ? parts[parts.length - 1] : '';
+                        try { updateSelectedAttributeInput(leaf); } catch {}
+                    });
+                });
+            } catch (e) { $attributesList.innerHTML = `<div class=\"text-danger\">✗ 로드 실패: ${e.message}</div>`; }
+        }
+
+        // new4와 동일한 함수 이름 유지용 래퍼
+        function loadAttributes() { return loadAttributesFull(); }
+
+        function openEditDataModal(attrBitMax, attrBitMin, dataBitMax, dataBitMin, dataText) {
+            currentEditData = { attrBitMax: parseFloat(attrBitMax), attrBitMin: parseFloat(attrBitMin), dataBitMax: parseFloat(dataBitMax), dataBitMin: parseFloat(dataBitMin), originalText: dataText };
+            const attrItem = document.querySelector(`.attribute-item[data-bit-max="${attrBitMax}"][data-bit-min="${attrBitMin}"]`);
+            const attributeText = attrItem ? attrItem.getAttribute('data-attribute-text') : '속성 정보 없음';
+            $editModalAttributeName.textContent = attributeText;
+            $editModalAttributeMax.textContent = Number(attrBitMax).toFixed(15);
+            $editModalAttributeMin.textContent = Number(attrBitMin).toFixed(15);
+            $editModalDataBitMax.textContent = Number(dataBitMax).toFixed(15);
+            $editModalDataBitMin.textContent = Number(dataBitMin).toFixed(15);
+            $editDataInput.value = dataText;
+            $editDataMax.textContent = '-';
+            $editDataMin.textContent = '-';
+            $updateDataStatus.textContent = '';
+            editDataModal.show();
+        }
+
+        if ($editDataInput) $editDataInput.addEventListener('input', (e) => { const text = e.target.value.trim(); if (text) { const { max, min } = calculateBitValues(text); $editDataMax.textContent = max!=null? max.toFixed(15):'-'; $editDataMin.textContent = min!=null? min.toFixed(15):'-'; } else { $editDataMax.textContent='-'; $editDataMin.textContent='-'; } });
+
+        if ($updateDataBtn) $updateDataBtn.addEventListener('click', async () => {
+            if (!currentEditData) { $updateDataStatus.textContent = '✗ 수정할 데이터 정보가 없습니다.'; $updateDataStatus.style.color = '#dc3545'; return; }
+            const dataText = $editDataInput.value.trim();
+            if (!dataText) { $updateDataStatus.textContent = '✗ 데이터를 입력하세요.'; $updateDataStatus.style.color = '#dc3545'; return; }
+            const novelTitle = $novelTitle.value.trim();
+            const currentChapter = currentChapterIdx !== null && chapters[currentChapterIdx] ? chapters[currentChapterIdx] : null;
+            if (!novelTitle) { $updateDataStatus.textContent = '✗ 소설 제목을 입력하세요.'; $updateDataStatus.style.color = '#dc3545'; return; }
+            if (!currentChapter) { $updateDataStatus.textContent = '✗ 챕터를 선택하세요.'; $updateDataStatus.style.color = '#dc3545'; return; }
+            const { max: newDataBitMax, min: newDataBitMin } = calculateBitValues(dataText);
+            if (newDataBitMax === null || newDataBitMin === null) { $updateDataStatus.textContent = '✗ BIT 값 계산 실패.'; $updateDataStatus.style.color = '#dc3545'; return; }
+            try {
+                $updateDataBtn.disabled = true; $updateDataStatus.textContent = '수정 중...'; $updateDataStatus.style.color = '#007bff';
+                const deleteUrl = getServerUrl('/api/attributes/data/delete');
+                const delRes = await fetch(deleteUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attributeBitMax: currentEditData.attrBitMax, attributeBitMin: currentEditData.attrBitMin, dataBitMax: currentEditData.dataBitMax, dataBitMin: currentEditData.dataBitMin }) });
+                if (!delRes.ok) { const raw = await delRes.text().catch(()=>`HTTP ${delRes.status}`); throw new Error(`삭제 실패: ${raw}`); }
+                const chapterText = `${currentChapter.number || ''} ${currentChapter.title || ''}`.trim();
+                const chapterBits = calculateBitValues(chapterText);
+                const combinedAttributeText = `${novelTitle} → ${currentChapter.number || ''}${currentChapter.title?`: ${currentChapter.title}`:''} → ${($editModalAttributeName.textContent||'').trim()}`;
+                const combinedAttrBits = calculateBitValues(combinedAttributeText);
+                const saveUrl = getServerUrl('/api/attributes/data');
+                const saveRes = await fetch(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attributeBitMax: combinedAttrBits.max, attributeBitMin: combinedAttrBits.min, attributeText: combinedAttributeText, text: dataText, dataBitMax: newDataBitMax, dataBitMin: newDataBitMin, novelTitle, chapter: currentChapter, chapterBitMax: chapterBits.max, chapterBitMin: chapterBits.min }) });
+                if (!saveRes.ok) { const raw = await saveRes.text().catch(()=>`HTTP ${saveRes.status}`); throw new Error(`저장 실패: ${raw}`); }
+                const d = await saveRes.json().catch(()=>({ ok: true }));
+                if (!d.ok) throw new Error(d.error || '저장 실패');
+                $updateDataStatus.textContent = '✓ 수정 완료'; $updateDataStatus.style.color = '#28a745';
+                editDataModal.hide();
+                loadAttributes();
+            } catch (e) { console.error('데이터 수정 오류:', e); $updateDataStatus.textContent = `✗ ${e.message || '수정 실패'}`; $updateDataStatus.style.color = '#dc3545'; }
+            finally { $updateDataBtn.disabled = false; }
+        });
+
+        // 저장된 속성 데이터 전체 수집 → GPT 입력 채우기 (요약)
+        async function collectAllAttributesDataToInput() {
+            const originalBtnText = $collectAllDataBtn ? $collectAllDataBtn.textContent : '';
+            try {
+                if ($collectAllDataBtn) { $collectAllDataBtn.disabled = true; $collectAllDataBtn.textContent = '⏳ 요약 중...'; }
+                if ($gptStatus) { $gptStatus.textContent = '목록 데이터를 수집하고 요약 중...'; $gptStatus.style.color = '#007bff'; }
+                const novelTitle = $novelTitle ? ($novelTitle.value || '').trim() : '';
+                const currentChapter = (currentChapterIdx !== null && chapters[currentChapterIdx]) ? chapters[currentChapterIdx] : null;
+                if (!novelTitle || !currentChapter) { if ($gptStatus) { $gptStatus.textContent = '✗ 소설 제목과 챕터를 먼저 선택하세요.'; $gptStatus.style.color = '#dc3545'; } return; }
+                if (!$attributesList) return;
+                const attributeItems = $attributesList.querySelectorAll('.attribute-item');
+                if (attributeItems.length === 0) { alert('수집할 항목이 없습니다. 목록을 먼저 불러오세요.'); return; }
+                let outputParts = [];
+                attributeItems.forEach(attrItem => {
+                    const dataItems = attrItem.querySelectorAll('.data-item');
+                    if (!dataItems || dataItems.length === 0) return;
+                    const attrText = (attrItem.getAttribute('data-attribute-text') || (attrItem.querySelector('.attribute-name')?.textContent || '')).trim();
+                    if (attrText) outputParts.push(`속성: ${attrText}`);
+                    dataItems.forEach(di => {
+                        let fullText = '';
+                        const hidden = di.querySelector('input[type="hidden"]');
+                        if (hidden && hidden.value) fullText = hidden.value.replace(/&quot;/g,'"');
+                        else { const editBtn = di.querySelector('.edit-data-btn'); if (editBtn) fullText = (editBtn.getAttribute('data-text')||'').replace(/&quot;/g,'"'); }
+                        fullText = (fullText||'').trim();
+                        if (fullText) outputParts.push(`- ${fullText}`);
+                    });
+                    outputParts.push('');
+                });
+                const collected = outputParts.join('\n').trim();
+                if (!collected) { alert('수집할 데이터가 없습니다.'); return; }
+                const chapterDisplay = `${currentChapter.number || ''}${currentChapter.title ? `: ${currentChapter.title}` : ''}`;
+                const systemMessage = '당신은 소설 구성 데이터를 정밀하게 통합·요약하는 전문가입니다.';
+                const userPrompt = `아래는 속성별로 모아 둔 원본 데이터입니다. 이를 바탕으로 요약 정리본을 작성해주세요.\n\n소설: ${novelTitle} | 챕터: ${chapterDisplay}\n\n[원본 데이터]\n${collected}`;
+                if (typeof updatePromptLog2 === 'function') { const loggedPrompt = userPrompt.replace(/\[원본 데이터\][\s\S]*/m, '[원본 데이터]\n(데이터 제외)'); updatePromptLog2(systemMessage, loggedPrompt); }
+                const gUrl = getServerUrl('/api/gpt/chat');
+                const gRes = await fetch(gUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: userPrompt, systemMessage, model: 'gpt-4o-mini', temperature: 0.2, maxTokens: 1400 }) });
+                if (!gRes.ok) { const raw = await gRes.text().catch(()=> ''); throw new Error(raw || `HTTP ${gRes.status}`); }
+                const gData = await gRes.json();
+                if (!gData.ok || !gData.response) { throw new Error(gData.error || '요약 생성 실패'); }
+                const summaryText = (gData.response || '').trim();
+                if ($gptInput) { $gptInput.value = summaryText; $gptInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                if ($gptStatus) { $gptStatus.textContent = '✓ GPT 요약 완료'; $gptStatus.style.color = '#28a745'; }
+            } catch (e) { console.error('데이터 수집/요약 오류:', e); if ($gptStatus) { $gptStatus.textContent = `✗ 요약 실패: ${e.message}`; $gptStatus.style.color = '#dc3545'; } }
+            finally { if ($collectAllDataBtn) { $collectAllDataBtn.disabled = false; $collectAllDataBtn.textContent = originalBtnText || '📥 분석 입력'; } }
+        }
+
+        // 이벤트 바인딩 (new4 포팅분)
+        if ($analyzeBtn1) $analyzeBtn1.addEventListener('click', ()=>{ analyzeWithGPT(($gptPrompt1 && $gptPrompt1.value)||null); });
+        if ($analyzeBtn2) $analyzeBtn2.addEventListener('click', ()=>{ analyzeWithGPT2(); });
+        if ($refreshBtn) $refreshBtn.addEventListener('click', ()=>{ loadAttributes(); });
+        if ($collectAllDataBtn) $collectAllDataBtn.addEventListener('click', ()=>{ collectAllAttributesDataToInput(); });
+        if ($attributeFilterInput) {
+            let t=null;
+            $attributeFilterInput.addEventListener('input', ()=>{
+                // 저장 및 동기화
+                syncAttributeFilterToSearchFilter();
+                saveSearchSettingsToStorage();
+                if (t) clearTimeout(t);
+                t=setTimeout(()=>{ loadAttributes(); }, 400);
+            });
+        }
+        if ($additionalSearchInput) {
+            let t=null;
+            $additionalSearchInput.addEventListener('input', ()=>{
+                saveSearchSettingsToStorage();
+                if ($attributeFilterInput && $attributeFilterInput.value.trim()) {
+                    if (t) clearTimeout(t);
+                    t=setTimeout(()=>{ loadAttributes(); }, 500);
+                }
+            });
+        }
+        if ($searchFilterInput) {
+            let t=null;
+            $searchFilterInput.addEventListener('input', ()=>{
+                // 양방향 동기화: 검색 결과 필터 → 속성 필터
+                if ($attributeFilterInput) {
+                    $attributeFilterInput.value = $searchFilterInput.value.trim();
+                }
+                saveSearchSettingsToStorage();
+                if (t) clearTimeout(t);
+                t=setTimeout(()=>{ loadAttributes(); }, 300);
+            });
+        }
+        if ($resetAllBtn) $resetAllBtn.addEventListener('click', async ()=>{ if (!confirm('속성 관련 로컬 설정을 초기화할까요? (서버 데이터는 유지)')) return; try { localStorage.removeItem('novel_composition_new2_attribute_filter'); localStorage.removeItem('novel_composition_new2_additional_search'); localStorage.removeItem('novel_composition_new2_search_filter'); addLog('info','로컬 속성 설정 초기화 완료'); } catch {} });
+
+        // 소설 구성 트리 렌더링 (좌측 패널)
+        async function renderNovelStructure() {
+            const treeEl = $novelStructureTree;
+            if (!treeEl) return;
+            
+            const novelTitle = ($novelTitle && $novelTitle.value || '').trim();
+            if (!novelTitle) {
+                treeEl.innerHTML = '<div class="text-muted text-center">소설 제목을 입력하세요</div>';
+                return;
+            }
+            
+            treeEl.innerHTML = '<div class="text-muted text-center">로딩 중...</div>';
+            
+            try {
+                // 모든 속성 조회
+                const allAttrUrl = getServerUrl('/api/attributes/all');
+                const allAttrRes = await fetch(allAttrUrl);
+                if (!allAttrRes.ok) throw new Error(`HTTP ${allAttrRes.status}`);
+                const allAttrData = await allAttrRes.json();
+                
+                if (!allAttrData.ok || !allAttrData.attributes) {
+                    treeEl.innerHTML = '<div class="text-muted text-center">저장된 속성이 없습니다.</div>';
+                    return;
+                }
+                
+                // 소설 제목으로 필터링
+                const novelAttributes = allAttrData.attributes.filter(attr => {
+                    const attrText = (attr.text || '').trim();
+                    return attrText.startsWith(novelTitle + ' → ');
+                });
+                
+                // 챕터별로 그룹화
+                const chapterMap = new Map();
+                novelAttributes.forEach(attr => {
+                    const attrText = attr.text.trim();
+                    const parts = attrText.split(' → ');
+                    if (parts.length >= 2) {
+                        const chapterKey = parts[1]; // "챕터 1: 제1장" 형식
+                        if (!chapterMap.has(chapterKey)) {
+                            chapterMap.set(chapterKey, []);
+                        }
+                        chapterMap.get(chapterKey).push(attr);
+                    }
+                });
+                
+                // 트리 구조 생성
+                let html = `<div class="novel-structure-root mb-2" style="font-weight: bold; color: var(--primary);">
+                    <span>📖 ${escapeHtml(novelTitle)}</span>
+                    <span class="badge bg-secondary ms-2">${chapterMap.size}개 챕터</span>
+                </div>`;
+                
+                // 챕터 순서대로 정렬
+                const sortedChapters = Array.from(chapterMap.entries()).sort((a, b) => {
+                    const numA = (a[0].match(/(\d+)/) || [])[1] || '0';
+                    const numB = (b[0].match(/(\d+)/) || [])[1] || '0';
+                    return parseInt(numA) - parseInt(numB);
+                });
+                
+                sortedChapters.forEach(([chapterKey, attrs]) => {
+                    const chapterDisplay = chapterKey;
+                    html += `<div class="novel-structure-chapter mb-2" style="margin-left: 20px; padding: 8px; background: rgba(124, 92, 255, 0.1); border-radius: 6px;">
+                        <div style="font-weight: 600; color: var(--text); margin-bottom: 4px;">
+                            📄 ${escapeHtml(chapterDisplay)}
+                            <span class="badge bg-info ms-2">${attrs.length}개 속성</span>
+                        </div>`;
+                    
+                    // 속성별로 그룹화 및 데이터 조회
+                    attrs.forEach(async (attr, attrIdx) => {
+                        const attrName = attr.text.split(' → ').pop() || '';
+                        html += `<div class="novel-structure-attribute mb-1" style="margin-left: 20px; padding: 6px; background: rgba(255, 255, 255, 0.03); border-radius: 4px;">
+                            <div style="font-size: 0.85em; color: var(--muted);">
+                                • ${escapeHtml(attrName)}
+                                <span class="badge bg-secondary ms-1" style="font-size: 0.75em;">BIT: ${attr.bitMax?.toFixed(2)}/${attr.bitMin?.toFixed(2)}</span>
+                            </div>`;
+                        
+                        // 데이터 개수 표시 (비동기 조회)
+                        try {
+                            const dataUrl = getServerUrl(`/api/attributes/data?bitMax=${attr.bitMax}&bitMin=${attr.bitMin}&limit=10`);
+                            const dataRes = await fetch(dataUrl);
+                            if (dataRes.ok) {
+                                const dataData = await dataRes.json();
+                                if (dataData.ok && dataData.items) {
+                                    const dataCount = dataData.items.filter(item => {
+                                        const itemNovel = item.novel?.title || '';
+                                        const itemChapter = item.chapter?.number || '';
+                                        return itemNovel === novelTitle && itemChapter === chapterKey.split(':')[0].trim();
+                                    }).length;
+                                    if (dataCount > 0) {
+                                        html += `<div style="margin-left: 15px; font-size: 0.8em; color: var(--muted);">
+                                            <small>└─ ${dataCount}개 데이터</small>
+                                        </div>`;
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('데이터 조회 실패:', e);
+                        }
+                        
+                        html += `</div>`;
+                    });
+                    
+                    html += `</div>`;
+                });
+                
+                if (chapterMap.size === 0) {
+                    html = `<div class="text-muted text-center">저장된 챕터 구성이 없습니다.</div>`;
+                }
+                
+                treeEl.innerHTML = html;
+                
+                // 클릭 이벤트: 챕터 선택
+                treeEl.querySelectorAll('.novel-structure-chapter').forEach((el, idx) => {
+                    el.style.cursor = 'pointer';
+                    el.addEventListener('click', () => {
+                        const chapterText = el.querySelector('div').textContent.replace(/📄|[\d개속성]/g, '').trim();
+                        // 챕터 찾아서 선택
+                        const chapterIdx = chapters.findIndex(ch => {
+                            const chDisplay = `${ch.number || ''}${ch.title ? `: ${ch.title}` : ''}`.trim();
+                            return chDisplay === chapterText || chapterText.includes(chDisplay) || chDisplay.includes(chapterText);
+                        });
+                        if (chapterIdx >= 0) {
+                            selectChapter(chapterIdx);
+                        }
+                    });
+                });
+                
+            } catch (e) {
+                console.error('소설 구성 트리 렌더링 오류:', e);
+                treeEl.innerHTML = `<div class="text-danger text-center">오류: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function renderChapters() {
+            const listEl = $chaptersList; if (!listEl) return;
+            const filterText = ($chapterSearchInput && $chapterSearchInput.value || '').trim().toLowerCase();
+            const filterBits = calculateBitValues(filterText);
+            const matches = (ch) => {
+                if (!filterText) return true;
+                const num = (ch.number || '').toString().toLowerCase();
+                const title = (ch.title || '').toString().toLowerCase();
+                const desc = (ch.description || '').toString().toLowerCase();
+                const digits = (s) => { const m = s.match(/(\d{1,6})/); return m ? m[1] : ''; };
+                const fDigits = digits(filterText);
+                if (fDigits && (digits(num) === fDigits || digits(title) === fDigits)) return true;
+                return num.includes(filterText) || title.includes(filterText) || desc.includes(filterText);
+            };
+
+            let html = '';
+            chapters.forEach((ch, idx) => {
+                if (!matches(ch)) return;
+                const chText = `${ch.number || ''} ${ch.title || ''}`.trim();
+                const bits = calculateBitValues(chText);
+                const sim = (filterText && bits && filterBits && isFinite(bits.max) && isFinite(bits.min)) ? calculateBitPairSimilarity(filterBits, bits) : 0;
+                const simBadge = filterText ? `<span class="badge ${sim >= 0.9 ? 'bg-success' : sim >= 0.7 ? 'bg-warning' : 'bg-info'} ms-2">유사도 ${(sim*100).toFixed(1)}%</span>` : '';
+                const isSelected = (currentChapterIdx !== null && currentChapterIdx !== undefined && currentChapterIdx === idx);
+
+                html += `
+                <div class="d-flex align-items-center mb-2 p-2 chapter-item ${isSelected ? 'bg-primary text-white' : ''}" data-idx="${idx}">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${escapeHtml(ch.number || `챕터 ${idx+1}`)}: ${escapeHtml(ch.title || '(제목 없음)')} ${simBadge}</div>
+                        ${ch.description ? `<div class="small ${isSelected ? 'text-white-50' : 'text-muted'} mt-1">${escapeHtml(stripSectionLabels(ch.description))}</div>` : ''}
+                        ${ch.published ? `<div class="small mt-1 ${isSelected ? 'text-warning' : 'text-warning'}"><strong>📢 게시됨</strong>${ch.publishedAt ? ` · ${escapeHtml(new Date(ch.publishedAt).toLocaleString())}` : ''}</div>` : ''}
+                        ${isSelected ? '<div class="small mt-1" style="font-weight: bold;"><strong>✓ 현재 작업 중인 챕터</strong></div>' : ''}
+                    </div>
+                    <div class="ms-2 d-flex flex-column gap-1">
+                        <button class="btn btn-sm btn-outline-secondary copy-chapter-btn" data-idx="${idx}" title="챕터 텍스트 복사">📋 복사</button>
+                        <button class="btn btn-sm btn-outline-success input-chapter-btn" data-idx="${idx}" title="분석 입력으로 보내기">↘ 입력</button>
+                        <button class="btn btn-sm ${isSelected ? 'btn-light' : 'btn-outline-primary'} select-chapter-btn" data-idx="${idx}">${isSelected ? '✓ 선택됨' : '선택'}</button>
+                        <button class="btn btn-sm btn-outline-primary" data-action="edit" data-idx="${idx}">✏️ 편집</button>
+                        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-idx="${idx}">🗑️ 삭제</button>
+                    </div>
+                </div>`;
+            });
+            if (!html) html = '<div class="text-muted text-center">표시할 챕터가 없습니다.</div>';
+            listEl.innerHTML = html;
+
+            // 이벤트 위임
+            listEl.querySelectorAll('[data-action="edit"]').forEach(btn => btn.addEventListener('click', onEditChapter));
+            listEl.querySelectorAll('[data-action="delete"]').forEach(btn => btn.addEventListener('click', onDeleteChapter));
+            listEl.querySelectorAll('.chapter-item').forEach(div => div.addEventListener('click', (e) => { if (e.target.closest('button')) return; const idx = parseInt(div.getAttribute('data-idx')); selectChapter(idx); }));
+
+            // 챕터 복사 버튼
+            listEl.querySelectorAll('.copy-chapter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const i = parseInt(btn.getAttribute('data-idx'));
+                    if (!isNaN(i) && i >= 0 && i < chapters.length) {
+                        const ch = chapters[i];
+                        const text = `${ch.number || ''} ${ch.title || ''}\n${ch.description || ''}`.trim();
+                        navigator.clipboard.writeText(text).catch(() => {});
+                    }
+                });
+            });
+
+            // 챕터 분석 입력 버튼
+            listEl.querySelectorAll('.input-chapter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const i = parseInt(btn.getAttribute('data-idx'));
+                    if (!isNaN(i) && i >= 0 && i < chapters.length) {
+                        const ch = chapters[i];
+                        const title = ($novelTitle && $novelTitle.value.trim()) || '';
+                        const chapterLine = `${ch.number || ''}${ch.title ? `: ${ch.title}` : ''}`.trim();
+                        const payload = [
+                            title ? `소설: ${title}` : '',
+                            chapterLine ? `챕터: ${chapterLine}` : '',
+                            ch.description ? `설명: ${ch.description}` : ''
+                        ].filter(Boolean).join('\n');
+                        if ($gptInput) {
+                            $gptInput.value = payload;
+                            $gptInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                        if ($gptStatus) {
+                            $gptStatus.textContent = '✓ 챕터 정보가 분석 입력란에 채워졌습니다.';
+                            $gptStatus.style.color = '#28a745';
+                        }
+                    }
+                });
+            });
+
+            // 챕터 선택 버튼
+            listEl.querySelectorAll('.select-chapter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const i = parseInt(btn.getAttribute('data-idx'));
+                    if (!isNaN(i)) selectChapter(i);
+                });
+            });
+        }
+
+        // 챕터 조작
+        function selectChapter(idx) {
+            if (idx < 0 || idx >= chapters.length) return;
+            currentChapterIdx = idx;
+            renderChapters();
+            renderNovelStructure(); // 트리 구조 업데이트
+            saveAll();
+            // 선택된 챕터를 속성 필터에 반영
+            try {
+                const novel = ($novelTitle && $novelTitle.value || '').trim();
+                const ch = chapters[idx] || {};
+                const chapterDisplay = `${ch.number || ''}${ch.title ? `: ${ch.title}` : ''}`.trim();
+                if ($attributeFilterInput) {
+                    $attributeFilterInput.value = novel ? (chapterDisplay ? `${novel} → ${chapterDisplay}` : novel) : chapterDisplay;
+                    if (typeof syncAttributeFilterToSearchFilter === 'function') syncAttributeFilterToSearchFilter();
+                    if (typeof saveSearchSettingsToStorage === 'function') saveSearchSettingsToStorage();
+                }
+                if (typeof loadAttributes === 'function') loadAttributes();
+            } catch {}
+        }
+        function onEditChapter(e) { const idx = parseInt(e.currentTarget.getAttribute('data-idx')); openEdit(idx); }
+        function onDeleteChapter(e) { const idx = parseInt(e.currentTarget.getAttribute('data-idx')); if (isNaN(idx)) return; if (!confirm('삭제하시겠습니까?')) return; chapters.splice(idx,1); if (currentChapterIdx === idx) currentChapterIdx = null; else if (currentChapterIdx > idx) currentChapterIdx--; renderChapters(); saveAll(); }
+
+        function openAdd() {
+            const next = computeNextChapterDefaults();
+            $chapterModalTitle.textContent = '챕터 추가';
+            $chapterNumberInput.value = next.number;
+            $chapterTitleInput.value = next.title;
+            $chapterDescriptionInput.value = '';
+            $chapterModalStatus.textContent = '';
+            editingChapterIdx = null;
+            chapterModal.show();
+        }
+        function openEdit(idx) {
+            if (idx < 0 || idx >= chapters.length) return;
+            const ch = chapters[idx];
+            $chapterModalTitle.textContent = '챕터 편집';
+            $chapterNumberInput.value = ch.number || '';
+            $chapterTitleInput.value = ch.title || '';
+            $chapterDescriptionInput.value = ch.description || '';
+            $chapterModalStatus.textContent = '';
+            editingChapterIdx = idx;
+            chapterModal.show();
+        }
+
+        let editingChapterIdx = null;
+        function saveChapterFromModal() {
+            const number = $chapterNumberInput.value.trim();
+            const title = $chapterTitleInput.value.trim();
+            const description = $chapterDescriptionInput.value.trim();
+            if (!number) { $chapterModalStatus.textContent = '번호를 입력하세요.'; return; }
+            if (!title) { $chapterModalStatus.textContent = '제목을 입력하세요.'; return; }
+            const data = { number, title, description };
+            if (editingChapterIdx !== null) {
+                const prev = chapters[editingChapterIdx] || {};
+                chapters[editingChapterIdx] = { ...prev, ...data };
+            } else {
+                chapters.push({ ...data, analysisText: '', published: false, publishedAt: '' });
+            }
+            chapterModal.hide();
+            renderChapters();
+            saveAll();
+        }
+
+        // 저장 모음
+        function saveAll() { const title = getTitle(); if (title) { setActiveTitle(title); persistMapForTitle(title); } }
+
+        // 이벤트 바인딩
+        $addChapterBtn.addEventListener('click', openAdd);
+        $chapterModalSaveBtn.addEventListener('click', saveChapterFromModal);
+        $saveAllBtn.addEventListener('click', saveAll);
+        $quickSaveBtn.addEventListener('click', saveAll);
+        $newTitleBtn.addEventListener('click', () => { const name = prompt('새 제목 입력'); if (!name) return; $novelTitle.value = name; setActiveTitle(name); addTitleToList(name); chapters = []; currentChapterIdx = null; renderChapters(); saveAll(); if ($attributeFilterInput) { $attributeFilterInput.value = ($novelTitle.value||'').trim(); syncAttributeFilterToSearchFilter(); saveSearchSettingsToStorage(); } loadAttributes(); });
+        $deleteTitleBtn.addEventListener('click', async () => {
+            const title = getTitle(); if (!title) return;
+            if (!confirm(`제목 "${title}"의 구성을 삭제하시겠습니까?`)) return;
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            delete map[normalizeTitleKey(title)]; localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(map));
+            // 목록에서도 제거
+            const list = getSavedTitleList(); const i = list.findIndex(t => normalizeTitleKey(t) === normalizeTitleKey(title)); if (i >= 0) { list.splice(i,1); saveTitleList(list); renderTitleDatalist(); }
+            // 서버에서도 삭제 시도
+            await apiDeleteChaptersByTitle(title).catch(() => {});
+            chapters = []; currentChapterIdx = null; renderChapters();
+        });
+        if ($chapterSearchInput) {
+            try { const saved = localStorage.getItem(STORAGE_KEY_FILTER); if (saved) $chapterSearchInput.value = saved; } catch {}
+            let timer = null; $chapterSearchInput.addEventListener('input', () => { try { localStorage.setItem(STORAGE_KEY_FILTER, $chapterSearchInput.value); } catch {}; if (timer) clearTimeout(timer); timer = setTimeout(renderChapters, 150); });
+        }
+        $novelTitle.addEventListener('change', async () => { const prev = getActiveTitle(); if (prev) persistMapForTitle(prev); const t = getTitle(); setActiveTitle(t); addTitleToList(t); const entry = await loadMapForTitleOrApi(t); if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; } else { chapters=[]; currentChapterIdx=null; } renderChapters(); renderNovelStructure(); if ($attributeFilterInput) { $attributeFilterInput.value = ($novelTitle.value||'').trim(); syncAttributeFilterToSearchFilter(); saveSearchSettingsToStorage(); } loadAttributes(); });
+        $novelTitle.addEventListener('input', async () => { const value = $novelTitle.value.trim(); const list = getSavedTitleList(); const isKnown = list.some(t => normalizeTitleKey(t) === normalizeTitleKey(value)); if (isKnown) { const prev = getActiveTitle(); if (prev) persistMapForTitle(prev); setActiveTitle(value); const entry = await loadMapForTitleOrApi(value); if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; } else { chapters=[]; currentChapterIdx=null; } renderChapters(); renderNovelStructure(); if ($attributeFilterInput) { $attributeFilterInput.value = ($novelTitle.value||'').trim(); syncAttributeFilterToSearchFilter(); saveSearchSettingsToStorage(); } loadAttributes(); } else { renderNovelStructure(); } });
+        if ($refreshStructureBtn) $refreshStructureBtn.addEventListener('click', () => { renderNovelStructure(); });
+
+        // 초기화
+        (async function init() {
+            renderTitleDatalist();
+            // 검색 입력 초기화 및 기본값 적용
+            loadSearchSettingsFromStorage();
+            const savedActive = getActiveTitle();
+            if (savedActive) $novelTitle.value = savedActive; else if ($novelTitle.value.trim()) setActiveTitle($novelTitle.value.trim());
+            const entry = await loadMapForTitleOrApi(getTitle());
+            if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; }
+            renderChapters();
+            renderNovelStructure();
+            // 속성 목록 초기 로드
+            if ($attributeFilterInput && !$attributeFilterInput.value.trim() && $novelTitle && $novelTitle.value.trim()) {
+                $attributeFilterInput.value = $novelTitle.value.trim();
+                syncAttributeFilterToSearchFilter();
+                saveSearchSettingsToStorage();
+            }
+            loadAttributes();
+        })();
+    </script>
+</body>
+</html>
+
+

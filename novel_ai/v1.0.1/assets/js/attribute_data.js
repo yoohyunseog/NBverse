@@ -641,7 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (fullAttributeText) {
                     const bits = calculateBitValues(fullAttributeText);
-                    if (bits.max !== null && bits.min !== null) {
+                    if (bits.max !== null && bits.max !== undefined && bits.min !== null && bits.min !== undefined) {
                         $attributeBitInfo.textContent = `BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}`;
                     } else {
                         $attributeBitInfo.textContent = 'BIT: 계산 중...';
@@ -908,7 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (attributeValue) {
                     const fullAttributeText = `${novelTitle} → ${attributeValue}`;
                     const attributeBits = calculateBitValues(fullAttributeText);
-                    if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
+                    if (attributeBits.max !== null && attributeBits.max !== undefined && attributeBits.min !== null && attributeBits.min !== undefined && $attributeBitInfo) {
                         $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                     }
                 }
@@ -936,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // BIT 값 재계산 및 표시 (일관성 있게 처리)
             const fullAttributeText = `${novelTitle} → ${chapterFullTitle}`;
             const attributeBits = calculateBitValues(fullAttributeText);
-            if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
+            if (attributeBits.max !== null && attributeBits.max !== undefined && attributeBits.min !== null && attributeBits.min !== undefined && $attributeBitInfo) {
                 $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
             }
             
@@ -1174,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // BIT 값 재계산 및 표시 (일관성 있게 처리)
                         const fullAttributeText = `${novelTitle} → ${finalValue}`;
                         const attributeBits = calculateBitValues(fullAttributeText);
-                        if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
+                        if (attributeBits.max !== null && attributeBits.max !== undefined && attributeBits.min !== null && attributeBits.min !== undefined && $attributeBitInfo) {
                             $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                         }
                         
@@ -1247,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // BIT 값 재계산 및 표시 (일관성 있게 처리)
                                 const fullAttributeText = `${novelTitle} → ${sceneText}`;
                                 const attributeBits = calculateBitValues(fullAttributeText);
-                                if (attributeBits.max !== null && attributeBits.min !== null && $attributeBitInfo) {
+                                if (attributeBits.max !== null && attributeBits.max !== undefined && attributeBits.min !== null && attributeBits.min !== undefined && $attributeBitInfo) {
                                     $attributeBitInfo.textContent = `BIT: ${attributeBits.max.toFixed(15)}, ${attributeBits.min.toFixed(15)}`;
                                 }
                                 
@@ -1647,7 +1647,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const text = $dataInput.value.trim();
                 if (text) {
                     const bits = calculateBitValues(text);
-                    if (bits.max !== null && bits.min !== null) {
+                    if (bits.max !== null && bits.max !== undefined && bits.min !== null && bits.min !== undefined) {
                         $dataBitInfo.textContent = `BIT: ${bits.max.toFixed(15)}, ${bits.min.toFixed(15)}`;
                     } else {
                         $dataBitInfo.textContent = 'BIT: 계산 중...';
@@ -1775,7 +1775,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <button class="btn-icon btn-delete" onclick="event.stopPropagation(); deleteNovel('${escapeHtml(novel.title)}', '${novel.bitMax}', '${novel.bitMin}')" title="소설 삭제">🗑️</button>
                             </div>
                         </div>
-                        <div class="attribute-bit">BIT: ${novel.bitMax !== undefined ? novel.bitMax.toFixed(15) : '-'}, ${novel.bitMin !== undefined ? novel.bitMin.toFixed(15) : '-'} | 데이터 ${novel.dataCount}개</div>
+                        <div class="attribute-bit">BIT: ${novel.bitMax !== undefined && novel.bitMax !== null ? novel.bitMax.toFixed(15) : '-'}, ${novel.bitMin !== undefined && novel.bitMin !== null ? novel.bitMin.toFixed(15) : '-'} | 데이터 ${novel.dataCount}개</div>
                     </div>
                 `;
             });
@@ -2318,7 +2318,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div class="data-text" data-text-id="${uniqueDataId}" onclick="event.stopPropagation(); const textId = this.getAttribute('data-text-id'); if (textId && window.dataTextStorage && window.dataTextStorage[textId]) { window.showDataModal(window.dataTextStorage[textId]); }" style="cursor: pointer; flex: 1; padding: 5px; border-radius: 3px; transition: background 0.2s;" onmouseover="this.style.background='rgba(124, 92, 255, 0.1)'" onmouseout="this.style.background='transparent'" title="클릭하여 전체 내용 보기">${escapeHtml(displayText)}</div>
                                         <button class="btn-icon btn-delete" onclick="event.stopPropagation(); deleteDataItem('${attr.bitMax}', '${attr.bitMin}', '${itemBits.max}', '${itemBits.min}', '${textEscaped}')" title="삭제">🗑️</button>
                                     </div>
-                                    <div class="data-bit">BIT: ${itemBits.max !== undefined ? itemBits.max.toFixed(15) : '-'}, ${itemBits.min !== undefined ? itemBits.min.toFixed(15) : '-'}</div>
+                                    <div class="data-bit">BIT: ${itemBits.max !== undefined && itemBits.max !== null ? itemBits.max.toFixed(15) : '-'}, ${itemBits.min !== undefined && itemBits.min !== null ? itemBits.min.toFixed(15) : '-'}</div>
                                     <button class="btn btn-sm btn-outline-success mt-2" onclick="event.stopPropagation(); copyToClipboard('${textEscaped}')">📋 복사</button>
                                 </div>
                             `;
@@ -2335,7 +2335,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div class="toggle-icon" id="toggle-${attrId}" onclick="toggleData('${attrId}')" style="cursor: pointer; padding: 5px;">▼</div>
                                     </div>
                                 </div>
-                                <div class="attribute-bit">BIT: ${attr.bitMax !== undefined ? attr.bitMax.toFixed(15) : '-'}, ${attr.bitMin !== undefined ? attr.bitMin.toFixed(15) : '-'} | 유사도: ${(attr.similarity * 100).toFixed(1)}% | 데이터 ${dataItems.length}개</div>
+                                <div class="attribute-bit">BIT: ${attr.bitMax !== undefined && attr.bitMax !== null ? attr.bitMax.toFixed(15) : '-'}, ${attr.bitMin !== undefined && attr.bitMin !== null ? attr.bitMin.toFixed(15) : '-'} | 유사도: ${attr.similarity !== undefined && attr.similarity !== null ? (attr.similarity * 100).toFixed(1) : '-'}% | 데이터 ${dataItems.length}개</div>
                                 <div class="data-list" id="${attrId}" style="display: none;">${dataItemsHtml}</div>
                             </div>
                         `;

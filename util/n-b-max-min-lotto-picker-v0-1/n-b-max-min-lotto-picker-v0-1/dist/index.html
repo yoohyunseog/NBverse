@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N/B MAX·MIN LOTTO PICKER v0.1</title>
+    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.0.2/css/bootstrap.min.css'>
+    <style>
+      body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .card {
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        border: none;
+        margin-bottom: 20px;
+        overflow: hidden;
+      }
+      .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 20px;
+        font-weight: bold;
+        border: none;
+      }
+      .input-section {
+        background: white;
+        padding: 25px;
+      }
+      .result-section {
+        background: white;
+        padding: 25px;
+      }
+      .top-results {
+        background: white;
+        padding: 25px;
+      }
+      .result-item {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border-left: 4px solid #667eea;
+      }
+      .result-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      }
+      .result-item.rank-1 {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border-left-color: #f5576c;
+      }
+      .result-item.rank-2 {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        border-left-color: #00f2fe;
+      }
+      .result-item.rank-3 {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        color: white;
+        border-left-color: #38f9d7;
+      }
+      .rank-badge {
+        display: inline-block;
+        width: 35px;
+        height: 35px;
+        line-height: 35px;
+        text-align: center;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.3);
+        font-weight: bold;
+        margin-right: 10px;
+      }
+      .numbers-display {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #333;
+        margin: 10px 0;
+      }
+      .result-item.rank-1 .numbers-display,
+      .result-item.rank-2 .numbers-display,
+      .result-item.rank-3 .numbers-display {
+        color: white;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .stat-item {
+        background: rgba(255,255,255,0.2);
+        padding: 8px;
+        border-radius: 5px;
+        text-align: center;
+      }
+      .current-stats {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+        gap: 15px;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        color: white;
+        margin-bottom: 20px;
+      }
+      .stat-box {
+        text-align: center;
+        min-width: 120px;
+      }
+      .stat-label {
+        font-size: 0.9em;
+        opacity: 0.9;
+        margin-bottom: 5px;
+      }
+      .stat-value {
+        font-size: 1.5em;
+        font-weight: bold;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: bold;
+        transition: transform 0.2s;
+      }
+      .btn-primary:hover {
+        transform: scale(1.05);
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+      }
+      .status-text {
+        text-align: center;
+        padding: 20px;
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #333;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin-bottom: 20px;
+      }
+      .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 8px;
+      }
+      .form-control {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        transition: border-color 0.3s;
+      }
+      .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+      }
+      .input-group-text {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+    
+  <body>
+    <div class="container">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="mb-0">🎰 N/B MAX·MIN LOTTO PICKER v0.1</h2>
+        </div>
+        <div class="input-section">
+          <!-- ✅ 입력 영역 -->
+          <div class="mb-3">
+            <label for="exampleFormControlTextarea1" class="form-label">붙여넣기</label>
+            <textarea class="form-control" id="exampleFormControlTextarea1" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="exampleFormControlTextarea2" class="form-label">String Format</label>
+            <textarea class="form-control" id="exampleFormControlTextarea2" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label for="exampleFormControlTextarea3" class="form-label">Number Format</label>
+            <textarea class="form-control" id="exampleFormControlTextarea3" rows="2"></textarea>
+          </div>
+
+          <!-- ✅ 랜덤 생성 입력 -->
+          <div class="input-group mb-3">
+            <span class="input-group-text">MAX</span>
+            <input type="number" id="randMax" class="form-control" placeholder="예: 4.5" value="4.5" step="0.1">
+            <span class="input-group-text">MIN</span>
+            <input type="number" id="randMin" class="form-control" placeholder="예: 2.5" value="2.5" step="0.1">
+            <span class="input-group-text">COUNT</span>
+            <input type="number" id="randCount" class="form-control" placeholder="예: 100" value="100" min="1">
+            <button class="btn btn-primary" id="randBtn">🎲 랜덤 선택 시작</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ 현재 결과 표시 -->
+      <div class="card">
+        <div class="card-header">현재 계산 결과</div>
+        <div class="result-section">
+          <div class="status-text" id="h1">READY</div>
+          <div class="current-stats">
+            <div class="stat-box">
+              <div class="stat-label">MAX</div>
+              <div class="stat-value" id="NB-MAX">0.0000</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">MIN</div>
+              <div class="stat-value" id="NB-MIN">0.0000</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">ROOT</div>
+              <div class="stat-value" id="NB-ROOT">0%</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">진행 횟수</div>
+              <div class="stat-value" id="NB-VIEW">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ TOP 10 결과 표시 -->
+      <div class="card">
+        <div class="card-header">🏆 TOP 10 근사치 결과</div>
+        <div class="top-results">
+          <div id="topResultsContainer">
+            <p class="text-center text-muted">결과가 여기에 표시됩니다...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.2/jquery.min.js'></script>
+    <script src='https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js'></script>
+    <script src="./script.js"></script>
+  </body>
+  
+</html>

@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BIT 값 속성 검색</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+</head>
+<body>
+    <div class="container py-4">
+        <h2 class="mb-4">🔍 BIT 값 속성 검색</h2>
+        
+        <!-- 속성별 데이터 저장 -->
+        <div class="card mb-4">
+            <div class="card-header"><strong>속성별 데이터 저장</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label"><strong>1단계: 속성 (문자 입력)</strong></label>
+                    <textarea id="attributeInput" class="form-control" placeholder="속성을 나타내는 텍스트를 입력하세요. 자동으로 BIT 값으로 변환되어 속성으로 사용됩니다." rows="3"></textarea>
+                    <div class="row g-3 mt-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label">계산된 속성 BIT MAX</label>
+                            <input type="number" id="attributeBitMax" class="form-control" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">계산된 속성 BIT MIN</label>
+                            <input type="number" id="attributeBitMin" class="form-control" readonly />
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mb-2">
+                        <button id="loadAttributeBtn" class="btn btn-sm btn-outline-secondary">속성으로 저장된 데이터 로드</button>
+                        <button id="copyToAttributeBtn" class="btn btn-sm btn-outline-info">검색 결과에서 속성 복사</button>
+                    </div>
+                </div>
+                
+                <div class="mb-3 border-top pt-3">
+                    <label class="form-label"><strong>2단계: 데이터 (문자 입력)</strong></label>
+                    <textarea id="textInput" class="form-control" placeholder="이 속성에 저장할 데이터(텍스트)를 입력하세요." rows="4"></textarea>
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-6">
+                            <label class="form-label">계산된 BIT MAX</label>
+                            <input type="number" id="calculatedBitMax" class="form-control" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">계산된 BIT MIN</label>
+                            <input type="number" id="calculatedBitMin" class="form-control" readonly />
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <button id="saveBtn" class="btn btn-success">속성에 데이터 저장</button>
+                    <span id="saveStatus" class="ms-2 small text-muted"></span>
+                </div>
+                
+                <div id="attributeDataList" class="mt-3 border-top pt-3" style="display: none;">
+                    <strong>이 속성에 저장된 데이터 목록:</strong>
+                    <div id="attributeDataItems" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 검색 조건 -->
+        <div class="card mb-4">
+            <div class="card-header"><strong>검색 조건 (문자열 기반)</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="searchTextInput" class="form-label">검색할 텍스트 입력</label>
+                    <textarea id="searchTextInput" class="form-control" placeholder="검색할 텍스트를 입력하세요. 자동으로 BIT 값으로 변환되어 검색됩니다." rows="3"></textarea>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label for="bitMaxInput" class="form-label">계산된 BIT MAX</label>
+                        <input type="number" id="bitMaxInput" class="form-control" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label for="bitMinInput" class="form-label">계산된 BIT MIN</label>
+                        <input type="number" id="bitMinInput" class="form-control" readonly />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="d-grid">
+                            <button id="searchBtn" class="btn btn-primary">검색</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="useSimilarity" checked />
+                            <label class="form-check-label" for="useSimilarity">
+                                유사도 검색 사용 (정확 일치가 아닌 유사한 값도 검색)
+                            </label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="searchByMaxOnly" />
+                            <label class="form-check-label" for="searchByMaxOnly">
+                                MAX 값만으로 검색 (MIN 무시)
+                            </label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="searchByMinOnly" />
+                            <label class="form-check-label" for="searchByMinOnly">
+                                MIN 값만으로 검색 (MAX 무시)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <label for="limitInput" class="form-label">검색 결과 개수 제한</label>
+                        <input type="number" id="limitInput" class="form-control" value="10" min="1" max="100" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 상위 속성 관리 -->
+        <div class="card mb-4">
+            <div class="card-header"><strong>🌐 상위 속성 관리 (벌집 구조)</strong></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <button id="detectClustersBtn" class="btn btn-primary me-2">클러스터 자동 감지</button>
+                    <button id="loadParentsBtn" class="btn btn-outline-secondary">상위 속성 목록 보기</button>
+                </div>
+                <div id="clusterStatus" class="small text-muted mb-2"></div>
+                <div id="clustersList" class="mt-3"></div>
+                <div id="parentsList" class="mt-3" style="display: none;">
+                    <h6>생성된 상위 속성:</h6>
+                    <div id="parentsItems"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 검색 결과 -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>검색 결과</strong>
+                <span id="resultCount" class="badge bg-secondary">결과 없음</span>
+            </div>
+            <div class="card-body">
+                <div id="searchStatus" class="small text-muted mb-2"></div>
+                <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                    <table class="table table-sm table-bordered table-striped">
+                        <thead class="table-light sticky-top" style="background-color: #f8f9fa;">
+                            <tr>
+                                <th style="width: 5%;">#</th>
+                                <th style="width: 12%;">시간</th>
+                                <th style="width: 10%;">BIT_MAX</th>
+                                <th style="width: 10%;">BIT_MIN</th>
+                                <th style="width: 25%;">입력</th>
+                                <th style="width: 28%;">응답/데이터</th>
+                                <th style="width: 10%;">유사도</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultBody"></tbody>
+                    </table>
+                </div>
+                <div id="resultInfo" class="small text-muted mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+      // 입력 및 저장 관련
+      const $textInput = document.getElementById('textInput');
+      const $calculatedBitMax = document.getElementById('calculatedBitMax');
+      const $calculatedBitMin = document.getElementById('calculatedBitMin');
+      const $saveBtn = document.getElementById('saveBtn');
+      const $saveStatus = document.getElementById('saveStatus');
+      const $attributeInput = document.getElementById('attributeInput');
+      const $attributeBitMax = document.getElementById('attributeBitMax');
+      const $attributeBitMin = document.getElementById('attributeBitMin');
+      const $loadAttributeBtn = document.getElementById('loadAttributeBtn');
+      const $copyToAttributeBtn = document.getElementById('copyToAttributeBtn');
+      const $attributeDataList = document.getElementById('attributeDataList');
+      const $attributeDataItems = document.getElementById('attributeDataItems');
+      
+      // 검색 관련
+      const $searchTextInput = document.getElementById('searchTextInput');
+      const $bitMax = document.getElementById('bitMaxInput');
+      const $bitMin = document.getElementById('bitMinInput');
+      const $searchBtn = document.getElementById('searchBtn');
+      const $useSimilarity = document.getElementById('useSimilarity');
+      const $searchByMaxOnly = document.getElementById('searchByMaxOnly');
+      const $searchByMinOnly = document.getElementById('searchByMinOnly');
+      const $limit = document.getElementById('limitInput');
+      const $resultBody = document.getElementById('resultBody');
+      const $resultCount = document.getElementById('resultCount');
+      const       $resultInfo = document.getElementById('resultInfo');
+      const $searchStatus = document.getElementById('searchStatus');
+      
+      // 상위 속성 관리 관련
+      const $detectClustersBtn = document.getElementById('detectClustersBtn');
+      const $loadParentsBtn = document.getElementById('loadParentsBtn');
+      const $clusterStatus = document.getElementById('clusterStatus');
+      const $clustersList = document.getElementById('clustersList');
+      const $parentsList = document.getElementById('parentsList');
+      const $parentsItems = document.getElementById('parentsItems');
+
+      function getServerUrl(path) {
+        if (window.location.protocol === 'file:') {
+          return `http://localhost:8123${path}`;
+        }
+        return path;
+      }
+
+      // 서버 연결 테스트
+      async function testServerConnection() {
+        try {
+          const res = await fetch(getServerUrl('/health'));
+          if (res.ok) {
+            return true;
+          }
+        } catch (e) {
+          return false;
+        }
+        return false;
+      }
+
+      // BIT 값 계산
+      function calculateBitValues(text) {
+        try {
+          const arr = (window.wordNbUnicodeFormat || wordNbUnicodeFormat)(text || '');
+          if (arr.length === 0) {
+            $calculatedBitMax.value = '';
+            $calculatedBitMin.value = '';
+            return { max: null, min: null };
+          }
+          const bitMax = (window.BIT_MAX_NB || (()=>0))(arr);
+          const bitMin = (window.BIT_MIN_NB || (()=>0))(arr);
+          $calculatedBitMax.value = bitMax;
+          $calculatedBitMin.value = bitMin;
+          return { max: bitMax, min: bitMin };
+        } catch (e) {
+          console.error('BIT 계산 오류:', e);
+          $calculatedBitMax.value = '';
+          $calculatedBitMin.value = '';
+          return { max: null, min: null };
+        }
+      }
+
+      // 속성 입력란 변경 시 BIT 값 계산
+      $attributeInput.addEventListener('input', () => {
+        const text = $attributeInput.value.trim();
+        if (text) {
+          const bitValues = calculateBitValues(text);
+          $attributeBitMax.value = bitValues.max || '';
+          $attributeBitMin.value = bitValues.min || '';
+        } else {
+          $attributeBitMax.value = '';
+          $attributeBitMin.value = '';
+        }
+      });
+
+      // 데이터 입력란 변경 시 BIT 값 계산
+      $textInput.addEventListener('input', () => {
+        const text = $textInput.value.trim();
+        if (text) {
+          calculateBitValues(text);
+        } else {
+          $calculatedBitMax.value = '';
+          $calculatedBitMin.value = '';
+        }
+      });
+
+      // 속성별 데이터 로드
+      async function loadAttributeData() {
+        const attributeText = $attributeInput.value.trim();
+        if (!attributeText) {
+          $saveStatus.textContent = '속성 텍스트를 입력하세요.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+        
+        const bitValues = calculateBitValues(attributeText);
+        const attrMax = bitValues.max;
+        const attrMin = bitValues.min;
+        
+        if (attrMax === null || attrMin === null) {
+          $saveStatus.textContent = '속성 BIT 값 계산 실패.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+        
+        try {
+          const res = await fetch(getServerUrl(`/api/attributes/data?bitMax=${attrMax}&bitMin=${attrMin}`));
+          const data = await res.json();
+          
+          if (data.ok) {
+            if (data.items && data.items.length > 0) {
+              $attributeDataList.style.display = 'block';
+              $attributeDataItems.innerHTML = '';
+              
+              data.items.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'border rounded p-2 mb-2';
+                const attributeInfo = item.attribute && item.attribute.text 
+                  ? `<small class="text-primary">속성: "${item.attribute.text.substring(0, 30)}${item.attribute.text.length > 30 ? '...' : ''}"</small><br>`
+                  : '';
+                div.innerHTML = `
+                  <div class="d-flex justify-content-between">
+                    <small class="text-muted">#${idx + 1} - ${new Date(item.t).toLocaleString('ko-KR')}</small>
+                  </div>
+                  ${attributeInfo}
+                  <div class="mt-1"><strong>데이터:</strong> ${item.data.text || ''}</div>
+                `;
+                $attributeDataItems.appendChild(div);
+              });
+            } else {
+              $attributeDataList.style.display = 'block';
+              $attributeDataItems.innerHTML = '<div class="text-muted">이 속성에 저장된 데이터가 없습니다.</div>';
+            }
+          }
+        } catch (e) {
+          console.error('속성 데이터 로드 오류:', e);
+        }
+      }
+
+      // 속성에 데이터 저장
+      async function saveData() {
+        const attributeText = $attributeInput.value.trim();
+        if (!attributeText) {
+          $saveStatus.textContent = '속성 텍스트를 먼저 입력하세요.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+        
+        const text = $textInput.value.trim();
+        if (!text) {
+          $saveStatus.textContent = '저장할 데이터 텍스트를 입력하세요.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+        
+        // 속성 BIT 값 계산
+        const attributeBitValues = calculateBitValues(attributeText);
+        const attrMax = attributeBitValues.max;
+        const attrMin = attributeBitValues.min;
+        
+        if (attrMax === null || attrMin === null) {
+          $saveStatus.textContent = '속성 BIT 값 계산 실패.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+
+        const bitValues = calculateBitValues(text);
+        if (bitValues.max === null || bitValues.min === null) {
+          $saveStatus.textContent = 'BIT 값 계산 실패.';
+          $saveStatus.style.color = '#dc3545';
+          return;
+        }
+
+        try {
+          $saveBtn.disabled = true;
+          $saveStatus.textContent = '저장 중...';
+          $saveStatus.style.color = '#007bff';
+
+          // 속성별 데이터 저장 API 사용
+          const url = getServerUrl('/api/attributes/data');
+          const requestBody = {
+            attributeBitMax: attrMax,
+            attributeBitMin: attrMin,
+            attributeText: attributeText, // 속성 텍스트도 함께 저장
+            text: text,
+            dataBitMax: bitValues.max,
+            dataBitMin: bitValues.min
+          };
+          
+          console.log('[Save] 속성 데이터 저장 요청:', { url, body: requestBody });
+          
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+          });
+          
+          console.log('[Save] 응답 상태:', res.status, res.statusText);
+          
+          if (!res.ok) {
+            const text = await res.text();
+            let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+            try {
+              const json = JSON.parse(text);
+              if (json.error) errorMsg = json.error;
+            } catch {}
+            throw new Error(errorMsg);
+          }
+          
+          const contentType = res.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            throw new Error(`서버가 JSON 대신 다른 형식을 반환했습니다. Content-Type: ${contentType || '없음'}. 응답 시작: ${text.substring(0, 100)}`);
+          }
+          
+          const data = await res.json();
+          if (data.ok) {
+            if (data.duplicate) {
+              $saveStatus.textContent = `⚠ ${data.message || '이미 동일한 속성-데이터 조합이 저장되어 있습니다.'}`;
+              $saveStatus.style.color = '#ffc107';
+            } else {
+              $saveStatus.textContent = `✓ 저장 완료! 속성 "${attributeText.substring(0, 20)}${attributeText.length > 20 ? '...' : ''}" (BIT: ${attrMax}, ${attrMin})에 데이터 추가됨`;
+              $saveStatus.style.color = '#28a745';
+            }
+            $textInput.value = ''; // 데이터 입력란 초기화
+            $calculatedBitMax.value = '';
+            $calculatedBitMin.value = '';
+            
+            // 속성 데이터 목록 새로고침
+            await loadAttributeData();
+          } else {
+            $saveStatus.textContent = `✗ 저장 실패: ${data.error || '알 수 없는 오류'}`;
+            $saveStatus.style.color = '#dc3545';
+          }
+        } catch (e) {
+          $saveStatus.textContent = `✗ 저장 실패: ${e.message}`;
+          $saveStatus.style.color = '#dc3545';
+        } finally {
+          $saveBtn.disabled = false;
+        }
+      }
+      
+      $loadAttributeBtn.addEventListener('click', loadAttributeData);
+      
+      // 검색 결과에서 속성 값 복사 (검색 결과의 텍스트를 속성으로 사용)
+      $copyToAttributeBtn.addEventListener('click', () => {
+        // 검색 결과에서 첫 번째 결과의 입력 텍스트를 속성으로 사용
+        const firstResult = document.querySelector('#resultBody tr:first-child td:nth-child(5)');
+        if (firstResult && firstResult.textContent.trim()) {
+          const resultText = firstResult.textContent.trim();
+          $attributeInput.value = resultText;
+          // 속성 BIT 값 자동 계산
+          const bitValues = calculateBitValues(resultText);
+          $attributeBitMax.value = bitValues.max || '';
+          $attributeBitMin.value = bitValues.min || '';
+          $saveStatus.textContent = '검색 결과에서 속성이 복사되었습니다.';
+          $saveStatus.style.color = '#007bff';
+          loadAttributeData(); // 자동으로 데이터 로드
+        } else if ($searchTextInput.value.trim()) {
+          // 검색 텍스트가 있으면 그것을 속성으로 사용
+          const searchText = $searchTextInput.value.trim();
+          $attributeInput.value = searchText;
+          const bitValues = calculateBitValues(searchText);
+          $attributeBitMax.value = bitValues.max || '';
+          $attributeBitMin.value = bitValues.min || '';
+          $saveStatus.textContent = '검색 텍스트가 속성으로 복사되었습니다.';
+          $saveStatus.style.color = '#007bff';
+          loadAttributeData(); // 자동으로 데이터 로드
+        } else {
+          $saveStatus.textContent = '먼저 검색을 실행하여 결과를 찾으세요.';
+          $saveStatus.style.color = '#dc3545';
+        }
+      });
+
+      $saveBtn.addEventListener('click', saveData);
+
+      // 엔터키로 저장 (Shift+Enter는 줄바꿈)
+      $textInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          saveData();
+        }
+      });
+
+      // 검색 텍스트 입력 시 BIT 값 계산
+      $searchTextInput.addEventListener('input', () => {
+        const text = $searchTextInput.value.trim();
+        if (text) {
+          const bitValues = calculateBitValues(text);
+          $bitMax.value = bitValues.max || '';
+          $bitMin.value = bitValues.min || '';
+        } else {
+          $bitMax.value = '';
+          $bitMin.value = '';
+        }
+      });
+
+      async function search() {
+        const searchText = $searchTextInput.value.trim();
+        let bitMax, bitMin;
+        
+        // 텍스트 입력이 있으면 BIT 값 계산
+        if (searchText) {
+          const bitValues = calculateBitValues(searchText);
+          bitMax = bitValues.max;
+          bitMin = bitValues.min;
+          
+          if (bitMax === null || bitMin === null) {
+            $searchStatus.textContent = 'BIT 값 계산 실패.';
+            $searchStatus.style.color = '#dc3545';
+            return;
+          }
+        } else {
+          // 텍스트가 없으면 직접 입력된 BIT 값 사용 (하위 호환성)
+          bitMax = $bitMax.value.trim() ? Number($bitMax.value) : undefined;
+          bitMin = $bitMin.value.trim() ? Number($bitMin.value) : undefined;
+        }
+        
+        const useSimilar = $useSimilarity.checked;
+        const maxOnly = $searchByMaxOnly.checked;
+        const minOnly = $searchByMinOnly.checked;
+        const limit = Number($limit.value) || 10;
+
+        // 검증
+        if (!useSimilar && bitMax === undefined && bitMin === undefined) {
+          $searchStatus.textContent = '검색할 텍스트를 입력하세요.';
+          $searchStatus.style.color = '#dc3545';
+          return;
+        }
+
+        try {
+          $searchBtn.disabled = true;
+          $searchStatus.textContent = '서버 연결 확인 중...';
+          $searchStatus.style.color = '#007bff';
+          
+          // 서버 연결 확인
+          const isConnected = await testServerConnection();
+          if (!isConnected) {
+            throw new Error('서버에 연결할 수 없습니다. 서버가 http://localhost:8123 에서 실행 중인지 확인하세요.');
+          }
+          
+          $searchStatus.textContent = '검색 중...';
+          $resultBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">검색 중...</td></tr>';
+
+          let results = [];
+
+          if (useSimilar) {
+            // 유사도 검색 (training 데이터 사용)
+            try {
+              const url = getServerUrl('/api/training/similar');
+              const requestBody = {
+                query: '', // 텍스트 쿼리는 비우고 BIT 값만 사용
+                queryBitMax: maxOnly ? bitMax : (minOnly ? undefined : bitMax),
+                queryBitMin: minOnly ? bitMin : (maxOnly ? undefined : bitMin),
+                limit: limit
+              };
+              
+              console.log('[Search] 유사도 검색 요청:', { url, body: requestBody });
+              
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+              });
+              
+              console.log('[Search] 응답 상태:', res.status, res.statusText, 'URL:', res.url);
+              
+              if (!res.ok) {
+                const text = await res.text();
+                let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+                try {
+                  const json = JSON.parse(text);
+                  if (json.error) errorMsg = json.error;
+                } catch {}
+                throw new Error(errorMsg);
+              }
+              
+              const contentType = res.headers.get('content-type');
+              if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                throw new Error(`서버가 JSON 대신 다른 형식을 반환했습니다. Content-Type: ${contentType || '없음'}. 응답 시작: ${text.substring(0, 100)}`);
+              }
+              
+              const data = await res.json();
+              if (data.ok && data.items) {
+                results = data.items.map(item => ({
+                  ...item,
+                  source: 'training',
+                  similarity: item.similarity_score || 0
+                }));
+              } else if (!data.ok) {
+                throw new Error(data.error || '검색 실패');
+              }
+            } catch (e) {
+              throw new Error(`유사도 검색 오류: ${e.message}`);
+            }
+          } else {
+            // 정확 일치 검색
+            if (bitMax !== undefined && !minOnly) {
+              try {
+                const res = await fetch(getServerUrl(`/api/log/by-max?nb_max=${bitMax}&n=${limit}`));
+                
+                if (!res.ok) {
+                  const text = await res.text();
+                  let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+                  try {
+                    const json = JSON.parse(text);
+                    if (json.error) errorMsg = json.error;
+                  } catch {}
+                  throw new Error(errorMsg);
+                }
+                
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                  const text = await res.text();
+                  throw new Error(`서버가 JSON 대신 다른 형식을 반환했습니다. Content-Type: ${contentType || '없음'}. 응답 시작: ${text.substring(0, 100)}`);
+                }
+                
+                const data = await res.json();
+                if (data.ok && data.items) {
+                  results.push(...data.items.map(item => ({
+                    ...item,
+                    source: 'log_max',
+                    similarity: 1.0 // 정확 일치
+                  })));
+                }
+              } catch (e) {
+                throw new Error(`BIT MAX 검색 오류: ${e.message}`);
+              }
+            }
+            if (bitMin !== undefined && !maxOnly) {
+              try {
+                const res = await fetch(getServerUrl(`/api/log/by-min?nb_min=${bitMin}&n=${limit}`));
+                
+                if (!res.ok) {
+                  const text = await res.text();
+                  let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+                  try {
+                    const json = JSON.parse(text);
+                    if (json.error) errorMsg = json.error;
+                  } catch {}
+                  throw new Error(errorMsg);
+                }
+                
+                const contentType = res.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                  const text = await res.text();
+                  throw new Error(`서버가 JSON 대신 다른 형식을 반환했습니다. Content-Type: ${contentType || '없음'}. 응답 시작: ${text.substring(0, 100)}`);
+                }
+                
+                const data = await res.json();
+                if (data.ok && data.items) {
+                  results.push(...data.items.map(item => ({
+                    ...item,
+                    source: 'log_min',
+                    similarity: 1.0 // 정확 일치
+                  })));
+                }
+              } catch (e) {
+                throw new Error(`BIT MIN 검색 오류: ${e.message}`);
+              }
+            }
+          }
+
+          // 속성에 연결된 데이터 조회 (검색 텍스트가 속성일 수 있음)
+          if (searchText && bitMax !== undefined && bitMin !== undefined) {
+            try {
+              // 유사도 검색 옵션에 따라 쿼리 파라미터 추가
+              const similarityParam = useSimilar ? '&similarity=true&threshold=0.1' : '';
+              const attrRes = await fetch(getServerUrl(`/api/attributes/data?bitMax=${bitMax}&bitMin=${bitMin}&limit=${limit}${similarityParam}`));
+              if (attrRes.ok) {
+                const attrData = await attrRes.json();
+                if (attrData.ok && attrData.items && attrData.items.length > 0) {
+                  // 속성에 연결된 데이터를 결과에 추가
+                  attrData.items.forEach(item => {
+                    // 이미 results에 있는지 확인 (중복 방지)
+                    const existingKey = `${item.t || ''}_${item.data?.text || item.s || ''}_${item.attribute?.bitMax || ''}_${item.attribute?.bitMin || ''}`;
+                    const exists = results.some(r => {
+                      const rKey = `${r.t || ''}_${r.data?.text || r.s || r.input || ''}_${r.attribute?.bitMax || ''}_${r.attribute?.bitMin || ''}`;
+                      return rKey === existingKey;
+                    });
+                    
+                    if (!exists) {
+                      // 유사도 계산 (서버에서 계산한 similarity 사용, 없으면 계산)
+                      let similarity = item.similarity || 1.0;
+                      if (!item.similarity && item.attribute && item.attribute.bitMax !== undefined && item.attribute.bitMin !== undefined) {
+                        // 검색 BIT와 속성 BIT의 차이로 유사도 계산
+                        const bitMaxDiff = Math.abs((bitMax || 0) - (item.attribute.bitMax || 0));
+                        const bitMinDiff = Math.abs((bitMin || 0) - (item.attribute.bitMin || 0));
+                        // 차이가 작을수록 높은 유사도 (0~1 범위)
+                        const bitDistance = Math.sqrt(bitMaxDiff * bitMaxDiff + bitMinDiff * bitMinDiff);
+                        similarity = Math.max(0, 1 / (1 + bitDistance)); // 거리가 0이면 1.0, 거리가 커질수록 감소
+                      }
+                      
+                      results.push({
+                        ...item,
+                        source: 'attribute_data',
+                        similarity: similarity,
+                        input: item.attribute?.text || searchText, // 속성 텍스트를 input으로 표시
+                        response: item.data?.text || item.s || '', // 데이터 텍스트를 response로 표시
+                        bit: {
+                          max: item.attribute?.bitMax || null,
+                          min: item.attribute?.bitMin || null
+                        }
+                      });
+                    }
+                  });
+                  console.log('[Search] 속성 연결 데이터 추가:', attrData.items.length, '개');
+                }
+              }
+            } catch (e) {
+              console.warn('[Search] 속성 데이터 조회 오류:', e);
+              // 속성 데이터 조회 실패해도 기존 검색 결과는 표시
+            }
+          }
+
+          // 중복 제거 및 정렬
+          const uniqueResults = [];
+          const seen = new Set();
+          results.forEach(item => {
+            const key = `${item.t || ''}_${item.input || item.attribute?.text || ''}_${item.response || item.data?.text || item.s || ''}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueResults.push(item);
+            }
+          });
+
+          // 유사도순 정렬 (내림차순)
+          uniqueResults.sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
+
+          // 결과 제한
+          const finalResults = uniqueResults.slice(0, limit);
+
+          renderResults(finalResults);
+          
+          $resultCount.textContent = `${finalResults.length}개`;
+          $searchStatus.textContent = `✓ 검색 완료 (${finalResults.length}개 결과)`;
+          $searchStatus.style.color = '#28a745';
+          
+        } catch (e) {
+          console.error('검색 오류:', e);
+          const errorMsg = e.message || String(e);
+          $resultBody.innerHTML = `<tr><td colspan="7" class="text-danger">
+            <strong>검색 오류</strong><br>
+            ${errorMsg}<br>
+            <small class="text-muted">서버가 실행 중인지 확인하세요 (http://localhost:8123)</small>
+          </td></tr>`;
+          $resultCount.textContent = '오류';
+          $searchStatus.textContent = `✗ 검색 실패: ${errorMsg.substring(0, 50)}${errorMsg.length > 50 ? '...' : ''}`;
+          $searchStatus.style.color = '#dc3545';
+        } finally {
+          $searchBtn.disabled = false;
+        }
+      }
+
+      function renderResults(results) {
+        $resultBody.innerHTML = '';
+        if (results.length === 0) {
+          $resultBody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">검색 결과가 없습니다.</td></tr>';
+          $resultInfo.textContent = '';
+          return;
+        }
+
+        results.forEach((item, idx) => {
+          const tr = document.createElement('tr');
+          
+          const time = item.t ? new Date(item.t).toLocaleString('ko-KR') : (item.timestamp || '');
+          
+          // BIT 값 추출 (속성 데이터인 경우 attribute.bitMax/Min, 일반 데이터인 경우 bit.max/min)
+          const bitMax = (item.attribute && item.attribute.bitMax != null) ? String(item.attribute.bitMax) : 
+                        (item.bit && item.bit.max != null) ? String(item.bit.max) : 
+                        (item.nb_max != null ? String(item.nb_max) : '');
+          const bitMin = (item.attribute && item.attribute.bitMin != null) ? String(item.attribute.bitMin) : 
+                        (item.bit && item.bit.min != null) ? String(item.bit.min) : 
+                        (item.nb_min != null ? String(item.nb_min) : '');
+          
+          // 입력: 속성 텍스트 또는 일반 입력
+          const input = item.input || item.attribute?.text || item.input_text || '';
+          
+          // 응답: 데이터 텍스트 또는 일반 응답
+          const response = item.response || item.data?.text || item.s || item.output || '';
+          
+          const similarity = item.similarity != null ? (item.similarity * 100).toFixed(10) + '%' : '100%';
+          
+          // 속성 연결 데이터 표시 (소스 표시)
+          const sourceBadge = item.source === 'attribute_data' ? '<span class="badge bg-info">속성연결</span> ' : '';
+
+          const tds = [
+            idx + 1,
+            time,
+            bitMax,
+            bitMin,
+            (sourceBadge ? sourceBadge : '') + input.substring(0, 100) + (input.length > 100 ? '...' : ''),
+            response.substring(0, 150) + (response.length > 150 ? '...' : ''),
+            similarity
+          ];
+
+          tds.forEach((v, i) => {
+            const td = document.createElement('td');
+            if (i === 4 && sourceBadge) {
+              // 입력 컬럼에 배지가 있으면 HTML로 표시
+              td.innerHTML = String(v || '');
+            } else {
+              td.textContent = String(v || '');
+            }
+            if (i === 4 || i === 5) { // 입력, 응답 컬럼
+              td.style.wordBreak = 'break-word';
+              td.style.fontSize = '0.9em';
+            }
+            tr.appendChild(td);
+          });
+
+          $resultBody.appendChild(tr);
+        });
+
+        // 통계 정보
+        const avgSimilarity = results.length > 0 
+          ? (results.reduce((sum, r) => sum + (r.similarity || 1), 0) / results.length * 100).toFixed(10)
+          : 0;
+        $resultInfo.textContent = `평균 유사도: ${avgSimilarity}%`;
+      }
+
+      $searchBtn.addEventListener('click', search);
+
+      // 엔터키로 검색
+      [$bitMax, $bitMin, $limit].forEach(el => {
+        el.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            search();
+          }
+        });
+      });
+
+      // 클러스터 감지
+      async function detectClusters() {
+        if (!(await testServerConnection())) {
+          $clusterStatus.textContent = '✗ 서버 연결 실패';
+          $clusterStatus.style.color = '#dc3545';
+          return;
+        }
+
+        try {
+          $detectClustersBtn.disabled = true;
+          $clusterStatus.textContent = '클러스터 감지 중...';
+          $clusterStatus.style.color = '#007bff';
+
+          const url = getServerUrl('/api/attributes/clusters/detect');
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold: 0.5, minPts: 2 })
+          });
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (data.ok) {
+            displayClusters(data.clusters, data.totalAttributes);
+            $clusterStatus.textContent = `✓ ${data.clusters.length}개 클러스터 감지됨 (총 ${data.totalAttributes}개 속성)`;
+            $clusterStatus.style.color = '#28a745';
+          } else {
+            throw new Error(data.error || '클러스터 감지 실패');
+          }
+        } catch (e) {
+          console.error('클러스터 감지 오류:', e);
+          $clusterStatus.textContent = `✗ 클러스터 감지 실패: ${e.message}`;
+          $clusterStatus.style.color = '#dc3545';
+        } finally {
+          $detectClustersBtn.disabled = false;
+        }
+      }
+
+      function displayClusters(clusters, totalAttributes) {
+        $clustersList.innerHTML = '';
+        
+        if (clusters.length === 0) {
+          $clustersList.innerHTML = '<div class="text-muted">클러스터가 없습니다.</div>';
+          return;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        const cardBody = document.createElement('div');
+        cardBody.className = 'card-body';
+        card.appendChild(cardBody);
+
+        clusters.forEach((cluster, idx) => {
+          const clusterDiv = document.createElement('div');
+          clusterDiv.className = 'border rounded p-3 mb-3';
+          
+          const title = document.createElement('h6');
+          title.innerHTML = `${cluster.isolated ? '🏝️ 고립' : '🔗 클러스터'} ${idx + 1} (${cluster.size}개 속성)`;
+          clusterDiv.appendChild(title);
+
+          const centerInfo = document.createElement('div');
+          centerInfo.className = 'small text-muted mb-2';
+          centerInfo.textContent = `중심: BIT_MAX=${cluster.center.bitMax.toFixed(3)}, BIT_MIN=${cluster.center.bitMin.toFixed(3)}`;
+          clusterDiv.appendChild(centerInfo);
+
+          const attrsList = document.createElement('div');
+          attrsList.className = 'mb-2';
+          cluster.attributes.forEach(attr => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary me-1 mb-1';
+            badge.textContent = `${attr.text} (${attr.dataCount}개 데이터)`;
+            attrsList.appendChild(badge);
+          });
+          clusterDiv.appendChild(attrsList);
+
+          // 상위 속성 생성 UI
+          const createParentDiv = document.createElement('div');
+          createParentDiv.className = 'mt-2';
+          
+          const inputGroup = document.createElement('div');
+          inputGroup.className = 'input-group';
+          
+          const parentInput = document.createElement('input');
+          parentInput.type = 'text';
+          parentInput.className = 'form-control form-control-sm';
+          parentInput.placeholder = '상위 속성 이름 입력 (예: 톨킨 세계관)';
+          parentInput.value = cluster.isolated ? cluster.attributes[0].text : '';
+          
+          const createBtn = document.createElement('button');
+          createBtn.className = 'btn btn-sm btn-success';
+          createBtn.textContent = '상위 속성 생성';
+          createBtn.onclick = () => createParentAttribute(cluster, parentInput.value.trim() || `클러스터_${idx + 1}`);
+          
+          inputGroup.appendChild(parentInput);
+          inputGroup.appendChild(createBtn);
+          createParentDiv.appendChild(inputGroup);
+          clusterDiv.appendChild(createParentDiv);
+
+          cardBody.appendChild(clusterDiv);
+        });
+
+        $clustersList.appendChild(card);
+      }
+
+      async function createParentAttribute(cluster, parentText) {
+        if (!parentText) {
+          alert('상위 속성 이름을 입력하세요.');
+          return;
+        }
+
+        try {
+          const url = getServerUrl('/api/hierarchy/parent');
+          const parentBitMax = cluster.center.bitMax;
+          const parentBitMin = cluster.center.bitMin;
+          
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              parentText,
+              parentBitMax,
+              parentBitMin,
+              childCellIds: cluster.cellIds,
+              autoGenerated: false
+            })
+          });
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (data.ok) {
+            if (data.duplicate) {
+              if (data.updated) {
+                alert(`✓ 기존 상위 속성 "${parentText}"에 ${data.newChildren.length}개 하위 속성이 추가되었습니다.`);
+              } else {
+                alert(`⚠ ${data.message || '이미 동일한 상위 속성이 존재합니다.'}`);
+              }
+            } else {
+              let msg = `✓ 상위 속성 "${parentText}" 생성 완료!`;
+              if (data.conflicts && data.conflicts.length > 0) {
+                msg += `\n⚠ 참고: ${data.conflicts.length}개 하위 속성이 다른 상위 속성에서 이동되었습니다.`;
+              }
+              alert(msg);
+            }
+            loadParents(); // 목록 새로고침
+          } else {
+            throw new Error(data.error || '생성 실패');
+          }
+        } catch (e) {
+          console.error('상위 속성 생성 오류:', e);
+          alert(`✗ 생성 실패: ${e.message}`);
+        }
+      }
+
+      async function loadParents() {
+        if (!(await testServerConnection())) {
+          alert('서버 연결 실패');
+          return;
+        }
+
+        try {
+          const url = getServerUrl('/api/hierarchy/parents');
+          const res = await fetch(url);
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (data.ok) {
+            displayParents(data.parents);
+            $parentsList.style.display = data.parents.length > 0 ? 'block' : 'none';
+          }
+        } catch (e) {
+          console.error('상위 속성 로드 오류:', e);
+          alert(`✗ 로드 실패: ${e.message}`);
+        }
+      }
+
+      function displayParents(parents) {
+        $parentsItems.innerHTML = '';
+        
+        if (parents.length === 0) {
+          $parentsItems.innerHTML = '<div class="text-muted">상위 속성이 없습니다.</div>';
+          return;
+        }
+
+        parents.forEach(parent => {
+          const div = document.createElement('div');
+          div.className = 'border rounded p-2 mb-2';
+          
+          const title = document.createElement('strong');
+          title.textContent = parent.text;
+          div.appendChild(title);
+
+          const info = document.createElement('div');
+          info.className = 'small text-muted';
+          info.textContent = `${parent.childCellIds.length}개 하위 속성 | 생성: ${new Date(parent.createdAt).toLocaleString('ko-KR')}`;
+          div.appendChild(info);
+
+          const searchBtn = document.createElement('button');
+          searchBtn.className = 'btn btn-sm btn-outline-primary mt-2';
+          searchBtn.textContent = '이 상위 속성으로 검색';
+          searchBtn.onclick = () => searchByParent(parent.parentId);
+          div.appendChild(searchBtn);
+
+          $parentsItems.appendChild(div);
+        });
+      }
+
+      async function searchByParent(parentId) {
+        if (!(await testServerConnection())) {
+          alert('서버 연결 실패');
+          return;
+        }
+
+        try {
+          const url = getServerUrl(`/api/attributes/data/by-parent?parentId=${encodeURIComponent(parentId)}&limit=100`);
+          const res = await fetch(url);
+
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (data.ok) {
+            const items = data.items || [];
+            // 결과 포맷팅 (renderResults 형식에 맞게)
+            const formattedItems = items.map(item => ({
+              ...item,
+              input: item.attribute?.text || '',
+              response: item.data?.text || item.s || '',
+              similarity: 1.0,
+              source: 'parent_attribute'
+            }));
+            renderResults(formattedItems);
+            $resultCount.textContent = `${data.count || 0}개 결과`;
+            $searchStatus.textContent = `상위 속성 "${data.parent.text}" 검색 (${data.childAttributes.length}개 하위 속성)`;
+            $searchStatus.style.color = '#28a745';
+          }
+        } catch (e) {
+          console.error('상위 속성 검색 오류:', e);
+          alert(`✗ 검색 실패: ${e.message}`);
+        }
+      }
+
+      $detectClustersBtn.addEventListener('click', detectClusters);
+      $loadParentsBtn.addEventListener('click', loadParents);
+    })();
+    </script>
+</body>
+</html>
+

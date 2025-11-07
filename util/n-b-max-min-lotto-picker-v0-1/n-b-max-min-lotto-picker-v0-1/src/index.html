@@ -1,0 +1,39 @@
+<!-- ✅ 입력 영역 -->
+<div class="mb-3">
+  <label for="exampleFormControlTextarea1" class="form-label">붙여넣기</label>
+  <textarea class="form-control" id="exampleFormControlTextarea1" rows="3"></textarea>
+</div>
+<div class="mb-3">
+  <label for="exampleFormControlTextarea2" class="form-label">String Format</label>
+  <textarea class="form-control" id="exampleFormControlTextarea2" rows="3"></textarea>
+</div>
+<div class="mb-3">
+  <label for="exampleFormControlTextarea3" class="form-label">Number Format</label>
+  <textarea class="form-control" id="exampleFormControlTextarea3" rows="3"></textarea>
+</div>
+
+<!-- ✅ 랜덤 생성 입력 -->
+<div class="input-group mb-3">
+  <span class="input-group-text">MAX</span>
+  <input type="number" id="randMax" class="form-control" placeholder="예: 60" value="4.5">
+  <span class="input-group-text">MIN</span>
+  <input type="number" id="randMin" class="form-control" placeholder="예: 1" value="2.5">
+  <span class="input-group-text">COUNT</span>
+  <input type="number" id="randCount" class="form-control" placeholder="예: 50" value="10">
+  <button class="btn btn-primary" id="randBtn">🎲 화이트볼 랜덤 선택</button>
+</div>
+
+<!-- ✅ 결과 표시 -->
+<figure class="text-center">
+  <blockquote class="blockquote">
+    <p>벨런스 측정 N/B</p>
+  </blockquote>
+  <figcaption class="blockquote-footer">
+    <span id="NB-MAX">MAX 0.0000</span>
+    <span id="NB-MIN">MIN 0.0000</span>
+    <span id="NB-ROOT">ROOT 0%</span>
+    <span id="NB-VIEW">0 HIT</span>
+  </figcaption>
+</figure>
+
+<h1 id="h1">READY</h1>

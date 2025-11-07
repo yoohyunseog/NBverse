@@ -45,12 +45,24 @@ if (!fs.existsSync(HIERARCHY_DIR)) fs.mkdirSync(HIERARCHY_DIR, { recursive: true
 function getApiKey() {
   try {
     if (fs.existsSync(API_KEY_FILE)) {
-      return fs.readFileSync(API_KEY_FILE, 'utf8').trim();
+      const key = fs.readFileSync(API_KEY_FILE, 'utf8').trim();
+      if (key && key.length > 0) {
+        return key;
+      } else {
+        console.warn(`[API 키] 파일이 존재하지만 내용이 비어있습니다: ${API_KEY_FILE}`);
+      }
+    } else {
+      console.warn(`[API 키] 파일이 존재하지 않습니다: ${API_KEY_FILE}`);
     }
   } catch (e) {
-    // 파일 읽기 실패 시 무시
+    console.error(`[API 키] 파일 읽기 오류: ${API_KEY_FILE}`, e);
   }
-  return process.env.OPENAI_API_KEY || null;
+  const envKey = process.env.OPENAI_API_KEY;
+  if (envKey) {
+    console.info('[API 키] 환경 변수에서 로드됨');
+    return envKey;
+  }
+  return null;
 }
 
 app.use(cors());
@@ -258,7 +270,9 @@ app.get('/database/index.html', (req, res, next) => {
 });
 
 function nestedPathFromNumber(label, num) {
-  const str = Math.abs(num).toFixed(10).replace('.', '');
+  // 전체 정밀도 유지를 위해 더 많은 소수점 자릿수 사용 (최대 20자리)
+  // JavaScript Number의 전체 정밀도는 약 15-17자리이므로 충분히 포함
+  const str = Math.abs(num).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
   const digits = (str.match(/\d/g) || []);
   const baseDir = path.join(DATA_DIR, label, ...digits);
   const leaf = label === 'max' ? 'max_bit' : 'min_bit';
@@ -492,8 +506,11 @@ app.post('/api/gpt/key', (req, res) => {
 app.get('/api/gpt/key', (req, res) => {
   try {
     const apiKey = getApiKey();
-    return res.json({ ok: true, hasKey: !!apiKey });
+    const hasKey = !!apiKey && apiKey.length > 0;
+    console.log(`[API 키 확인] hasKey: ${hasKey}, 파일 경로: ${API_KEY_FILE}, 파일 존재: ${fs.existsSync(API_KEY_FILE)}`);
+    return res.json({ ok: true, hasKey, filePath: API_KEY_FILE, fileExists: fs.existsSync(API_KEY_FILE) });
   } catch (e) {
+    console.error('[API 키 확인] 오류:', e);
     return res.status(500).json({ ok: false, error: String(e) });
   }
 });
@@ -1308,14 +1325,26 @@ function getAttributeFilePath(bitMax, bitMin, type = 'max') {
 // 속성에 데이터 저장 - 기존 MAX/MIN 폴더 구조 사용
 app.post('/api/attributes/data', (req, res) => {
   try {
-    const { attributeBitMax, attributeBitMin, attributeText, text, dataBitMax, dataBitMin, novelTitle, novelTitleBitMax, novelTitleBitMin, chapter, chapterBitMax, chapterBitMin } = req.body || {};
+    let { attributeBitMax, attributeBitMin, attributeText, text, dataBitMax, dataBitMin, novelTitle, novelTitleBitMax, novelTitleBitMin, chapter, chapterBitMax, chapterBitMin } = req.body || {};
     
     if (attributeBitMax === undefined || attributeBitMin === undefined) {
       return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
     }
     
-    if (!text || typeof text !== 'string') {
+    // text는 null, 빈 문자열 모두 허용 (데이터 없이 속성만 저장 가능)
+    // 'text' 필드가 req.body에 존재하지 않으면 오류 (undefined만 체크)
+    if (!('text' in (req.body || {}))) {
       return res.status(400).json({ ok: false, error: 'text required' });
+    }
+    
+    // text가 null이면 빈 문자열로 변환 (속성만 저장)
+    if (text === null) {
+      text = '';
+    }
+    
+    // text는 문자열이어야 함
+    if (typeof text !== 'string') {
+      return res.status(400).json({ ok: false, error: 'text must be a string' });
     }
     
     // 중복 체크: 같은 속성+데이터 조합이 이미 존재하는지 확인
@@ -1328,23 +1357,27 @@ app.post('/api/attributes/data', (req, res) => {
           try {
             const parsed = JSON.parse(line);
             // 속성 BIT와 데이터 텍스트가 동일하고, 같은 소설/챕터면 중복
-            if (parsed.attribute && 
-                parsed.attribute.bitMax === attributeBitMax && 
-                parsed.attribute.bitMin === attributeBitMin &&
-                parsed.data && 
-                parsed.data.text === text) {
-              // 소설 제목과 챕터 정보가 있으면 비교
-              if (novelTitle && chapter) {
-                if (parsed.novel && parsed.novel.title === novelTitle &&
-                    parsed.chapter && parsed.chapter.number === chapter.number) {
+            if (parsed.attribute) {
+              // 부동소수점 오차 허용
+              const epsilon = 1e-10;
+              const bitMaxMatch = Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+              const bitMinMatch = Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+              if (bitMaxMatch && bitMinMatch &&
+                  parsed.data && 
+                  parsed.data.text === text) {
+                // 소설 제목과 챕터 정보가 있으면 비교
+                if (novelTitle && chapter) {
+                  if (parsed.novel && parsed.novel.title === novelTitle &&
+                      parsed.chapter && parsed.chapter.number === chapter.number) {
+                    return true;
+                  }
+                } else {
+                  // 기존 데이터에는 없을 수 있으므로 일단 중복으로 간주
                   return true;
                 }
-              } else {
-                // 기존 데이터에는 없을 수 있으므로 일단 중복으로 간주
-                return true;
               }
             }
-          } catch {}
+          } catch { return false; }
         }
       } catch {}
       return false;
@@ -1356,30 +1389,37 @@ app.post('/api/attributes/data', (req, res) => {
       return res.json({ ok: true, duplicate: true, message: '이미 동일한 속성-데이터 조합이 저장되어 있습니다.' });
     }
     
+    // BIT 값이 숫자인지 확인하고 전체 정밀도 유지
+    const ensureNumber = (val) => {
+      if (val === null || val === undefined) return null;
+      const num = typeof val === 'string' ? parseFloat(val) : val;
+      return Number.isFinite(num) ? num : null;
+    };
+    
     const record = {
       timestamp: new Date().toISOString(),
       t: Date.now(),
       s: text, // 데이터 텍스트
-      max: dataBitMax || null, // 데이터 BIT MAX
-      min: dataBitMin || null, // 데이터 BIT MIN
+      max: ensureNumber(dataBitMax), // 데이터 BIT MAX (전체 정밀도 유지)
+      min: ensureNumber(dataBitMin), // 데이터 BIT MIN (전체 정밀도 유지)
       attribute: {
         text: attributeText || null, // 속성 텍스트도 저장
-        bitMax: attributeBitMax,
-        bitMin: attributeBitMin
+        bitMax: ensureNumber(attributeBitMax), // 전체 정밀도 유지
+        bitMin: ensureNumber(attributeBitMin) // 전체 정밀도 유지
       },
       data: {
         text: text,
-        bitMax: dataBitMax || null,
-        bitMin: dataBitMin || null
+        bitMax: ensureNumber(dataBitMax), // 전체 정밀도 유지
+        bitMin: ensureNumber(dataBitMin) // 전체 정밀도 유지
       }
     };
     
-    // 소설 제목과 챕터 정보 추가 (BIT 값 포함)
+    // 소설 제목과 챕터 정보 추가 (BIT 값 포함, 전체 정밀도 유지)
     if (novelTitle) {
       record.novel = {
         title: novelTitle,
-        bitMax: novelTitleBitMax || null,
-        bitMin: novelTitleBitMin || null
+        bitMax: ensureNumber(novelTitleBitMax), // 전체 정밀도 유지
+        bitMin: ensureNumber(novelTitleBitMin) // 전체 정밀도 유지
       };
     }
     if (chapter) {
@@ -1387,18 +1427,97 @@ app.post('/api/attributes/data', (req, res) => {
         number: chapter.number || null,
         title: chapter.title || null,
         description: chapter.description || null,
-        bitMax: chapterBitMax || null,
-        bitMin: chapterBitMin || null
+        bitMax: ensureNumber(chapterBitMax), // 전체 정밀도 유지
+        bitMin: ensureNumber(chapterBitMin) // 전체 정밀도 유지
       };
     }
     
+    // JSON.stringify는 기본적으로 전체 정밀도를 유지하지만, 명시적으로 확인
     const line = JSON.stringify(record) + '\n';
     let written = { 
       novelTitleMax: null, novelTitleMin: null,
       chapterMax: null, chapterMin: null,
       attributeMax: null, attributeMin: null, 
-      dataMax: null, dataMin: null 
+      dataMax: null, dataMin: null,
+      attributeAsDataMax: null, attributeAsDataMin: null
     };
+    const errors = []; // 저장 실패 에러 추적
+    
+    // 데이터 텍스트가 입력되었을 때, 속성 텍스트를 데이터로 저장하는 레코드 생성 (속성 BIT 값으로 저장, 전체 정밀도 유지)
+    // 조건: 데이터 텍스트(text)가 입력되었고, 속성 텍스트(attributeText)도 있을 때
+    if (text && typeof text === 'string' && text.trim() && attributeText && typeof attributeText === 'string' && attributeText.trim()) {
+      const attributeAsDataRecord = {
+        timestamp: new Date().toISOString(),
+        t: Date.now(),
+        s: attributeText, // 속성 텍스트를 데이터 텍스트로 저장
+        max: ensureNumber(attributeBitMax), // 속성 BIT MAX를 데이터 BIT MAX로 사용 (전체 정밀도 유지)
+        min: ensureNumber(attributeBitMin), // 속성 BIT MIN을 데이터 BIT MIN으로 사용 (전체 정밀도 유지)
+        attribute: {
+          text: attributeText,
+          bitMax: ensureNumber(attributeBitMax), // 전체 정밀도 유지
+          bitMin: ensureNumber(attributeBitMin) // 전체 정밀도 유지
+        },
+        data: {
+          text: attributeText, // 속성 텍스트를 데이터로 저장
+          bitMax: ensureNumber(attributeBitMax), // 속성 BIT MAX를 데이터 BIT MAX로 사용 (전체 정밀도 유지)
+          bitMin: ensureNumber(attributeBitMin) // 속성 BIT MIN을 데이터 BIT MIN으로 사용 (전체 정밀도 유지)
+        }
+      };
+      
+      // 소설 제목과 챕터 정보도 포함 (전체 정밀도 유지)
+      if (novelTitle) {
+        attributeAsDataRecord.novel = {
+          title: novelTitle,
+          bitMax: ensureNumber(novelTitleBitMax), // 전체 정밀도 유지
+          bitMin: ensureNumber(novelTitleBitMin) // 전체 정밀도 유지
+        };
+      }
+      if (chapter) {
+        attributeAsDataRecord.chapter = {
+          number: chapter.number || null,
+          title: chapter.title || null,
+          description: chapter.description || null,
+          bitMax: ensureNumber(chapterBitMax), // 전체 정밀도 유지
+          bitMin: ensureNumber(chapterBitMin) // 전체 정밀도 유지
+        };
+      }
+      
+      const attributeAsDataLine = JSON.stringify(attributeAsDataRecord) + '\n';
+      
+      // 속성 BIT MAX로 MAX 폴더에 저장 (속성 텍스트를 데이터로)
+      if (Number.isFinite(attributeBitMax)) {
+        const { targetDir, nestedFile } = nestedPathFromNumber('max', attributeBitMax);
+        try { 
+          fs.mkdirSync(targetDir, { recursive: true }); 
+        } catch (_) {}
+        try { 
+          fs.appendFileSync(nestedFile, attributeAsDataLine, 'utf8'); 
+          console.log('[Attribute] 속성 텍스트를 데이터로 MAX 폴더에 저장:', nestedFile); 
+          written.attributeAsDataMax = nestedFile; 
+        } catch (e) { 
+          const errorMsg = `속성 텍스트 데이터 MAX 저장 실패: ${nestedFile}`;
+          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMax, attributeText });
+          errors.push({ type: 'attributeAsDataMax', file: nestedFile, error: e.message });
+        }
+      }
+      
+      // 속성 BIT MIN으로 MIN 폴더에 저장 (속성 텍스트를 데이터로)
+      if (Number.isFinite(attributeBitMin)) {
+        const { targetDir, nestedFile } = nestedPathFromNumber('min', attributeBitMin);
+        try { 
+          fs.mkdirSync(targetDir, { recursive: true }); 
+        } catch (_) {}
+        try { 
+          fs.appendFileSync(nestedFile, attributeAsDataLine, 'utf8'); 
+          console.log('[Attribute] 속성 텍스트를 데이터로 MIN 폴더에 저장:', nestedFile); 
+          written.attributeAsDataMin = nestedFile; 
+        } catch (e) { 
+          const errorMsg = `속성 텍스트 데이터 MIN 저장 실패: ${nestedFile}`;
+          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMin, attributeText });
+          errors.push({ type: 'attributeAsDataMin', file: nestedFile, error: e.message });
+        }
+      }
+    }
     
     // 1. 소설 제목 BIT MAX로 MAX 폴더에 저장
     if (novelTitleBitMax !== undefined && novelTitleBitMax !== null && Number.isFinite(novelTitleBitMax)) {
@@ -1411,7 +1530,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Novel] 소설 제목 MAX 폴더에 저장:', nestedFile); 
         written.novelTitleMax = nestedFile; 
       } catch (e) { 
-        console.warn('[Novel] 소설 제목 MAX 저장 실패:', nestedFile, e); 
+        const errorMsg = `소설 제목 MAX 저장 실패: ${nestedFile}`;
+        console.error(`[Novel] ${errorMsg}`, { error: e.message, stack: e.stack, novelTitleBitMax, novelTitle });
+        errors.push({ type: 'novelTitleMax', file: nestedFile, error: e.message });
       }
     }
     
@@ -1426,7 +1547,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Novel] 소설 제목 MIN 폴더에 저장:', nestedFile); 
         written.novelTitleMin = nestedFile; 
       } catch (e) { 
-        console.warn('[Novel] 소설 제목 MIN 저장 실패:', nestedFile, e); 
+        const errorMsg = `소설 제목 MIN 저장 실패: ${nestedFile}`;
+        console.error(`[Novel] ${errorMsg}`, { error: e.message, stack: e.stack, novelTitleBitMin, novelTitle });
+        errors.push({ type: 'novelTitleMin', file: nestedFile, error: e.message });
       }
     }
     
@@ -1441,7 +1564,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Chapter] 챕터 MAX 폴더에 저장:', nestedFile); 
         written.chapterMax = nestedFile; 
       } catch (e) { 
-        console.warn('[Chapter] 챕터 MAX 저장 실패:', nestedFile, e); 
+        const errorMsg = `챕터 MAX 저장 실패: ${nestedFile}`;
+        console.error(`[Chapter] ${errorMsg}`, { error: e.message, stack: e.stack, chapterBitMax, chapter });
+        errors.push({ type: 'chapterMax', file: nestedFile, error: e.message });
       }
     }
     
@@ -1456,7 +1581,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Chapter] 챕터 MIN 폴더에 저장:', nestedFile); 
         written.chapterMin = nestedFile; 
       } catch (e) { 
-        console.warn('[Chapter] 챕터 MIN 저장 실패:', nestedFile, e); 
+        const errorMsg = `챕터 MIN 저장 실패: ${nestedFile}`;
+        console.error(`[Chapter] ${errorMsg}`, { error: e.message, stack: e.stack, chapterBitMin, chapter });
+        errors.push({ type: 'chapterMin', file: nestedFile, error: e.message });
       }
     }
     
@@ -1471,7 +1598,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Attribute] 속성 MAX 폴더에 저장:', nestedFile); 
         written.attributeMax = nestedFile; 
       } catch (e) { 
-        console.warn('[Attribute] 속성 MAX 저장 실패:', nestedFile, e); 
+        const errorMsg = `속성 MAX 저장 실패: ${nestedFile}`;
+        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMax, attributeText, text });
+        errors.push({ type: 'attributeMax', file: nestedFile, error: e.message });
       }
     }
     
@@ -1486,7 +1615,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Attribute] 속성 MIN 폴더에 저장:', nestedFile); 
         written.attributeMin = nestedFile; 
       } catch (e) { 
-        console.warn('[Attribute] 속성 MIN 저장 실패:', nestedFile, e); 
+        const errorMsg = `속성 MIN 저장 실패: ${nestedFile}`;
+        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMin, attributeText, text });
+        errors.push({ type: 'attributeMin', file: nestedFile, error: e.message });
       }
     }
     
@@ -1501,7 +1632,9 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Attribute] 데이터 MAX 폴더에 저장:', nestedFile); 
         written.dataMax = nestedFile; 
       } catch (e) { 
-        console.warn('[Attribute] 데이터 MAX 저장 실패:', nestedFile, e); 
+        const errorMsg = `데이터 MAX 저장 실패: ${nestedFile}`;
+        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, dataBitMax, text });
+        errors.push({ type: 'dataMax', file: nestedFile, error: e.message });
       }
     }
     
@@ -1516,16 +1649,55 @@ app.post('/api/attributes/data', (req, res) => {
         console.log('[Attribute] 데이터 MIN 폴더에 저장:', nestedFile); 
         written.dataMin = nestedFile; 
       } catch (e) { 
-        console.warn('[Attribute] 데이터 MIN 저장 실패:', nestedFile, e); 
+        const errorMsg = `데이터 MIN 저장 실패: ${nestedFile}`;
+        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, dataBitMin, text });
+        errors.push({ type: 'dataMin', file: nestedFile, error: e.message });
       }
     }
     
-    console.log('[Attribute] Data saved:', { attributeBitMax, attributeBitMin, textLength: text.length, files: written });
-    
-    return res.json({ ok: true, record, files: written });
+    // 저장 결과 로깅
+    if (errors.length > 0) {
+      console.error('[Attribute] Data saved with errors:', { 
+        attributeBitMax, 
+        attributeBitMin, 
+        textLength: text.length, 
+        files: written,
+        errorCount: errors.length,
+        errors: errors.map(e => ({ type: e.type, file: e.file, error: e.error }))
+      });
+      return res.status(500).json({ 
+        ok: false, 
+        error: `일부 파일 저장 실패 (${errors.length}개 실패)`,
+        errors: errors,
+        record,
+        files: written
+      });
+    } else {
+      console.log('[Attribute] Data saved successfully:', { attributeBitMax, attributeBitMin, textLength: text.length, files: written });
+      return res.json({ ok: true, record, files: written });
+    }
   } catch (e) {
-    console.error('[Attribute] Save error:', e);
-    return res.status(500).json({ ok: false, error: String(e.message || e) });
+    console.error('[Attribute] Save error:', {
+      message: e.message,
+      stack: e.stack,
+      name: e.name,
+      requestBody: {
+        attributeBitMax: req.body?.attributeBitMax,
+        attributeBitMin: req.body?.attributeBitMin,
+        attributeText: req.body?.attributeText,
+        text: req.body?.text ? `${req.body.text.substring(0, 50)}...` : null,
+        dataBitMax: req.body?.dataBitMax,
+        dataBitMin: req.body?.dataBitMin
+      }
+    });
+    return res.status(500).json({ 
+      ok: false, 
+      error: String(e.message || e),
+      details: process.env.NODE_ENV === 'development' ? {
+        name: e.name,
+        stack: e.stack
+      } : undefined
+    });
   }
 });
 
@@ -1570,8 +1742,11 @@ app.get('/api/attributes/data', (req, res) => {
                 }
                 return null;
               } else {
-                // 정확 일치만
-                if (parsed.attribute.bitMax === attributeBitMax && parsed.attribute.bitMin === attributeBitMin) {
+                // 정확 일치 (부동소수점 오차 허용)
+                const epsilon = 1e-10; // 매우 작은 오차 허용
+                const bitMaxMatch = Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+                const bitMinMatch = Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                if (bitMaxMatch && bitMinMatch) {
                   return parsed;
                 }
                 return null;
@@ -1611,8 +1786,11 @@ app.get('/api/attributes/data', (req, res) => {
                   }
                   return null;
                 } else {
-                  // 정확 일치만
-                  if (parsed.attribute.bitMax === attributeBitMax && parsed.attribute.bitMin === attributeBitMin) {
+                  // 정확 일치 (부동소수점 오차 허용)
+                  const epsilon = 1e-10; // 매우 작은 오차 허용
+                  const bitMaxMatch = Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+                  const bitMinMatch = Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                  if (bitMaxMatch && bitMinMatch) {
                     return parsed;
                   }
                   return null;
@@ -1750,10 +1928,11 @@ app.post('/api/attributes/data/delete', (req, res) => {
           try {
             const parsed = JSON.parse(line);
             
-            // 삭제 조건: attribute BIT와 data BIT가 정확히 일치하는 경우
+            // 삭제 조건: attribute BIT와 data BIT가 정확히 일치하는 경우 (부동소수점 오차 허용)
+            const epsilon = 1e-10;
             const attributeMatch = parsed.attribute && 
-              parsed.attribute.bitMax === attributeBitMax && 
-              parsed.attribute.bitMin === attributeBitMin;
+              Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon &&
+              Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
             
             const dataMatch = (parsed.data && 
               parsed.data.bitMax === dataBitMax && 
@@ -1919,10 +2098,11 @@ app.post('/api/attributes/delete', (req, res) => {
           try {
             const parsed = JSON.parse(line);
             
-            // 삭제 조건: attribute BIT가 일치하는 모든 레코드
+            // 삭제 조건: attribute BIT가 일치하는 모든 레코드 (부동소수점 오차 허용)
+            const epsilon = 1e-10;
             const attributeMatch = parsed.attribute && 
-              parsed.attribute.bitMax === attributeBitMax && 
-              parsed.attribute.bitMin === attributeBitMin;
+              Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon &&
+              Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
             
             if (attributeMatch) {
               fileDeletedCount++;

@@ -18,7 +18,11 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 // Root to serve: project root one level up from server/
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const PUBLIC_ROOT = PROJECT_ROOT; // serve the whole current folder
+// Serve from dev root to support /novel_ai/v1.0.2/ paths
+// __dirname = E:\GameTools\dev\novel_ai\v1.0.2\server
+// ../.. = E:\GameTools\dev\novel_ai (wrong!)
+// ../../.. = E:\GameTools\dev (correct!)
+const PUBLIC_ROOT = path.resolve(__dirname, '../../..'); // serve from dev root
 
 // Data directory
 const DATA_DIR = path.join(__dirname, 'data');
@@ -1308,15 +1312,78 @@ function getAttributeFilePath(bitMax, bitMin, type = 'max') {
 // 속성에 데이터 저장 - 기존 MAX/MIN 폴더 구조 사용
 app.post('/api/attributes/data', (req, res) => {
   try {
-    const { attributeBitMax, attributeBitMin, attributeText, text, dataBitMax, dataBitMin, novelTitle, novelTitleBitMax, novelTitleBitMin, chapter, chapterBitMax, chapterBitMin } = req.body || {};
+    const { attributeBitMax, attributeBitMin, attributeText, dataBitMax, dataBitMin, novelTitle, novelTitleBitMax, novelTitleBitMin, chapter, chapterBitMax, chapterBitMin } = req.body || {};
+    
+    // text 필드는 req.body에서 직접 가져오기 (destructuring으로는 빈 문자열이 제거될 수 있음)
+    // 'text' in req.body로 존재 여부 확인 후, 값이 빈 문자열이어도 허용
+    let text = req.body?.text;
+    
+    // 디버깅: 받은 chapter 정보 확인
+    console.log('[서버] /api/attributes/data 요청 받음:', {
+      attributeText: attributeText?.substring(0, 100),
+      novelTitle,
+      chapter: chapter,
+      chapterNumber: chapter?.number,
+      chapterTitle: chapter?.title,
+      chapterType: typeof chapter?.number,
+      text: text,
+      textType: typeof text,
+      textIsUndefined: text === undefined,
+      textIsNull: text === null,
+      textIsString: typeof text === 'string',
+      textLength: text !== undefined && text !== null ? text.length : 'N/A',
+      textInBody: 'text' in (req.body || {}),
+      reqBodyText: req.body?.text,
+      reqBodyTextType: typeof req.body?.text,
+      전체body: JSON.stringify(req.body).substring(0, 500)
+    });
     
     if (attributeBitMax === undefined || attributeBitMin === undefined) {
       return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
     }
     
-    if (!text || typeof text !== 'string') {
+    // text는 null, 빈 문자열 모두 허용 (데이터 없이 속성만 저장 가능)
+    // 'text' 필드가 req.body에 존재하지 않으면 오류 (undefined만 체크)
+    if (!('text' in (req.body || {}))) {
+      console.error('[서버] text 필드가 req.body에 없음:', {
+        reqBodyKeys: Object.keys(req.body || {}),
+        reqBodyStringified: JSON.stringify(req.body).substring(0, 500)
+      });
       return res.status(400).json({ ok: false, error: 'text required' });
     }
+    
+    // text가 null이면 빈 문자열로 변환 (속성만 저장)
+    if (text === null) {
+      console.log('[서버] text 필드가 null, 빈 문자열로 변환 (속성만 저장):', {
+        text: text,
+        reqBodyText: req.body?.text
+      });
+      text = '';
+    }
+    
+    // text가 문자열이 아니면 문자열로 변환
+    if (typeof text !== 'string') {
+      console.warn('[서버] text 필드가 문자열이 아님, 변환 시도:', {
+        text: text,
+        textType: typeof text,
+        reqBodyText: req.body?.text
+      });
+      text = String(text);
+      // 변환 후에도 'undefined' 문자열이면 오류
+      if (text === 'undefined') {
+        console.error('[서버] text 필드를 문자열로 변환할 수 없음:', text);
+        return res.status(400).json({ ok: false, error: 'text required' });
+      }
+    }
+    
+    // 이제 text는 문자열임 (빈 문자열 포함, null은 빈 문자열로 변환됨)
+    console.log('[서버] text 필드 검증 통과:', {
+      text: text,
+      textType: typeof text,
+      textLength: text.length,
+      isEmpty: text === '',
+      isNull: req.body?.text === null
+    });
     
     // 중복 체크: 같은 속성+데이터 조합이 이미 존재하는지 확인
     const checkDuplicate = (nestedFile) => {
@@ -1328,11 +1395,14 @@ app.post('/api/attributes/data', (req, res) => {
           try {
             const parsed = JSON.parse(line);
             // 속성 BIT와 데이터 텍스트가 동일하고, 같은 소설/챕터면 중복
+            // text가 null이거나 빈 문자열이면 모두 빈 문자열로 비교
+            const existingText = parsed.data?.text || '';
+            const currentText = text || '';
             if (parsed.attribute && 
                 parsed.attribute.bitMax === attributeBitMax && 
                 parsed.attribute.bitMin === attributeBitMin &&
                 parsed.data && 
-                parsed.data.text === text) {
+                existingText === currentText) {
               // 소설 제목과 챕터 정보가 있으면 비교
               if (novelTitle && chapter) {
                 if (parsed.novel && parsed.novel.title === novelTitle &&
@@ -1390,6 +1460,18 @@ app.post('/api/attributes/data', (req, res) => {
         bitMax: chapterBitMax || null,
         bitMin: chapterBitMin || null
       };
+      console.log('[서버] chapter 정보 저장:', {
+        받은chapter: chapter,
+        저장할chapter: record.chapter,
+        chapterNumber: record.chapter.number,
+        chapterTitle: record.chapter.title
+      });
+    } else {
+      console.warn('[서버] chapter 정보가 없음:', {
+        attributeText,
+        novelTitle,
+        chapter객체: chapter
+      });
     }
     
     const line = JSON.stringify(record) + '\n';
@@ -2638,4 +2720,6 @@ app.use('/', express.static(PUBLIC_ROOT, { index: 'database/index.html' }));
 app.listen(PORT, HOST, () => {
   console.log(`Server listening on http://${HOST}:${PORT}`);
   console.log(`Serving static from: ${PUBLIC_ROOT}`);
+  console.log(`Test path: ${path.join(PUBLIC_ROOT, 'novel_ai', 'v1.0.2', 'index.html')}`);
+  console.log(`File exists: ${fs.existsSync(path.join(PUBLIC_ROOT, 'novel_ai', 'v1.0.2', 'index.html'))}`);
 });

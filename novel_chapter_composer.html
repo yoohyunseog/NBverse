@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>챕터 구성 전용</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0e1116;
+            --surface: #131825;
+            --border: rgba(255, 255, 255, 0.08);
+            --text: #e8edf7;
+            --muted: #a9b3c7;
+            --primary: #7c5cff;
+            --warning: #ffc857;
+            --success: #2bd576;
+            --shadow: 0 8px 24px rgba(0,0,0,0.35);
+            --radius: 14px;
+        }
+        body { background: var(--bg); color: var(--text); }
+        .card { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--text); }
+        .card-header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--text); }
+        .chapter-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; transition: transform 0.18s ease, box-shadow 0.18s ease; cursor: pointer; }
+        .chapter-item:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.35); }
+        .btn-sm { border-radius: 9px; }
+        .badge { vertical-align: middle; }
+        .floating-save { position: fixed; bottom: 20px; right: 20px; z-index: 1050; box-shadow: 0 10px 26px rgba(0,0,0,0.35); border-radius: 999px; }
+        .text-muted { color: var(--muted) !important; }
+        /* Form controls */
+        .form-control, .form-select, textarea { background-color: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+        .form-control::placeholder, textarea::placeholder { color: var(--muted) !important; }
+        /* Modal theming */
+        .modal-content, .modal-header, .modal-footer, .modal-body { background: var(--surface) !important; color: var(--text) !important; border-color: var(--border) !important; }
+        .btn-close { filter: invert(1); opacity: 0.85; }
+        .btn-close:hover { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-3">
+        <h3 class="mb-3">📖 챕터 구성 전용 (Title → Chapters)</h3>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">소설 제목</span>
+                        <button id="saveAllBtn" class="btn btn-sm btn-primary">💾 전체 저장</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <input type="text" id="novelTitle" list="novelTitleList" class="form-control" placeholder="제목 입력 또는 선택">
+                            <datalist id="novelTitleList"></datalist>
+                            <div class="form-text">제목을 바꾸면 해당 제목의 챕터 구성이 로드됩니다.</div>
+                        </div>
+                        <div class="mb-2 d-flex gap-2">
+                            <button id="newTitleBtn" class="btn btn-sm btn-success">➕ 새 제목</button>
+                            <button id="deleteTitleBtn" class="btn btn-sm btn-outline-danger">🗑️ 제목 삭제</button>
+                        </div>
+                        <hr>
+                        <div class="mb-2">
+                            <label class="form-label fw-bold mb-1">실시간 챕터 검색</label>
+                            <input type="text" id="chapterSearchInput" class="form-control form-control-sm" placeholder="번호/제목/설명, 숫자 패턴 인식(제N장, 챕터 N)">
+                        </div>
+                        <div class="small text-muted">저장 키: title → chapters 매핑(LocalStorage)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">챕터 구성</span>
+                        <div class="d-flex gap-2">
+                            <button id="addChapterBtn" class="btn btn-sm btn-success">➕ 챕터 추가</button>
+                            <button id="exportBtn" class="btn btn-sm btn-outline-light">⬇️ 내보내기</button>
+                            <label class="btn btn-sm btn-outline-light mb-0">⬆️ 불러오기
+                                <input id="importInput" type="file" accept="application/json" hidden>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="chaptersList" class="border rounded p-2" style="min-height: 200px; max-height: 60vh; overflow-y: auto;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 챕터 추가/편집 모달 -->
+    <div class="modal fade" id="chapterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="chapterModalTitle">챕터 추가</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 번호 또는 이름</label>
+                        <input id="chapterNumberInput" class="form-control" placeholder="예: 챕터 1">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 제목</label>
+                        <input id="chapterTitleInput" class="form-control" placeholder="예: 제1장">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold">챕터 설명</label>
+                        <textarea id="chapterDescriptionInput" class="form-control" rows="4" placeholder="챕터에 대한 설명"></textarea>
+                    </div>
+                    <div id="chapterModalStatus" class="small text-danger"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" id="chapterModalSaveBtn" class="btn btn-primary">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="quickSaveBtn" class="btn btn-primary btn-lg floating-save">💾 저장</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js" defer></script>
+    <script>
+        // DOM
+        const $novelTitle = document.getElementById('novelTitle');
+        const $novelTitleList = document.getElementById('novelTitleList');
+        const $chapterSearchInput = document.getElementById('chapterSearchInput');
+        const $addChapterBtn = document.getElementById('addChapterBtn');
+        const $chaptersList = document.getElementById('chaptersList');
+        const $saveAllBtn = document.getElementById('saveAllBtn');
+        const $quickSaveBtn = document.getElementById('quickSaveBtn');
+        const $newTitleBtn = document.getElementById('newTitleBtn');
+        const $deleteTitleBtn = document.getElementById('deleteTitleBtn');
+        const $exportBtn = document.getElementById('exportBtn');
+        const $importInput = document.getElementById('importInput');
+
+        // 모달
+        const chapterModal = new bootstrap.Modal(document.getElementById('chapterModal'));
+        const $chapterModalTitle = document.getElementById('chapterModalTitle');
+        const $chapterNumberInput = document.getElementById('chapterNumberInput');
+        const $chapterTitleInput = document.getElementById('chapterTitleInput');
+        const $chapterDescriptionInput = document.getElementById('chapterDescriptionInput');
+        const $chapterModalSaveBtn = document.getElementById('chapterModalSaveBtn');
+        const $chapterModalStatus = document.getElementById('chapterModalStatus');
+
+        // 상태
+        let chapters = [];
+        let currentChapterIdx = null;
+
+        // 키
+        const STORAGE_KEY_TITLE = 'chapter_only_title';
+        const STORAGE_KEY_TITLES = 'chapter_only_title_list';
+        const STORAGE_KEY_MAP = 'chapter_only_map'; // { key(normalizedTitle): { title, chapters, currentChapterIdx } }
+        const STORAGE_KEY_FILTER = 'chapter_only_filter';
+
+        // 유틸
+        function deepClone(obj) { try { return JSON.parse(JSON.stringify(obj)); } catch { return obj; } }
+        function normalizeTitleKey(title) { return (title || '').toString().trim().replace(/\s+/g, ' '); }
+
+        function calculateBitValues(text) {
+            if (!text || typeof text !== 'string' || text.trim() === '') return { max: null, min: null };
+            try {
+                if (typeof wordNbUnicodeFormat === 'undefined' || typeof BIT_MAX_NB === 'undefined' || typeof BIT_MIN_NB === 'undefined') return { max: null, min: null };
+                const arr = wordNbUnicodeFormat(text);
+                const max = BIT_MAX_NB(arr); const min = BIT_MIN_NB(arr);
+                return { max: isFinite(max) ? max : null, min: isFinite(min) ? min : null };
+            } catch { return { max: null, min: null }; }
+        }
+        function calculateBitPairSimilarity(filterBits, targetBits) {
+            try {
+                if (!filterBits || !targetBits) return 0;
+                const fMax = Number(filterBits.max), fMin = Number(filterBits.min);
+                const tMax = Number(targetBits.max), tMin = Number(targetBits.min);
+                if (!isFinite(fMax) || !isFinite(fMin) || !isFinite(tMax) || !isFinite(tMin)) return 0;
+                const dMax = Math.abs(fMax - tMax), dMin = Math.abs(fMin - tMin);
+                const norm = 5; const simMax = Math.max(0, 1 - (dMax / norm)); const simMin = Math.max(0, 1 - (dMin / norm));
+                return Math.max(0, Math.min(1, (simMax * 0.6 + simMin * 0.4)));
+            } catch { return 0; }
+        }
+
+        // 서버 URL 유틸
+        function getServerUrl(path) {
+            try {
+                if (!path) return window.location.origin;
+                if (path.startsWith('http://') || path.startsWith('https://')) return path;
+                const base = window.location.origin || '';
+                return `${base}${path}`;
+            } catch { return path; }
+        }
+
+        // Chapters API
+        async function apiGetChaptersByTitle(title) {
+            try {
+                if (!title) return null;
+                const url = getServerUrl(`/api/chapters?title=${encodeURIComponent(title)}`);
+                const res = await fetch(url, { method: 'GET' });
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (data && data.ok) return { chapters: data.chapters || [], currentChapterIdx: data.currentChapterIdx ?? null };
+            } catch (e) { console.warn('apiGetChaptersByTitle 실패:', e); }
+            return null;
+        }
+        async function apiSaveChaptersByTitle(title, chaptersPayload, currentIdx) {
+            try {
+                if (!title) return false;
+                const url = getServerUrl('/api/chapters');
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, chapters: chaptersPayload || [], currentChapterIdx: currentIdx ?? null })
+                });
+                if (!res.ok) return false;
+                const data = await res.json().catch(() => ({}));
+                return !!(data && data.ok);
+            } catch (e) { console.warn('apiSaveChaptersByTitle 실패:', e); return false; }
+        }
+        async function apiDeleteChaptersByTitle(title) {
+            try {
+                if (!title) return false;
+                const url = getServerUrl(`/api/chapters?title=${encodeURIComponent(title)}`);
+                const res = await fetch(url, { method: 'DELETE' });
+                if (!res.ok) return false;
+                const data = await res.json().catch(() => ({}));
+                return !!(data && data.ok);
+            } catch (e) { console.warn('apiDeleteChaptersByTitle 실패:', e); return false; }
+        }
+        function computeNextChapterDefaults() {
+            let maxNum = 0;
+            chapters.forEach((ch, idx) => {
+                const m = (ch.number || '').toString().match(/(\d{1,6})/);
+                const n = m && m[1] ? parseInt(m[1], 10) : (idx + 1);
+                if (!isNaN(n)) maxNum = Math.max(maxNum, n);
+            });
+            if (maxNum === 0) maxNum = chapters.length;
+            const nextNumber = `챕터 ${maxNum + 1}`;
+
+            let highestIdx = -1; let highestNum = -1;
+            chapters.forEach((ch, idx) => {
+                const m = (ch.number || '').toString().match(/(\d{1,6})/);
+                const n = m && m[1] ? parseInt(m[1], 10) : (idx + 1);
+                if (!isNaN(n) && n > highestNum) { highestNum = n; highestIdx = idx; }
+            });
+            let baseOrdinal = 0;
+            if (highestIdx >= 0) {
+                const t = (chapters[highestIdx].title || '').toString();
+                const tm = t.match(/^\s*제\s*(\d{1,6})\s*장\s*$/);
+                if (tm && tm[1]) baseOrdinal = parseInt(tm[1], 10) || 0;
+            }
+            if (baseOrdinal === 0) {
+                chapters.forEach(ch => {
+                    const tm = (ch.title || '').toString().match(/^\s*제\s*(\d{1,6})\s*장\s*$/);
+                    if (tm && tm[1]) baseOrdinal = Math.max(baseOrdinal, parseInt(tm[1], 10) || 0);
+                });
+            }
+            const nextTitle = baseOrdinal > 0 ? `제${baseOrdinal + 1}장` : '';
+            return { number: nextNumber, title: nextTitle };
+        }
+
+        // 제목 목록 관리
+        function getTitle() { return ($novelTitle && $novelTitle.value || '').trim(); }
+        function getSavedTitleList() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_TITLES) || '[]') || []; } catch { return []; } }
+        function saveTitleList(list) {
+            const seen = new Set(); const deduped = [];
+            list.forEach(t => { const k = normalizeTitleKey(t); if (!seen.has(k)) { seen.add(k); deduped.push(t); } });
+            localStorage.setItem(STORAGE_KEY_TITLES, JSON.stringify(deduped));
+        }
+        function addTitleToList(title) {
+            const list = getSavedTitleList(); const k = normalizeTitleKey(title);
+            const i = list.findIndex(t => normalizeTitleKey(t) === k); if (i >= 0) list.splice(i, 1);
+            list.unshift(title); saveTitleList(list.slice(0, 100)); renderTitleDatalist();
+        }
+        function renderTitleDatalist() {
+            if (!$novelTitleList) return; const list = getSavedTitleList();
+            $novelTitleList.innerHTML = list.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+        }
+        function setActiveTitle(title) { localStorage.setItem(STORAGE_KEY_TITLE, title); addTitleToList(title); }
+        function getActiveTitle() { return localStorage.getItem(STORAGE_KEY_TITLE) || ''; }
+
+        // 저장/로드
+        function persistMapForTitle(titleKey) {
+            const t = normalizeTitleKey(titleKey); if (!t) return;
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            map[t] = { title: titleKey, chapters: deepClone(chapters), currentChapterIdx };
+            localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(map));
+            // 서버 저장 (비동기, 실패 무시)
+            apiSaveChaptersByTitle(titleKey, deepClone(chapters), currentChapterIdx).then((ok) => { if (!ok) console.warn('서버 챕터 저장 실패(무시)'); });
+        }
+        async function loadMapForTitleOrApi(titleKey) {
+            const t = normalizeTitleKey(titleKey);
+            if (!t) return null;
+            // 서버 우선 조회
+            const apiEntry = await apiGetChaptersByTitle(titleKey);
+            if (apiEntry) return { title: titleKey, chapters: apiEntry.chapters || [], currentChapterIdx: apiEntry.currentChapterIdx ?? null };
+            // 로컬 저장소 조회
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            return map[t] || null;
+        }
+
+        // 렌더링
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+        function renderChapters() {
+            const listEl = $chaptersList; if (!listEl) return;
+            const filterText = ($chapterSearchInput && $chapterSearchInput.value || '').trim().toLowerCase();
+            const filterBits = calculateBitValues(filterText);
+            const matches = (ch) => {
+                if (!filterText) return true;
+                const num = (ch.number || '').toString().toLowerCase();
+                const title = (ch.title || '').toString().toLowerCase();
+                const desc = (ch.description || '').toString().toLowerCase();
+                const digits = (s) => { const m = s.match(/(\d{1,6})/); return m ? m[1] : ''; };
+                const fDigits = digits(filterText);
+                if (fDigits && (digits(num) === fDigits || digits(title) === fDigits)) return true;
+                return num.includes(filterText) || title.includes(filterText) || desc.includes(filterText);
+            };
+
+            let html = '';
+            chapters.forEach((ch, idx) => {
+                if (!matches(ch)) return;
+                const chText = `${ch.number || ''} ${ch.title || ''}`.trim();
+                const bits = calculateBitValues(chText);
+                const sim = (filterText && bits && filterBits && isFinite(bits.max) && isFinite(bits.min)) ? calculateBitPairSimilarity(filterBits, bits) : 0;
+                const simBadge = filterText ? `<span class="badge ${sim >= 0.9 ? 'bg-success' : sim >= 0.7 ? 'bg-warning' : 'bg-info'} ms-2">유사도 ${(sim*100).toFixed(1)}%</span>` : '';
+
+                html += `
+                <div class="d-flex align-items-center mb-2 p-2 chapter-item" data-idx="${idx}">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${escapeHtml(ch.number || `챕터 ${idx+1}`)}: ${escapeHtml(ch.title || '(제목 없음)')} ${simBadge}</div>
+                        ${ch.description ? `<div class="small text-muted mt-1">${escapeHtml(ch.description)}</div>` : ''}
+                        ${ch.published ? `<div class="small text-warning mt-1"><strong>📢 게시됨</strong>${ch.publishedAt ? ` · ${escapeHtml(new Date(ch.publishedAt).toLocaleString())}` : ''}</div>` : ''}
+                    </div>
+                    <div class="ms-2 d-flex flex-column gap-1">
+                        <button class="btn btn-sm btn-outline-primary" data-action="edit" data-idx="${idx}">✏️ 편집</button>
+                        <button class="btn btn-sm btn-outline-danger" data-action="delete" data-idx="${idx}">🗑️ 삭제</button>
+                    </div>
+                </div>`;
+            });
+            if (!html) html = '<div class="text-muted text-center">표시할 챕터가 없습니다.</div>';
+            listEl.innerHTML = html;
+
+            // 이벤트 위임
+            listEl.querySelectorAll('[data-action="edit"]').forEach(btn => btn.addEventListener('click', onEditChapter));
+            listEl.querySelectorAll('[data-action="delete"]').forEach(btn => btn.addEventListener('click', onDeleteChapter));
+            listEl.querySelectorAll('.chapter-item').forEach(div => div.addEventListener('click', (e) => { if (e.target.closest('button')) return; const idx = parseInt(div.getAttribute('data-idx')); selectChapter(idx); }));
+        }
+
+        // 챕터 조작
+        function selectChapter(idx) { if (idx < 0 || idx >= chapters.length) return; currentChapterIdx = idx; renderChapters(); saveAll(); }
+        function onEditChapter(e) { const idx = parseInt(e.currentTarget.getAttribute('data-idx')); openEdit(idx); }
+        function onDeleteChapter(e) { const idx = parseInt(e.currentTarget.getAttribute('data-idx')); if (isNaN(idx)) return; if (!confirm('삭제하시겠습니까?')) return; chapters.splice(idx,1); if (currentChapterIdx === idx) currentChapterIdx = null; else if (currentChapterIdx > idx) currentChapterIdx--; renderChapters(); saveAll(); }
+
+        function openAdd() {
+            const next = computeNextChapterDefaults();
+            $chapterModalTitle.textContent = '챕터 추가';
+            $chapterNumberInput.value = next.number;
+            $chapterTitleInput.value = next.title;
+            $chapterDescriptionInput.value = '';
+            $chapterModalStatus.textContent = '';
+            editingChapterIdx = null;
+            chapterModal.show();
+        }
+        function openEdit(idx) {
+            if (idx < 0 || idx >= chapters.length) return;
+            const ch = chapters[idx];
+            $chapterModalTitle.textContent = '챕터 편집';
+            $chapterNumberInput.value = ch.number || '';
+            $chapterTitleInput.value = ch.title || '';
+            $chapterDescriptionInput.value = ch.description || '';
+            $chapterModalStatus.textContent = '';
+            editingChapterIdx = idx;
+            chapterModal.show();
+        }
+
+        let editingChapterIdx = null;
+        function saveChapterFromModal() {
+            const number = $chapterNumberInput.value.trim();
+            const title = $chapterTitleInput.value.trim();
+            const description = $chapterDescriptionInput.value.trim();
+            if (!number) { $chapterModalStatus.textContent = '번호를 입력하세요.'; return; }
+            if (!title) { $chapterModalStatus.textContent = '제목을 입력하세요.'; return; }
+            const data = { number, title, description };
+            if (editingChapterIdx !== null) {
+                const prev = chapters[editingChapterIdx] || {};
+                chapters[editingChapterIdx] = { ...prev, ...data };
+            } else {
+                chapters.push({ ...data, analysisText: '', published: false, publishedAt: '' });
+            }
+            chapterModal.hide();
+            renderChapters();
+            saveAll();
+        }
+
+        // 저장 모음
+        function saveAll() { const title = getTitle(); if (title) { setActiveTitle(title); persistMapForTitle(title); } }
+
+        // 이벤트 바인딩
+        $addChapterBtn.addEventListener('click', openAdd);
+        $chapterModalSaveBtn.addEventListener('click', saveChapterFromModal);
+        $saveAllBtn.addEventListener('click', saveAll);
+        $quickSaveBtn.addEventListener('click', saveAll);
+        $newTitleBtn.addEventListener('click', () => { const name = prompt('새 제목 입력'); if (!name) return; $novelTitle.value = name; setActiveTitle(name); addTitleToList(name); chapters = []; currentChapterIdx = null; renderChapters(); saveAll(); });
+        $deleteTitleBtn.addEventListener('click', async () => {
+            const title = getTitle(); if (!title) return;
+            if (!confirm(`제목 "${title}"의 구성을 삭제하시겠습니까?`)) return;
+            const raw = localStorage.getItem(STORAGE_KEY_MAP); const map = raw ? JSON.parse(raw) : {};
+            delete map[normalizeTitleKey(title)]; localStorage.setItem(STORAGE_KEY_MAP, JSON.stringify(map));
+            // 목록에서도 제거
+            const list = getSavedTitleList(); const i = list.findIndex(t => normalizeTitleKey(t) === normalizeTitleKey(title)); if (i >= 0) { list.splice(i,1); saveTitleList(list); renderTitleDatalist(); }
+            // 서버에서도 삭제 시도
+            await apiDeleteChaptersByTitle(title).catch(() => {});
+            chapters = []; currentChapterIdx = null; renderChapters();
+        });
+        if ($chapterSearchInput) {
+            try { const saved = localStorage.getItem(STORAGE_KEY_FILTER); if (saved) $chapterSearchInput.value = saved; } catch {}
+            let timer = null; $chapterSearchInput.addEventListener('input', () => { try { localStorage.setItem(STORAGE_KEY_FILTER, $chapterSearchInput.value); } catch {}; if (timer) clearTimeout(timer); timer = setTimeout(renderChapters, 150); });
+        }
+        $novelTitle.addEventListener('change', async () => { const prev = getActiveTitle(); if (prev) persistMapForTitle(prev); const t = getTitle(); setActiveTitle(t); addTitleToList(t); const entry = await loadMapForTitleOrApi(t); if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; } else { chapters=[]; currentChapterIdx=null; } renderChapters(); });
+        $novelTitle.addEventListener('input', async () => { const value = $novelTitle.value.trim(); const list = getSavedTitleList(); const isKnown = list.some(t => normalizeTitleKey(t) === normalizeTitleKey(value)); if (isKnown) { const prev = getActiveTitle(); if (prev) persistMapForTitle(prev); setActiveTitle(value); const entry = await loadMapForTitleOrApi(value); if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; } else { chapters=[]; currentChapterIdx=null; } renderChapters(); }});
+
+        // 초기화
+        (async function init() {
+            renderTitleDatalist();
+            const savedActive = getActiveTitle();
+            if (savedActive) $novelTitle.value = savedActive; else if ($novelTitle.value.trim()) setActiveTitle($novelTitle.value.trim());
+            const entry = await loadMapForTitleOrApi(getTitle());
+            if (entry) { chapters = deepClone(entry.chapters||[]); currentChapterIdx = entry.currentChapterIdx ?? null; }
+            renderChapters();
+        })();
+    </script>
+</body>
+</html>
+
+
