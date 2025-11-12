@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI API 예제</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #080b16;
+      color: #f2f4ff;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+    }
+    .top-banner {
+      padding: 1.6rem 2.6rem;
+      background: linear-gradient(135deg, rgba(36, 48, 112, 0.65), rgba(16, 20, 44, 0.92));
+      border-bottom: 1px solid rgba(118, 138, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    @media (max-width: 991.98px) {
+      .top-banner {
+        padding: 1.4rem 1.4rem;
+      }
+    }
+    .top-banner h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #f2f4ff;
+      letter-spacing: 0.02em;
+    }
+    .top-banner p {
+      margin: 0;
+      color: #c3ccff;
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 960px;
+    }
+    .example-wrapper {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+    .example-sidebar {
+      width: 280px;
+      min-width: 200px;
+      max-width: 50%;
+      background: rgba(12, 18, 38, 0.95);
+      border-right: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 2rem 1.5rem;
+      overflow-y: auto;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 991.98px) {
+      .example-sidebar {
+        min-width: 180px;
+        max-width: 80%;
+        transform: translateX(-100%);
+      }
+      .example-sidebar.open {
+        transform: translateX(0);
+      }
+    }
+    .example-sidebar h3 {
+      margin: 0 0 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .example-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(118, 138, 255, 0.2);
+      padding-bottom: 1.5rem;
+    }
+    .example-sidebar-nav li {
+      margin: 0;
+    }
+    .example-sidebar-nav a {
+      display: block;
+      padding: 0.8rem 1rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      font-size: 0.94rem;
+      line-height: 1.4;
+      border: 1px solid rgba(118, 138, 255, 0.2);
+    }
+    .example-sidebar-nav a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #d3daff;
+      transform: translateX(4px);
+      border-color: rgba(118, 138, 255, 0.4);
+    }
+    .example-sidebar-nav a.active {
+      background: rgba(118, 138, 255, 0.25);
+      color: #e0e5ff;
+      font-weight: 600;
+      border-left: 3px solid rgba(118, 138, 255, 0.8);
+    }
+    .example-sidebar-toc {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .example-sidebar-toc li {
+      margin-bottom: 0.5rem;
+    }
+    .example-sidebar-toc a {
+      display: block;
+      padding: 0.6rem 0.8rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s ease, color 0.2s ease;
+      font-size: 0.9rem;
+    }
+    .example-sidebar-toc a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #d3daff;
+    }
+    .example-resizer {
+      position: fixed;
+      top: 0;
+      left: 280px;
+      width: 4px;
+      height: 100vh;
+      background: rgba(118, 138, 255, 0.3);
+      cursor: col-resize;
+      z-index: 101;
+      transition: background 0.2s ease;
+    }
+    .example-resizer:hover {
+      background: rgba(118, 138, 255, 0.6);
+    }
+    .example-resizer.dragging {
+      background: rgba(118, 138, 255, 0.8);
+    }
+    @media (max-width: 991.98px) {
+      .example-resizer {
+        display: none;
+      }
+    }
+    .example-toggle-btn {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 102;
+      background: rgba(118, 138, 255, 0.9);
+      border: 1px solid rgba(118, 138, 255, 0.5);
+      color: #f2f4ff;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s ease;
+    }
+    .example-toggle-btn:hover {
+      background: rgba(118, 138, 255, 1);
+    }
+    @media (max-width: 991.98px) {
+      .example-toggle-btn {
+        display: block;
+      }
+    }
+    .example-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+    @media (max-width: 991.98px) {
+      .example-overlay.open {
+        display: block;
+      }
+    }
+    .example-container {
+      flex: 1;
+      padding: 2.8rem 2.4rem;
+      margin-left: 284px;
+      width: calc(100% - 284px);
+      overflow-y: auto;
+      transition: margin-left 0.2s ease, width 0.2s ease;
+    }
+    @media (max-width: 991.98px) {
+      .example-container {
+        padding: 1.8rem 1.2rem;
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+    .example-section {
+      margin-bottom: 3rem;
+      background: rgba(12, 18, 38, 0.6);
+      border: 1px solid rgba(118, 138, 255, 0.22);
+      border-radius: 20px;
+      padding: 2.4rem;
+      box-shadow: 0 35px 65px rgba(10, 15, 34, 0.45);
+    }
+    @media (max-width: 991.98px) {
+      .example-section {
+        padding: 1.6rem 1.4rem;
+        border-radius: 18px;
+      }
+    }
+    .example-section h2 {
+      margin: 0 0 1.2rem;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.015em;
+      border-bottom: 2px solid rgba(118, 138, 255, 0.3);
+      padding-bottom: 0.8rem;
+    }
+    .example-section h3 {
+      margin: 1.8rem 0 0.8rem;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #d3daff;
+    }
+    .example-section p {
+      margin: 0 0 1rem;
+      color: #b7c1ff;
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+    }
+    .method.post {
+      background: rgba(74, 144, 226, 0.3);
+      color: #7bb3ff;
+      border: 1px solid rgba(74, 144, 226, 0.5);
+    }
+    .method.get {
+      background: rgba(105, 220, 150, 0.3);
+      color: #8dffc4;
+      border: 1px solid rgba(105, 220, 150, 0.5);
+    }
+    .endpoint {
+      display: inline-block;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      color: #a5b9ff;
+      background: rgba(20, 28, 62, 0.65);
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      margin-right: 0.5rem;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+    }
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #d3daff;
+      font-size: 0.95rem;
+    }
+    .form-group input,
+    .form-group textarea {
+      width: 100%;
+      background: rgba(23, 30, 58, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      border-radius: 12px;
+      padding: 0.82rem 1rem;
+      color: #f2f4ff;
+      font-size: 1rem;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+      box-sizing: border-box;
+    }
+    .form-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: rgba(150, 170, 255, 0.85);
+      box-shadow: 0 0 0 3px rgba(118, 138, 255, 0.3);
+    }
+    .form-group .hint {
+      display: block;
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
+      color: #95a4e9;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .btn {
+      background: linear-gradient(135deg, rgba(104, 120, 255, 0.9), rgba(74, 95, 210, 0.92));
+      border: 1px solid rgba(160, 178, 255, 0.4);
+      color: #f4f6ff;
+      padding: 0.75rem 1.5rem;
+      border-radius: 999px;
+      font-size: 0.94rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+      box-shadow: 0 12px 24px rgba(72, 92, 210, 0.35);
+      font-weight: 600;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 28px rgba(72, 92, 210, 0.45);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .btn-secondary {
+      background: linear-gradient(135deg, rgba(80, 90, 120, 0.9), rgba(60, 70, 100, 0.92));
+      border-color: rgba(120, 130, 160, 0.4);
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+    .result-box {
+      margin-top: 1.5rem;
+      background: rgba(15, 21, 46, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 12px;
+      padding: 1.2rem;
+    }
+    .result-box h4 {
+      margin: 0 0 0.8rem;
+      font-size: 1rem;
+      color: #d0d7ff;
+    }
+    .result-box pre {
+      margin: 0;
+      background: rgba(10, 15, 30, 0.8);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.88rem;
+      color: #d8dcff;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .curl-box {
+      margin-top: 1rem;
+      background: rgba(18, 24, 46, 0.6);
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .curl-box h5 {
+      margin: 0 0 0.6rem;
+      font-size: 0.9rem;
+      color: #c0c9ff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .curl-box pre {
+      margin: 0;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      color: #a5b9ff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .btn-copy {
+      background: rgba(118, 138, 255, 0.3);
+      border: 1px solid rgba(118, 138, 255, 0.4);
+      color: #b7c1ff;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .btn-copy:hover {
+      background: rgba(118, 138, 255, 0.5);
+    }
+    .status {
+      display: inline-block;
+      padding: 0.3rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+    .status.success {
+      background: rgba(105, 220, 150, 0.2);
+      color: #8dffc4;
+    }
+    .status.error {
+      background: rgba(255, 92, 92, 0.2);
+      color: #ffc1c1;
+    }
+    .status.loading {
+      background: rgba(255, 200, 120, 0.2);
+      color: #ffe5be;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-banner">
+    <h1>Novel AI API 예제</h1>
+    <p>
+      각 API 엔드포인트를 실제로 테스트해볼 수 있는 인터랙티브 예제 페이지입니다.
+      입력 필드를 채우고 실행 버튼을 클릭하면 API를 호출하고 결과를 확인할 수 있습니다.
+    </p>
+  </header>
+
+  <button class="example-toggle-btn" id="exampleToggleBtn">☰ 메뉴</button>
+  <div class="example-overlay" id="exampleOverlay"></div>
+
+  <div class="example-wrapper">
+    <aside class="example-sidebar" id="exampleSidebar">
+      <h3>메뉴</h3>
+      <ul class="example-sidebar-nav">
+        <li><a href="action_manual_test.html">📝 수동 입력 테스트</a></li>
+        <li><a href="action_manual_test_doc.html">📚 API 문서</a></li>
+        <li><a href="action_manual_test_example.html" class="active">🧪 API 예제</a></li>
+        <li><a href="action_manual_test_full_doc.html">📖 전체 문서</a></li>
+      </ul>
+      <h3>예제 목차</h3>
+      <ul class="example-sidebar-toc" id="exampleToc">
+        <!-- JavaScript로 자동 생성 -->
+      </ul>
+    </aside>
+    <div class="example-resizer" id="exampleResizer"></div>
+
+    <div class="example-container">
+      <!-- 1. 데이터 저장 -->
+      <section class="example-section" id="section-save">
+        <h2>1. 데이터 저장</h2>
+        <p>
+          <span class="method post">POST</span>
+          <span class="endpoint">/api/attributes/data</span>
+        </p>
+        <p>속성과 데이터를 저장합니다.</p>
+
+        <div class="form-group">
+          <label for="saveAttributeText">속성 전체 경로 <span style="color:#95a4e9;">(필수)</span></label>
+          <input type="text" id="saveAttributeText" placeholder="예: 다크 판타지 → 챕터 1: 제1장 → 구성">
+          <span class="hint">속성 BIT 값이 자동으로 계산됩니다.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="saveDataText">데이터 본문 <span style="color:#95a4e9;">(필수)</span></label>
+          <textarea id="saveDataText" placeholder="저장할 데이터 본문을 입력하세요..."></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="saveNovelTitle">소설 제목 (속성 필터) <span style="color:#95a4e9;">(선택)</span></label>
+          <input type="text" id="saveNovelTitle" placeholder="예: 다크 판타지">
+          <span class="hint">소설 제목을 입력하면 속성 경로의 필터로 사용됩니다.</span>
+        </div>
+
+        <div id="saveResult" class="result-box">
+          <h4>응답 결과 <span id="saveStatus" class="status"></span></h4>
+          <pre id="saveResponse">입력 필드를 채우면 자동으로 실행됩니다...</pre>
+          <div id="saveCurl" class="curl-box" style="display:none;">
+            <h5>생성된 curl 명령어 <button class="btn-copy" onclick="copyCurl('saveCurlText')">복사</button></h5>
+            <pre id="saveCurlText"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2-1. 속성 입력으로 조회 -->
+      <section class="example-section" id="section-query-attribute">
+        <h2>2-1. 속성 입력으로 조회</h2>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/attributes/data</span>
+        </p>
+        <p>속성 BIT 값으로 데이터를 조회합니다.</p>
+
+        <div class="form-group">
+          <label for="queryNovelTitle">소설 제목 (속성 필터) <span style="color:#95a4e9;">(선택)</span></label>
+          <input type="text" id="queryNovelTitle" placeholder="예: 다크 판타지">
+          <span class="hint">소설 제목을 입력하면 해당 소설의 속성만 조회됩니다.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="queryAttributeText">속성 전체 경로</label>
+          <input type="text" id="queryAttributeText" placeholder="예: 다크 판타지 → 챕터 1: 제1장 → 구성">
+          <span class="hint">속성 BIT 값이 자동으로 계산됩니다. 소설 제목을 입력하면 자동으로 경로가 구성됩니다.</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="queryBitMax">BIT MAX</label>
+            <input type="number" step="any" id="queryBitMax" placeholder="자동 계산">
+          </div>
+          <div class="form-group">
+            <label for="queryBitMin">BIT MIN</label>
+            <input type="number" step="any" id="queryBitMin" placeholder="자동 계산">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="querySimilarity">유사도 검색</label>
+            <input type="checkbox" id="querySimilarity">
+            <span class="hint">체크 시 유사한 BIT 값을 가진 레코드도 검색</span>
+          </div>
+          <div class="form-group">
+            <label for="queryThreshold">임계값</label>
+            <input type="number" step="0.01" id="queryThreshold" value="0.1" placeholder="0.1">
+          </div>
+          <div class="form-group">
+            <label for="queryLimit">최대 개수</label>
+            <input type="number" id="queryLimit" value="100" min="1" max="1000">
+          </div>
+        </div>
+
+        <div id="queryResult" class="result-box">
+          <h4>응답 결과 <span id="queryStatus" class="status"></span></h4>
+          <pre id="queryResponse">속성 경로를 입력하거나 BIT 값을 입력하면 자동으로 실행됩니다...</pre>
+          <div id="queryCurl" class="curl-box" style="display:none;">
+            <h5>생성된 curl 명령어 <button class="btn-copy" onclick="copyCurl('queryCurlText')">복사</button></h5>
+            <pre id="queryCurlText"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 전체 데이터 조회 -->
+      <section class="example-section" id="section-query-all">
+        <h2>2. 전체 데이터 조회</h2>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/tests/records</span>
+        </p>
+        <p>저장된 모든 레코드를 조회합니다.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="queryAllNovelTitle">소설 제목 (필터링)</label>
+            <input type="text" id="queryAllNovelTitle" placeholder="선택사항">
+          </div>
+          <div class="form-group">
+            <label for="queryAllLimit">최대 개수</label>
+            <input type="number" id="queryAllLimit" value="50" min="1" max="500">
+          </div>
+        </div>
+
+        <div id="queryAllResult" class="result-box">
+          <h4>응답 결과 <span id="queryAllStatus" class="status"></span></h4>
+          <pre id="queryAllResponse">필터 옵션을 변경하면 자동으로 실행됩니다...</pre>
+          <div id="queryAllCurl" class="curl-box" style="display:none;">
+            <h5>생성된 curl 명령어 <button class="btn-copy" onclick="copyCurl('queryAllCurlText')">복사</button></h5>
+            <pre id="queryAllCurlText"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 폴더 구조 조회 -->
+      <section class="example-section" id="section-folders">
+        <h2>3. 폴더 구조 조회</h2>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/tests/folders</span>
+        </p>
+        <p>MAX/MIN 폴더별 파일·레코드 개수를 집계합니다.</p>
+
+        <div class="form-group">
+          <label for="foldersIncludeFiles">파일 경로 포함</label>
+          <input type="checkbox" id="foldersIncludeFiles">
+          <span class="hint">체크 시 각 폴더의 파일 경로도 포함</span>
+        </div>
+
+        <div id="foldersResult" class="result-box">
+          <h4>응답 결과 <span id="foldersStatus" class="status"></span></h4>
+          <pre id="foldersResponse">옵션을 변경하면 자동으로 실행됩니다...</pre>
+          <div id="foldersCurl" class="curl-box" style="display:none;">
+            <h5>생성된 curl 명령어 <button class="btn-copy" onclick="copyCurl('foldersCurlText')">복사</button></h5>
+            <pre id="foldersCurlText"></pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/novel_ai_shared.js"></script>
+  <script src="action_manual_test_example.js"></script>
+</body>
+</html>
+

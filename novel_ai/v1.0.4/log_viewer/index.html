@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N/B Novel AI 로그 플로우 뷰어</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="viewer.css">
+</head>
+<body class="log-viewer-body">
+    <div class="viewer-wrapper">
+        <header class="viewer-header">
+            <div class="viewer-title-group">
+                <h1 class="viewer-title">로그 플로우 다이어그램</h1>
+                <p class="viewer-subtitle">
+                    메인 애플리케이션에서 발생한 로그를 단계별로 시각화한 페이지입니다.
+                    경고·오류가 감지된 지점을 빠르게 파악할 수 있습니다.
+                </p>
+            </div>
+            <a class="viewer-link" href="../index.html">← 메인 화면으로 돌아가기</a>
+        </header>
+
+        <section class="viewer-summary">
+            <div class="summary-card">
+                <span class="summary-label">전체 로그</span>
+                <strong id="totalLogs" class="summary-value">0건</strong>
+            </div>
+            <div class="summary-card warn">
+                <span class="summary-label">경고</span>
+                <strong id="warnCount" class="summary-value">0건</strong>
+            </div>
+            <div class="summary-card error">
+                <span class="summary-label">오류</span>
+                <strong id="errorCount" class="summary-value">0건</strong>
+            </div>
+            <div class="summary-card">
+                <span class="summary-label">마지막 갱신</span>
+                <strong id="lastUpdated" class="summary-value">-</strong>
+            </div>
+        </section>
+
+        <main class="viewer-main">
+            <section class="flow-chart-section">
+                <div class="section-header">
+                    <h2>프로그램 단계 흐름</h2>
+                    <span class="section-help">각 단계를 클릭하면 관련 로그가 아래에 표시됩니다.</span>
+                </div>
+                <div id="flowChart" class="flow-chart"></div>
+                <p id="flowEmptyMessage" class="flow-empty hidden">아직 수집된 로그가 없습니다. 메인 화면에서 동작 후 다시 확인해주세요.</p>
+            </section>
+
+            <section class="flow-details-section">
+                <div class="section-header">
+                    <h2 id="flowDetailsTitle">상세 로그</h2>
+                    <span id="flowSelectedCount" class="section-count"></span>
+                </div>
+                <div id="flowDetails" class="flow-details">
+                    <div id="detailDiagram" class="detail-diagram hidden">
+                        <div class="detail-diagram-header">
+                            <span>로그 유형 요약</span>
+                            <span id="detailDiagramTotal" class="detail-diagram-total">총 0건</span>
+                        </div>
+                        <div class="detail-diagram-items">
+                            <div class="detail-diagram-item" data-type="info">
+                                <div class="detail-diagram-label">
+                                    <span class="detail-diagram-dot info"></span>
+                                    <span>정보</span>
+                                </div>
+                                <div class="detail-diagram-bar">
+                                    <span class="detail-diagram-fill info" data-role="bar"></span>
+                                </div>
+                                <div class="detail-diagram-meta">
+                                    <span data-role="count">0건</span>
+                                    <span data-role="percentage">0%</span>
+                                </div>
+                            </div>
+                            <div class="detail-diagram-item" data-type="message">
+                                <div class="detail-diagram-label">
+                                    <span class="detail-diagram-dot message"></span>
+                                    <span>일반</span>
+                                </div>
+                                <div class="detail-diagram-bar">
+                                    <span class="detail-diagram-fill message" data-role="bar"></span>
+                                </div>
+                                <div class="detail-diagram-meta">
+                                    <span data-role="count">0건</span>
+                                    <span data-role="percentage">0%</span>
+                                </div>
+                            </div>
+                            <div class="detail-diagram-item" data-type="warn">
+                                <div class="detail-diagram-label">
+                                    <span class="detail-diagram-dot warn"></span>
+                                    <span>경고</span>
+                                </div>
+                                <div class="detail-diagram-bar">
+                                    <span class="detail-diagram-fill warn" data-role="bar"></span>
+                                </div>
+                                <div class="detail-diagram-meta">
+                                    <span data-role="count">0건</span>
+                                    <span data-role="percentage">0%</span>
+                                </div>
+                            </div>
+                            <div class="detail-diagram-item" data-type="error">
+                                <div class="detail-diagram-label">
+                                    <span class="detail-diagram-dot error"></span>
+                                    <span>오류</span>
+                                </div>
+                                <div class="detail-diagram-bar">
+                                    <span class="detail-diagram-fill error" data-role="bar"></span>
+                                </div>
+                                <div class="detail-diagram-meta">
+                                    <span data-role="count">0건</span>
+                                    <span data-role="percentage">0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="emptyMessage" class="flow-empty">왼쪽 단계에서 확인할 항목을 선택하세요.</p>
+                    <ul id="flowDetailsList" class="flow-log-list"></ul>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="viewer.js"></script>
+</body>
+</html>
+

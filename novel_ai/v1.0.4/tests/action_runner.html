@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI v1.0.4 액션 테스트 러너</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      background: #090b12;
+      color: #f5f6f7;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      padding: 2rem 0;
+    }
+    .runner-shell {
+      max-width: 100%;
+      width: 100%;
+      margin: 0;
+      background: rgba(12, 16, 28, 0.9);
+      border-radius: 0;
+      border: 1px solid rgba(90, 110, 255, 0.25);
+      box-shadow: 0 20px 60px rgba(12, 18, 48, 0.6);
+      padding: 2.4rem 2.6rem;
+    }
+    .runner-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      border-bottom: 1px solid rgba(90, 110, 255, 0.25);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .runner-header h1 {
+      font-size: 1.9rem;
+      margin: 0;
+    }
+    .runner-header p {
+      margin: 0;
+      color: #a9b2d9;
+      line-height: 1.6;
+    }
+    .runner-body {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+    .sidebar {
+      --sidebar-width: 320px;
+      flex: 0 0 var(--sidebar-width);
+      display: flex;
+      flex-direction: column;
+      gap: 1.6rem;
+      background: rgba(18, 22, 38, 0.9);
+      border-radius: 18px 0 0 18px;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      padding: 1.6rem 1.3rem;
+      position: relative;
+    }
+    .sidebar h2 {
+      margin: 0 0 0.6rem;
+      font-size: 1.1rem;
+      color: #dfe3ff;
+    }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 12px;
+      color: #bfc8ff;
+      text-decoration: none;
+      font-weight: 600;
+      background: rgba(28, 34, 58, 0.75);
+      border: 1px solid transparent;
+      transition: border 0.2s ease, transform 0.2s ease;
+    }
+    .sidebar-nav a:hover {
+      border-color: rgba(120, 140, 255, 0.6);
+      transform: translateX(4px);
+    }
+    .sidebar-nav a span {
+      font-size: 1.1rem;
+    }
+    .sidebar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .sidebar-list {
+      max-height: 300px;
+      overflow-y: auto;
+      background: rgba(20, 26, 48, 0.75);
+      border-radius: 12px;
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 0.6rem 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .sidebar-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .sidebar-list::-webkit-scrollbar-thumb {
+      background: rgba(118, 138, 255, 0.4);
+      border-radius: 6px;
+    }
+    .sidebar-list button {
+      background: rgba(36, 44, 78, 0.9);
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      color: #dfe3ff;
+      border-radius: 10px;
+      padding: 0.55rem 0.6rem;
+      text-align: left;
+      font-size: 0.92rem;
+      cursor: pointer;
+      transition: transform 0.15s ease, border 0.2s ease;
+      display: block;
+    }
+    .sidebar-list button:hover {
+      transform: translateX(4px);
+      border-color: rgba(140, 160, 255, 0.6);
+    }
+    .sidebar-list button.active {
+      border-color: rgba(120, 150, 255, 0.85);
+      background: rgba(52, 64, 110, 0.95);
+    }
+    .sidebar-list .item-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: #9fa9d8;
+    }
+    .sidebar-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .sidebar-actions button,
+    .sidebar-actions a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.65rem 0.8rem;
+      border-radius: 12px;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      background: rgba(26, 32, 58, 0.85);
+      color: #dfe3ff;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .sidebar-actions button:hover,
+    .sidebar-actions a:hover {
+      background: rgba(44, 52, 92, 0.9);
+    }
+    .split-resizer {
+      width: 10px;
+      cursor: col-resize;
+      background: rgba(118, 138, 255, 0.35);
+      border-top: 1px solid rgba(118, 138, 255, 0.3);
+      border-bottom: 1px solid rgba(118, 138, 255, 0.3);
+      position: relative;
+    }
+    .split-resizer::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 60px;
+      background: rgba(180, 188, 255, 0.6);
+      border-radius: 4px;
+    }
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2.1rem;
+      background: rgba(16, 20, 34, 0.85);
+      border-radius: 0 18px 18px 0;
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 1.8rem 1.6rem 2.2rem;
+    }
+    section.content-block {
+      background: rgba(18, 22, 35, 0.65);
+      border-radius: 16px;
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 1.6rem 1.3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+    section.content-block h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      color: #dfe5ff;
+    }
+    .runner-form {
+      display: grid;
+      gap: 1.2rem;
+    }
+    .form-row {
+      display: grid;
+      gap: 1rem;
+    }
+    @media (min-width: 720px) {
+      .form-row.two-columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    label {
+      font-weight: 600;
+      color: #d2d8f8;
+      display: block;
+      margin-bottom: 0.35rem;
+    }
+    input[type="text"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      background: rgba(20, 25, 45, 0.8);
+      border: 1px solid rgba(90, 110, 255, 0.25);
+      border-radius: 12px;
+      color: #f5f6f7;
+      font-size: 1rem;
+      padding: 0.75rem 0.9rem;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(120, 140, 255, 0.85);
+      box-shadow: 0 0 0 3px rgba(120, 140, 255, 0.25);
+    }
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+    .runner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .primary-btn,
+    .secondary-btn,
+    .danger-btn,
+    .sidebar-actions button,
+    a.secondary-btn {
+      border: none;
+      cursor: pointer;
+      border-radius: 12px;
+      padding: 0.75rem 1.6rem;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+    }
+    .primary-btn {
+      background: linear-gradient(135deg, #4f5efc 0%, #6c7bff 100%);
+      color: #fff;
+      box-shadow: 0 14px 30px rgba(80, 98, 255, 0.35);
+    }
+    .primary-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+    .secondary-btn {
+      background: rgba(28, 34, 58, 0.9);
+      color: #d2d9ff;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+    }
+    .danger-btn {
+      background: rgba(120, 35, 35, 0.85);
+      border: 1px solid rgba(255, 120, 120, 0.6);
+      color: #ffe3e3;
+    }
+    .danger-btn:hover {
+      background: rgba(150, 40, 40, 0.9);
+    }
+    .runner-log {
+      background: rgba(12, 16, 28, 0.85);
+      border-radius: 16px;
+      border: 1px solid rgba(90, 110, 255, 0.18);
+      padding: 1.2rem 1rem;
+      max-height: 420px;
+      overflow-y: auto;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(118, 138, 255, 0.5) rgba(20, 25, 45, 0.6);
+    }
+    .runner-log::-webkit-scrollbar {
+      width: 8px;
+    }
+    .runner-log::-webkit-scrollbar-track {
+      background: rgba(20, 25, 45, 0.6);
+      border-radius: 10px;
+    }
+    .runner-log::-webkit-scrollbar-thumb {
+      background: rgba(118, 138, 255, 0.5);
+      border-radius: 10px;
+    }
+    .log-entry {
+      border-left: 4px solid rgba(80, 98, 255, 0.4);
+      padding-left: 0.75rem;
+      color: #d7dcff;
+    }
+    .log-entry.info { border-color: rgba(80, 160, 255, 0.6); }
+    .log-entry.success { border-color: rgba(105, 220, 150, 0.8); color: #b8ffd7; }
+    .log-entry.warn { border-color: rgba(255, 200, 120, 0.82); color: #ffe5be; }
+    .log-entry.error { border-color: rgba(255, 92, 92, 0.84); color: #ffc1c1; }
+    .status-steps {
+      display: grid;
+      gap: 0.55rem;
+    }
+    .status-step {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #9da9e0;
+    }
+    .status-step span {
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 50%;
+      background: rgba(120, 140, 255, 0.25);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+    }
+    .status-step.done span {
+      background: rgba(105, 220, 150, 0.75);
+    }
+    .records-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: center;
+    }
+    .records-header h3 {
+      margin: 0;
+      font-size: 1.3rem;
+      color: #dfe5ff;
+    }
+    .records-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+    .records-table {
+      display: grid;
+      gap: 0.9rem;
+    }
+    .record-card {
+      border: 1px solid rgba(90, 110, 255, 0.2);
+      border-radius: 14px;
+      padding: 1rem 1.1rem;
+      background: rgba(18, 22, 38, 0.85);
+      display: grid;
+      gap: 0.6rem;
+    }
+    .record-card.active {
+      border-color: rgba(120, 150, 255, 0.6);
+      box-shadow: 0 0 0 2px rgba(120, 150, 255, 0.2);
+    }
+    .record-top {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+    .record-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.6rem;
+      align-items: center;
+    }
+    .record-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+    }
+    .mini-btn {
+      background: rgba(40, 48, 82, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      color: #d7deff;
+      padding: 0.35rem 0.75rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .mini-btn:hover {
+      background: rgba(60, 70, 110, 0.9);
+    }
+    .record-data {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      background: rgba(9, 12, 22, 0.85);
+      border-radius: 10px;
+      border: 1px solid rgba(90, 110, 255, 0.18);
+      padding: 0.8rem;
+      max-height: 140px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .record-note {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .record-note textarea {
+      min-height: 70px;
+      font-size: 0.95rem;
+    }
+    .detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      font-size: 0.92rem;
+      color: #a9b2d9;
+    }
+    .detail-data {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      background: rgba(9, 12, 22, 0.85);
+      border-radius: 12px;
+      border: 1px solid rgba(90, 110, 255, 0.18);
+      padding: 1rem;
+      white-space: pre-wrap;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    #cursorPromptOutput {
+      width: 100%;
+      min-height: 180px;
+      background: rgba(9, 12, 22, 0.85);
+      border-radius: 12px;
+      border: 1px solid rgba(90, 110, 255, 0.25);
+      color: #f5f6f7;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      padding: 1rem;
+      resize: vertical;
+    }
+    .hint-text {
+      font-size: 0.9rem;
+      color: #9ba7d2;
+      line-height: 1.4;
+    }
+    @media (max-width: 1080px) {
+      .runner-shell {
+        padding: 1.8rem 1.2rem;
+      }
+      .runner-body {
+        flex-direction: column;
+      }
+      .sidebar {
+        border-radius: 18px;
+        flex: none;
+        width: auto;
+      }
+      .split-resizer {
+        display: none;
+      }
+      .content {
+        border-radius: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="runner-shell">
+    <header class="runner-header">
+      <h1>Novel AI 액션 테스트 러너</h1>
+      <p>
+        좌측 메뉴에서 결과를 바로 확인하고, 우측에서 테스트 입력 및 로그를 확인할 수 있습니다.<br>
+        값 입력 후 <strong>“테스트 실행”</strong>을 누르면 자동으로 챕터와 섹션 데이터를 생성하고 검증합니다.
+      </p>
+    </header>
+
+    <div class="runner-body">
+      <aside class="sidebar">
+        <div>
+          <h2>빠른 메뉴</h2>
+          <nav class="sidebar-nav">
+            <a href="#settings"><span>⚙</span>입력 설정</a>
+            <a href="#status"><span>📈</span>진행 상황</a>
+            <a href="#records"><span>📚</span>구성 목록</a>
+            <a href="#detail"><span>🗂</span>선택 상세</a>
+            <a href="#prompt"><span>✍</span>Cursor 프롬프트</a>
+            <a href="#logs"><span>📋</span>실행 로그</a>
+          </nav>
+        </div>
+        <div class="sidebar-section">
+          <h2>최근 구성 항목</h2>
+          <div id="sidebarRecordsList" class="sidebar-list">
+            <button type="button" class="active" data-example="true">
+              <div style="font-weight:600; font-size:0.9rem;">1장 회의실의 긴장</div>
+              <div class="item-meta"><span>#1</span><span>예시</span></div>
+            </button>
+            <button type="button" data-example="true">
+              <div style="font-weight:600; font-size:0.9rem;">2장 전장의 이탈</div>
+              <div class="item-meta"><span>#2</span><span>예시</span></div>
+            </button>
+            <button type="button" data-example="true">
+              <div style="font-weight:600; font-size:0.9rem;">3장 리사의 증언</div>
+              <div class="item-meta"><span>#3</span><span>예시</span></div>
+            </button>
+            <button type="button" data-example="true">
+              <div style="font-weight:600; font-size:0.9rem;">4장 균형의 붕괴</div>
+              <div class="item-meta"><span>#4</span><span>예시</span></div>
+            </button>
+            <p class="hint-text" style="margin:0; padding:0 0.4rem;">테스트 실행 후 자동으로 갱신됩니다.</p>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <button id="loadSampleDataBtn" type="button">📦 샘플 데이터 로드</button>
+          <button id="resetDataBtnSidebar" type="button">🗑 데이터 전체 삭제</button>
+          <a href="../index.html">🏠 메인 콘솔로 이동</a>
+        </div>
+      </aside>
+      <div class="split-resizer" id="sidebarResizer" role="separator" aria-orientation="vertical" aria-label="레이아웃 크기 조절"></div>
+      <main class="content">
+        <section class="content-block" id="settings">
+          <h2>입력 설정</h2>
+          <div class="runner-form">
+            <div class="form-row">
+              <label for="serverUrlInput">서버 URL</label>
+              <input id="serverUrlInput" type="text" value="http://127.0.0.1:8123" autocomplete="off">
+            </div>
+
+            <div class="form-row">
+              <label for="novelTitleInput">소설 제목</label>
+              <input id="novelTitleInput" type="text" autocomplete="off" placeholder="자동 생성" />
+            </div>
+
+            <div class="form-row two-columns">
+              <div>
+                <label for="chapterCountInput">생성할 챕터 수 (최대 10)</label>
+                <input id="chapterCountInput" type="number" min="1" max="10" value="3">
+              </div>
+              <div>
+                <label for="sectionsInput">사용할 섹션명 (쉼표 구분)</label>
+                <input id="sectionsInput" type="text" value="구성,상세,스토리,에필로그,주요 사건">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="customDataInput">데이터 텍스트 템플릿 ({{chapter}} 등 변수 사용 가능)</label>
+              <textarea id="customDataInput" placeholder="예: {{title}} / {{chapter}} / {{section}}"></textarea>
+            </div>
+          </div>
+
+          <div class="runner-actions">
+            <button id="runTestBtn" class="primary-btn">테스트 실행</button>
+            <button id="clearLogBtn" class="secondary-btn">로그 지우기</button>
+            <button id="resetDataBtn" class="danger-btn">데이터 전체 삭제</button>
+            <button id="loadRecordsBtn" class="secondary-btn">데이터 목록 새로고침</button>
+          </div>
+        </section>
+
+        <section class="content-block" id="status">
+          <h2>진행 상황</h2>
+          <div class="status-steps">
+            <div class="status-step" data-step="prepare">
+              <span>1</span>
+              <div>입력 값 준비</div>
+            </div>
+            <div class="status-step" data-step="saving">
+              <span>2</span>
+              <div>챕터 데이터 저장</div>
+            </div>
+            <div class="status-step" data-step="verifying">
+              <span>3</span>
+              <div>서버 검증</div>
+            </div>
+            <div class="status-step" data-step="done">
+              <span>4</span>
+              <div>완료</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="content-block" id="records">
+          <div class="records-header">
+            <h3>구성 목록</h3>
+            <div class="records-actions">
+              <button id="generatePromptBtn" class="primary-btn">선택 항목 프롬프트 만들기</button>
+              <button id="copyPromptBtn" class="secondary-btn">프롬프트 복사</button>
+            </div>
+          </div>
+          <p class="hint-text">
+            자동 생성된 챕터/섹션 구성입니다. 수정 또는 검토가 필요한 항목을 선택하고 오른쪽 상세 패널에서 확인하세요.
+          </p>
+          <div class="records-table" id="recordsContainer"></div>
+        </section>
+
+        <section class="content-block" id="detail">
+          <h2>선택 항목 상세</h2>
+          <div id="detailContent">
+            <p class="hint-text">목록에서 “보기” 버튼을 누르면 세부 내용이 표시됩니다.</p>
+          </div>
+        </section>
+
+        <section class="content-block" id="prompt">
+          <h2>Cursor AI 전달용 프롬프트</h2>
+          <textarea id="cursorPromptOutput" placeholder="선택한 항목과 메모를 기반으로 생성된 프롬프트가 여기에 표시됩니다."></textarea>
+          <p class="hint-text">
+            필요한 경우 프롬프트를 수정한 뒤 Cursor AI 대화창에 붙여넣으세요. 선택 후 다시 생성하면 최신 내용이 반영됩니다.
+          </p>
+        </section>
+
+        <section class="content-block" id="logs">
+          <h2>실행 로그</h2>
+          <div class="runner-log" id="runnerLog"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/novel_ai_shared.js"></script>
+  <script src="../assets/js/sample_data_loader.js"></script>
+  <script src="action_runner.js"></script>
+  <script>
+    (function initSidebarControls() {
+      const sidebarResetBtn = document.getElementById('resetDataBtnSidebar');
+      if (sidebarResetBtn) {
+        sidebarResetBtn.addEventListener('click', () => {
+          document.getElementById('resetDataBtn')?.click();
+        });
+      }
+
+      const sidebar = document.querySelector('.sidebar');
+      const resizer = document.getElementById('sidebarResizer');
+      if (!sidebar || !resizer) return;
+
+      const minWidth = 220;
+      const maxWidth = 520;
+      let startX = 0;
+      let startWidth = parseFloat(getComputedStyle(sidebar).width);
+      let dragging = false;
+
+      const setWidth = width => {
+        const clamped = Math.min(maxWidth, Math.max(minWidth, width));
+        sidebar.style.setProperty('--sidebar-width', `${clamped}px`);
+        localStorage.setItem('novel_ai_action_sidebar_width', String(clamped));
+      };
+
+      const stored = parseFloat(localStorage.getItem('novel_ai_action_sidebar_width'));
+      if (stored && Number.isFinite(stored)) {
+        setWidth(stored);
+      }
+
+      const onPointerMove = event => {
+        if (!dragging) return;
+        event.preventDefault();
+        const delta = event.clientX - startX;
+        setWidth(startWidth + delta);
+      };
+
+      const stopDragging = () => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', stopDragging);
+      };
+
+      resizer.addEventListener('pointerdown', event => {
+        dragging = true;
+        startX = event.clientX;
+        startWidth = parseFloat(getComputedStyle(sidebar).width);
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', stopDragging);
+      });
+    })();
+  </script>
+</body>
+</html>
+
+

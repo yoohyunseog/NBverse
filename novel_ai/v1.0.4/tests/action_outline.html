@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI 구성 목록 테스트</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      background: #090d1b;
+      color: #eef1ff;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+    }
+    .pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 2.6rem;
+      box-sizing: border-box;
+    }
+    .left-pane { background: #10172e; border-right: 1px solid rgba(120, 140, 255, 0.25); }
+    .right-pane { background: #0d1324; }
+    h1, h2 { margin: 0 0 1.6rem; font-weight: 700; }
+    h1 { font-size: 1.85rem; }
+    h2 { font-size: 1.3rem; }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      margin-bottom: 1.4rem;
+    }
+    label { font-weight: 600; color: #cdd4ff; }
+    input[type="text"], input[type="number"], textarea {
+      background: rgba(22, 29, 52, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      color: #eef1ff;
+      font-size: 1rem;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(150, 170, 255, 0.85);
+      box-shadow: 0 0 0 3px rgba(120, 140, 255, 0.25);
+    }
+    .section-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+    }
+    .section-item {
+      background: rgba(15, 22, 40, 0.78);
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      border-radius: 14px;
+      padding: 1rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #dce1ff;
+      font-weight: 600;
+    }
+    .section-status {
+      font-size: 0.9rem;
+      color: #9aa7ff;
+    }
+    .section-textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    .summary-card {
+      background: rgba(17, 25, 46, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      border-radius: 14px;
+      padding: 1.2rem 1.3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+    .summary-list {
+      display: grid;
+      gap: 0.7rem;
+    }
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+      color: #ccd4ff;
+    }
+    .summary-item span:last-child {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      color: #97a4ff;
+    }
+    .controls {
+      display: flex;
+      gap: 0.7rem;
+      margin-bottom: 1.6rem;
+    }
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 0.75rem 1.4rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #eef1ff;
+      background: rgba(30, 40, 70, 0.85);
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    button:hover { background: rgba(50, 62, 110, 0.9); }
+    .log {
+      margin-top: 1.8rem;
+      background: rgba(14, 20, 36, 0.82);
+      border-radius: 14px;
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.4rem 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.94rem;
+    }
+    .log-entry {
+      border-left: 4px solid rgba(80, 120, 255, 0.45);
+      padding-left: 0.8rem;
+      color: #d7dcff;
+    }
+    .log-entry.success { border-color: rgba(105, 220, 150, 0.8); color: #b8ffd7; }
+    .log-entry.warn { border-color: rgba(255, 200, 120, 0.82); color: #ffe5be; }
+    .log-entry.error { border-color: rgba(255, 92, 92, 0.84); color: #ffc1c1; }
+  </style>
+</head>
+<body>
+  <section class="pane left-pane">
+    <h1>구성 목록 테스트</h1>
+    <div class="field">
+      <label for="novelTitleInput">소설 제목</label>
+      <input id="novelTitleInput" type="text" value="다크 판타지" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="chapterNumberInput">챕터 번호</label>
+      <input id="chapterNumberInput" type="number" min="1" value="1">
+    </div>
+    <div class="section-list" id="sectionList"></div>
+  </section>
+
+  <section class="pane right-pane">
+    <h2>구성 저장 현황</h2>
+    <div class="controls">
+      <button id="refreshBtn" type="button">🔄 서버에서 새로고침</button>
+      <button id="clearBtn" type="button">🧼 입력 초기화</button>
+    </div>
+    <div class="summary-card">
+      <strong>저장된 섹션</strong>
+      <div class="summary-list" id="summaryList">
+        <span style="color:#9aa4d9;">섹션별 저장 상태가 여기에 표시됩니다.</span>
+      </div>
+    </div>
+    <div class="log" id="runnerLog"></div>
+  </section>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/novel_ai_shared.js"></script>
+  <script src="action_outline.js"></script>
+</body>
+</html>

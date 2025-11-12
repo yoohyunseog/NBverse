@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI 수동 입력 테스트</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #080b16;
+      color: #f2f4ff;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+    }
+    .top-banner {
+      padding: 1.6rem 2.6rem;
+      background: linear-gradient(135deg, rgba(36, 48, 112, 0.65), rgba(16, 20, 44, 0.92));
+      border-bottom: 1px solid rgba(118, 138, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    @media (max-width: 991.98px) {
+      .top-banner {
+        padding: 1.4rem 1.4rem;
+      }
+    }
+    .top-banner h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #f2f4ff;
+      letter-spacing: 0.02em;
+    }
+    .top-banner p {
+      margin: 0;
+      color: #c3ccff;
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 960px;
+    }
+    .top-banner .api-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.55rem 0.85rem;
+      border-radius: 10px;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      background: rgba(20, 28, 62, 0.65);
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      color: #9fb5ff;
+      text-decoration: none;
+      width: fit-content;
+      transition: border 0.2s ease, transform 0.2s ease;
+    }
+    .top-banner .api-inline:hover {
+      border-color: rgba(150, 170, 255, 0.7);
+      transform: translateY(-1px);
+    }
+    .api-usage {
+      padding: 1.8rem 2.6rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+    @media (max-width: 991.98px) {
+      .api-usage {
+        padding: 1.6rem 1.4rem 0;
+      }
+    }
+    .api-usage h2 {
+      margin: 0;
+      font-size: 1.35rem;
+      color: #e0e5ff;
+      letter-spacing: 0.015em;
+    }
+    .api-usage ul {
+      margin: 0;
+      padding-left: 1.2rem;
+      color: #c0c9ff;
+      line-height: 1.65;
+      font-size: 0.95rem;
+    }
+    .api-usage ul li {
+      margin-bottom: 0.35rem;
+    }
+    .api-usage .endpoint {
+      display: block;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      color: #a5b9ff;
+    }
+    .api-usage .desc {
+      display: block;
+      margin-top: 0.2rem;
+    }
+    .api-usage pre {
+      margin: 0;
+      background: rgba(15, 21, 46, 0.75);
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 12px;
+      padding: 1rem 1.2rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+      color: #d8dcff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .api-usage code {
+      color: #a5b9ff;
+    }
+    .layout-group {
+      margin-top: 1.6rem;
+    }
+    .pane-group-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: #e2e6ff;
+      margin-bottom: 1rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .pane-group-title::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #86a4ff, #4c6aff);
+      box-shadow: 0 0 12px rgba(134, 164, 255, 0.55);
+    }
+    .test-wrapper {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+    .test-sidebar {
+      width: 280px;
+      min-width: 200px;
+      max-width: 50%;
+      background: rgba(12, 18, 38, 0.95);
+      border-right: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 2rem 1.5rem;
+      overflow-y: auto;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 991.98px) {
+      .test-sidebar {
+        min-width: 180px;
+        max-width: 80%;
+        transform: translateX(-100%);
+      }
+      .test-sidebar.open {
+        transform: translateX(0);
+      }
+    }
+    .test-sidebar h3 {
+      margin: 0 0 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .test-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .test-sidebar-nav li {
+      margin: 0;
+    }
+    .test-sidebar-nav a {
+      display: block;
+      padding: 0.8rem 1rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      font-size: 0.94rem;
+      line-height: 1.4;
+      border: 1px solid rgba(118, 138, 255, 0.2);
+    }
+    .test-sidebar-nav a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #d3daff;
+      transform: translateX(4px);
+      border-color: rgba(118, 138, 255, 0.4);
+    }
+    .test-sidebar-nav a.active {
+      background: rgba(118, 138, 255, 0.25);
+      color: #e0e5ff;
+      font-weight: 600;
+      border-left: 3px solid rgba(118, 138, 255, 0.8);
+    }
+    .test-resizer {
+      position: fixed;
+      top: 0;
+      left: 280px;
+      width: 4px;
+      height: 100vh;
+      background: rgba(118, 138, 255, 0.3);
+      cursor: col-resize;
+      z-index: 101;
+      transition: background 0.2s ease;
+    }
+    .test-resizer:hover {
+      background: rgba(118, 138, 255, 0.6);
+    }
+    .test-resizer.dragging {
+      background: rgba(118, 138, 255, 0.8);
+    }
+    @media (max-width: 991.98px) {
+      .test-resizer {
+        display: none;
+      }
+    }
+    .test-toggle-btn {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 102;
+      background: rgba(118, 138, 255, 0.9);
+      border: 1px solid rgba(118, 138, 255, 0.5);
+      color: #f2f4ff;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s ease;
+    }
+    .test-toggle-btn:hover {
+      background: rgba(118, 138, 255, 1);
+    }
+    @media (max-width: 991.98px) {
+      .test-toggle-btn {
+        display: block;
+      }
+    }
+    .test-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+    @media (max-width: 991.98px) {
+      .test-overlay.open {
+        display: block;
+      }
+    }
+    .layout-shell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 2.8rem 2.4rem 2.4rem;
+      margin-left: 284px;
+      width: calc(100% - 284px);
+      transition: margin-left 0.2s ease, width 0.2s ease;
+    }
+    @media (max-width: 991.98px) {
+      .layout-shell {
+        padding: 1.8rem 1.2rem 1.5rem;
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      padding: 2.4rem;
+      box-sizing: border-box;
+      height: 100%;
+      border-radius: 20px;
+      border: 1px solid rgba(118, 138, 255, 0.22);
+      box-shadow: 0 35px 65px rgba(10, 15, 34, 0.45);
+      position: relative;
+    }
+    @media (max-width: 991.98px) {
+      .pane {
+        padding: 1.6rem 1.4rem;
+        border-radius: 18px;
+      }
+    }
+    .pane-header {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.5rem 0.95rem;
+      border-radius: 999px;
+      background: rgba(12, 18, 48, 0.76);
+      border: 1px solid rgba(118, 138, 255, 0.38);
+      font-size: 0.82rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #c9d4ff;
+      margin-bottom: 1.6rem;
+      box-shadow: 0 0 18px rgba(30, 42, 84, 0.25);
+    }
+    .pane-header .bullet {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #9aa8ff, #5f7cff);
+      display: inline-block;
+      box-shadow: 0 0 10px rgba(131, 157, 255, 0.65);
+    }
+    .action-controls {
+      margin: 1.4rem 0 1.8rem;
+      display: flex;
+      gap: 0.85rem;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .action-controls button {
+      background: linear-gradient(135deg, rgba(104, 120, 255, 0.9), rgba(74, 95, 210, 0.92));
+      border: 1px solid rgba(160, 178, 255, 0.4);
+      color: #f4f6ff;
+      padding: 0.65rem 1.35rem;
+      border-radius: 999px;
+      font-size: 0.94rem;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+      box-shadow: 0 12px 24px rgba(72, 92, 210, 0.35);
+    }
+    .action-controls button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 28px rgba(72, 92, 210, 0.45);
+    }
+    .action-controls button:active {
+      transform: translateY(0);
+      box-shadow: 0 10px 18px rgba(72, 92, 210, 0.35);
+    }
+    .action-controls .hint {
+      font-size: 0.88rem;
+      color: #95a4e9;
+      flex: 1 1 auto;
+    }
+    .left-pane {
+      background: radial-gradient(circle at top left, rgba(37, 52, 104, 0.55), rgba(12, 15, 32, 0.95));
+    }
+    .right-pane {
+      background: radial-gradient(circle at bottom right, rgba(24, 30, 68, 0.5), rgba(10, 13, 28, 0.95));
+    }
+    @media (max-width: 991.98px) {
+      .left-pane,
+      .right-pane {
+        border-radius: 18px;
+        box-shadow: 0 0 38px rgba(12, 18, 38, 0.45);
+      }
+      .left-pane {
+        margin-bottom: 1.8rem;
+      }
+    }
+    h1, h2 {
+      margin: 0 0 1.8rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    h1 { font-size: 1.9rem; }
+    h2 { font-size: 1.45rem; }
+    p.description {
+      margin: 0 0 1.9rem;
+      color: #b7c1ff;
+      line-height: 1.6;
+      font-size: 0.98rem;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      margin-bottom: 1.8rem;
+    }
+    label {
+      font-weight: 600;
+      color: #d3daff;
+      font-size: 0.98rem;
+    }
+    input[type="text"], textarea {
+      background: rgba(23, 30, 58, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      border-radius: 12px;
+      padding: 0.82rem 1rem;
+      color: #f2f4ff;
+      font-size: 1rem;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+    }
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: rgba(150, 170, 255, 0.85);
+      box-shadow: 0 0 0 3px rgba(118, 138, 255, 0.3);
+    }
+    .bit-display {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1.4rem;
+    }
+    @media (max-width: 575.98px) {
+      .bit-display {
+        grid-template-columns: 1fr;
+      }
+    }
+    .bit-card {
+      background: rgba(16, 21, 42, 0.82);
+      border: 1px solid rgba(118, 138, 255, 0.28);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .bit-card strong {
+      font-size: 0.88rem;
+      text-transform: uppercase;
+      color: #c7cffb;
+      letter-spacing: 0.08em;
+    }
+    .bit-card span {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 1rem;
+      color: #9fb2ff;
+    }
+    .api-info {
+      margin-bottom: 1.8rem;
+      padding: 1.1rem 1.25rem;
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 14px;
+      background: rgba(18, 24, 46, 0.78);
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .api-info strong {
+      font-size: 0.98rem;
+      color: #dce2ff;
+      letter-spacing: 0.06em;
+    }
+    .api-info p {
+      margin: 0;
+      color: #b1bbff;
+      line-height: 1.55;
+      font-size: 0.93rem;
+    }
+    .api-info .api-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      color: #8aa4ff;
+      text-decoration: none;
+      padding: 0.55rem 0.75rem;
+      background: rgba(30, 42, 84, 0.65);
+      border-radius: 8px;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+      transition: border 0.2s ease, transform 0.2s ease;
+    }
+    .api-info .api-link:hover {
+      border-color: rgba(150, 170, 255, 0.65);
+      transform: translateY(-1px);
+    }
+    .api-info .api-summary {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.88rem;
+      color: #9fb2ff;
+      background: rgba(17, 23, 45, 0.75);
+      border-radius: 8px;
+      padding: 0.55rem 0.7rem;
+    }
+    .data-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      max-height: 320px;
+      overflow-y: auto;
+      margin-bottom: 1.8rem;
+    }
+    .data-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.4rem;
+      margin-bottom: 1.8rem;
+    }
+    @media (max-width: 575.98px) {
+      .data-columns {
+        grid-template-columns: 1fr;
+      }
+    }
+    .data-column h3 {
+      margin: 0 0 0.8rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #dce1ff;
+    }
+    .column-log {
+      margin-top: 1rem;
+      background: rgba(18, 23, 44, 0.82);
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.86rem;
+      color: #c7cffb;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .column-folders {
+      margin-top: 1.2rem;
+      background: rgba(16, 22, 40, 0.78);
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+    }
+    .column-folders h4 {
+      margin: 0 0 0.6rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #d0d7ff;
+    }
+    .folder-list {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.84rem;
+      color: #aab5f0;
+      max-height: 160px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .folder-list .folder-item {
+      line-height: 1.45;
+      word-break: break-all;
+      background: rgba(20, 27, 54, 0.7);
+      border: 1px solid rgba(118, 138, 255, 0.18);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .folder-list .folder-item .label {
+      color: #d5dbff;
+      font-weight: 600;
+      font-size: 0.86rem;
+    }
+    .folder-list .folder-item .meta {
+      color: #8e99d9;
+      font-size: 0.8rem;
+    }
+    .data-item {
+      position: relative;
+      background: rgba(17, 24, 44, 0.78);
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      border-radius: 12px;
+      padding: 0.95rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      cursor: pointer;
+      transition: border 0.2s ease, transform 0.2s ease;
+    }
+    .data-item:hover { border-color: rgba(150, 170, 255, 0.6); transform: translateX(4px); }
+    .data-item .title { font-weight: 600; color: #dce2ff; }
+    .data-item .snippet { color: #9aa5d9; font-size: 0.92rem; padding-right: 1.8rem; }
+    .data-item button {
+      position: absolute;
+      right: 0.65rem;
+      bottom: 0.55rem;
+      background: rgba(255, 94, 94, 0.9);
+      border: none;
+      color: #fff2f2;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+      box-shadow: 0 10px 20px rgba(255, 94, 94, 0.3);
+    }
+    .data-item button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 14px 24px rgba(255, 94, 94, 0.38);
+    }
+    .result-card {
+      background: rgba(15, 22, 43, 0.82);
+      border-radius: 14px;
+      border: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 1.15rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+    }
+    .result-card strong {
+      font-size: 0.95rem;
+      letter-spacing: 0.05em;
+      color: #d5dbff;
+    }
+    .result-body {
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.94rem;
+      color: #eef1ff;
+      white-space: pre-wrap;
+    }
+    .log {
+      margin-top: 1.9rem;
+      background: rgba(13, 19, 38, 0.85);
+      border-radius: 12px;
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.3rem 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.92rem;
+    }
+    .log-entry {
+      border-left: 4px solid rgba(80, 120, 255, 0.45);
+      padding-left: 0.8rem;
+      color: #d7dcff;
+    }
+    .log-entry.success { border-color: rgba(105, 220, 150, 0.8); color: #b8ffd7; }
+    .log-entry.warn { border-color: rgba(255, 200, 120, 0.82); color: #ffe5be; }
+    .log-entry.error { border-color: rgba(255, 92, 92, 0.84); color: #ffc1c1; }
+  </style>
+</head>
+<body>
+  <header class="top-banner">
+    <h1>Novel AI 수동 입력 예제</h1>
+    <p>
+      이 페이지는 속성과 데이터를 실시간으로 저장·조회하는 테스트 흐름을 보여주는 샘플입니다.
+      아래 폼에 입력하면 서버의 MAX/MIN 디렉터리 구조를 자동으로 갱신하며, 우측 패널에서 생성된 데이터를 즉시 확인할 수 있습니다.
+    </p>
+    <a id="topApiLink" class="api-inline" href="#" target="_blank" rel="noopener noreferrer">GET /api/tests/folders</a>
+  </header>
+
+  <button class="test-toggle-btn" id="testToggleBtn">☰ 메뉴</button>
+  <div class="test-overlay" id="testOverlay"></div>
+
+  <div class="test-wrapper">
+    <aside class="test-sidebar" id="testSidebar">
+      <h3>메뉴</h3>
+      <ul class="test-sidebar-nav">
+        <li><a href="action_manual_test.html" class="active">📝 수동 입력 테스트</a></li>
+        <li><a href="action_manual_test_doc.html">📚 API 문서</a></li>
+        <li><a href="action_manual_test_example.html">🧪 API 예제</a></li>
+        <li><a href="action_manual_test_full_doc.html">📖 전체 문서</a></li>
+      </ul>
+    </aside>
+    <div class="test-resizer" id="testResizer"></div>
+
+    <div class="layout-shell container-fluid">
+    <section class="api-usage">
+      <h2>API 사용 순서</h2>
+      <ul>
+        <li>
+          <span class="endpoint">POST /api/attributes/data</span>
+          <span class="desc">입력한 속성과 데이터를 저장합니다. 서버가 BIT 값을 검증한 뒤 MAX/MIN 폴더에 기록합니다.</span>
+        </li>
+        <li>
+          <span class="endpoint">GET /api/tests/records</span>
+          <span class="desc">현재 저장된 레코드를 조회합니다. MAX/MIN 폴더를 스캔해 속성·데이터 정보를 반환합니다.</span>
+        </li>
+        <li>
+          <span class="endpoint">POST /api/attributes/data/delete</span>
+          <span class="desc">특정 속성 BIT 값을 가진 기존 데이터를 삭제합니다. 새 데이터 저장 전에 중복을 제거할 때 사용합니다.</span>
+        </li>
+        <li>
+          <span class="endpoint">GET /api/tests/folders</span>
+          <span class="desc">MAX/MIN 폴더별 파일·레코드 개수를 집계해 보여줍니다. includeFiles=true 로 호출하면 파일 경로도 확인할 수 있습니다.</span>
+        </li>
+        <li>
+          <span class="endpoint">POST /api/tests/reset-all</span>
+          <span class="desc">모든 테스트 데이터를 초기화합니다. body에 <code>{"confirm":"RESET"}</code> 를 포함해야 합니다.</span>
+        </li>
+      </ul>
+      <pre><code># 저장: 속성/데이터 입력
+curl -X POST http://127.0.0.1:8123/api/attributes/data \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeText": "다크 판타지 → 챕터 1: 제1장 → 구성",
+    "text": "소설 본문...",
+    "novelTitle": "다크 판타지"
+  }'
+
+# 조회: 저장된 항목 확인
+curl http://127.0.0.1:8123/api/tests/records?limit=50
+
+# 삭제: 특정 속성 BIT 삭제
+curl -X POST http://127.0.0.1:8123/api/attributes/data/delete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeBitMax": 3.065276923076923,
+    "attributeBitMin": 2.659123076923078
+  }'</code></pre>
+    </section>
+    <div class="pane-group-title">좌측: 입력·저장 / 우측: 데이터 상태</div>
+    <div class="layout-group row g-4 flex-column flex-lg-row">
+      <section class="pane left-pane col-12 col-lg-6">
+        <div class="pane-header"><span class="bullet"></span>입력 · 저장 영역</div>
+        <h1>수동 입력 테스트</h1>
+        <p class="description">
+          속성과 데이터를 입력하면 BIT 계산과 자동 저장이 즉시 실행됩니다.
+          저장된 기록은 오른쪽 목록에서 확인하고 다시 불러올 수 있습니다.
+        </p>
+        <div class="api-info">
+          <strong>폴더 구조 API</strong>
+          <p>MAX/MIN 데이터 디렉터리를 서버에서 직접 스캔해 폴더·파일·레코드 개수를 집계합니다.
+            테스트 자동화나 대시보드에서 데이터 상태를 확인할 때 사용할 수 있습니다.</p>
+          <a id="folderApiLink" class="api-link" href="#" target="_blank" rel="noopener noreferrer">GET /api/tests/folders</a>
+          <div id="folderApiSummary" class="api-summary">폴더 정보를 불러오는 중입니다…</div>
+        </div>
+        <div class="field">
+          <label for="attributeTextInput">속성 전체 경로</label>
+          <input id="attributeTextInput" type="text" placeholder="예: 다크 판타지 → 챕터 1: 제1장 → 구성" autocomplete="off">
+        </div>
+        <div class="bit-display">
+          <div class="bit-card">
+            <strong>BIT MAX</strong>
+            <span id="attributeMaxOutput">-</span>
+          </div>
+          <div class="bit-card">
+            <strong>BIT MIN</strong>
+            <span id="attributeMinOutput">-</span>
+          </div>
+        </div>
+        <div class="field mt-4">
+          <label for="dataTextInput">데이터 본문</label>
+          <textarea id="dataTextInput" placeholder="이곳에 데이터를 입력하면 자동으로 저장되고 우측 목록에 반영됩니다."></textarea>
+        </div>
+        <div class="result-card mt-4">
+          <strong>마지막 저장 결과</strong>
+          <div id="fetchResultContent" class="result-body">속성과 데이터를 모두 입력하면 저장 정보가 표시됩니다.</div>
+        </div>
+        <div class="log mt-4 mt-lg-5" id="runnerLog"></div>
+      </section>
+
+      <section class="pane right-pane col-12 col-lg-6">
+        <div class="pane-header"><span class="bullet"></span>데이터 조회 · 폴더 현황</div>
+        <h2>저장된 데이터</h2>
+        <div class="action-controls">
+          <span class="hint">현재 입력한 속성 경로와 동일한 레코드를 즉시 삭제합니다.</span>
+          <button type="button" id="deleteCurrentButton">현재 속성 데이터 삭제</button>
+        </div>
+        <div class="data-columns">
+          <div class="data-column">
+            <h3>MAX 폴더</h3>
+            <div class="data-list" id="dataListMax">
+              <span style="color:#9aa4d9;">저장된 데이터가 여기 표시됩니다.</span>
+            </div>
+            <div class="column-log" id="logMax">─</div>
+            <div class="column-folders">
+              <h4>폴더 경로</h4>
+              <div class="folder-list" id="folderListMax"><span style="color:#7d88c7;">폴더 경로가 여기 표시됩니다.</span></div>
+            </div>
+          </div>
+          <div class="data-column">
+            <h3>MIN 폴더</h3>
+            <div class="data-list" id="dataListMin">
+              <span style="color:#9aa4d9;">저장된 데이터가 여기 표시됩니다.</span>
+            </div>
+            <div class="column-log" id="logMin">─</div>
+            <div class="column-folders">
+              <h4>폴더 경로</h4>
+              <div class="folder-list" id="folderListMin"><span style="color:#7d88c7;">폴더 경로가 여기 표시됩니다.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      // 사이드바 너비 관리
+      const STORAGE_KEY = 'testSidebarWidth';
+      const DEFAULT_WIDTH = 280;
+      let sidebarWidth = parseInt(localStorage.getItem(STORAGE_KEY)) || DEFAULT_WIDTH;
+
+      // 사이드바 너비 적용
+      function applySidebarWidth(width) {
+        const sidebar = document.getElementById('testSidebar');
+        const resizer = document.getElementById('testResizer');
+        const container = document.querySelector('.layout-shell');
+        
+        if (sidebar && resizer && container) {
+          sidebar.style.width = `${width}px`;
+          resizer.style.left = `${width}px`;
+          container.style.marginLeft = `${width + 4}px`;
+          container.style.width = `calc(100% - ${width + 4}px)`;
+          sidebarWidth = width;
+          localStorage.setItem(STORAGE_KEY, width.toString());
+        }
+      }
+
+      // 리사이저 초기화
+      function initResizer() {
+        const resizer = document.getElementById('testResizer');
+        const sidebar = document.getElementById('testSidebar');
+        if (!resizer || !sidebar) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        resizer.addEventListener('mousedown', (e) => {
+          isDragging = true;
+          startX = e.clientX;
+          startWidth = sidebarWidth;
+          resizer.classList.add('dragging');
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+          e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+          if (!isDragging) return;
+          
+          const diff = e.clientX - startX;
+          const newWidth = Math.max(200, Math.min(window.innerWidth * 0.5, startWidth + diff));
+          applySidebarWidth(newWidth);
+        });
+
+        document.addEventListener('mouseup', () => {
+          if (isDragging) {
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+          }
+        });
+
+        // 터치 이벤트 지원 (모바일)
+        resizer.addEventListener('touchstart', (e) => {
+          isDragging = true;
+          startX = e.touches[0].clientX;
+          startWidth = sidebarWidth;
+          resizer.classList.add('dragging');
+          e.preventDefault();
+        });
+
+        document.addEventListener('touchmove', (e) => {
+          if (!isDragging) return;
+          
+          const diff = e.touches[0].clientX - startX;
+          const newWidth = Math.max(180, Math.min(window.innerWidth * 0.8, startWidth + diff));
+          applySidebarWidth(newWidth);
+          e.preventDefault();
+        });
+
+        document.addEventListener('touchend', () => {
+          if (isDragging) {
+            isDragging = false;
+            resizer.classList.remove('dragging');
+          }
+        });
+      }
+
+      // 모바일 토글 기능
+      function initMobileToggle() {
+        const toggleBtn = document.getElementById('testToggleBtn');
+        const sidebar = document.getElementById('testSidebar');
+        const overlay = document.getElementById('testOverlay');
+        
+        if (!toggleBtn || !sidebar || !overlay) return;
+
+        function openSidebar() {
+          sidebar.classList.add('open');
+          overlay.classList.add('open');
+        }
+
+        function closeSidebar() {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('open');
+        }
+
+        toggleBtn.addEventListener('click', () => {
+          if (sidebar.classList.contains('open')) {
+            closeSidebar();
+          } else {
+            openSidebar();
+          }
+        });
+
+        overlay.addEventListener('click', closeSidebar);
+
+        // ESC 키로 닫기
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+            closeSidebar();
+          }
+        });
+      }
+
+      // 현재 페이지 감지 및 active 클래스 설정
+      function setActiveNavItem() {
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('.test-sidebar-nav a');
+        navLinks.forEach(link => {
+          link.classList.remove('active');
+          const href = link.getAttribute('href');
+          if (currentPath.endsWith(href) || (href === 'action_manual_test.html' && currentPath.endsWith('action_manual_test.html'))) {
+            link.classList.add('active');
+          }
+        });
+      }
+
+      // 초기화
+      document.addEventListener('DOMContentLoaded', () => {
+        // 현재 페이지 active 설정
+        setActiveNavItem();
+        
+        // 초기 사이드바 너비 적용
+        applySidebarWidth(sidebarWidth);
+        
+        // 리사이저 초기화
+        initResizer();
+        
+        // 모바일 토글 초기화
+        initMobileToggle();
+
+        // 윈도우 리사이즈 시 사이드바 너비 재적용
+        window.addEventListener('resize', () => {
+          const maxWidth = window.innerWidth <= 991.98 ? window.innerWidth * 0.8 : window.innerWidth * 0.5;
+          if (sidebarWidth > maxWidth) {
+            applySidebarWidth(Math.min(sidebarWidth, maxWidth));
+          }
+        });
+      });
+    })();
+  </script>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/novel_ai_shared.js"></script>
+  <script src="action_manual_test.js"></script>
+</body>
+</html>

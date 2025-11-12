@@ -268,14 +268,10 @@
         // 사용자가 입력 필드에 입력한 값의 BIT를 그대로 사용해야 함
         const attributeBits = calculateBitValues(finalAttributeText);
         
-        // 데이터 텍스트가 비어있으면 dataBits는 null이어도 허용 (속성만 저장)
-        // 데이터 BIT 값은 속성 BIT 값을 사용
+        const hasDataText = Boolean(dataText && dataText.trim().length > 0);
         let dataBits = { max: null, min: null };
-        if (dataText && dataText.length > 0) {
-            dataBits = {
-                max: attributeBits.max,
-                min: attributeBits.min
-            };
+        if (hasDataText) {
+            dataBits = calculateBitValues(dataText);
         }
         
         // 속성 BIT는 필수, 데이터 BIT는 선택 (데이터가 있을 때만 필요)
@@ -287,7 +283,7 @@
         }
         
         // 데이터가 있을 때는 dataBits도 필요
-        if (dataText && dataText.length > 0 && (!dataBits.max || !dataBits.min)) {
+        if (hasDataText && (dataBits.max === null || dataBits.min === null)) {
             if (typeof window.updateSaveStatus === 'function') {
                 window.updateSaveStatus('⚠️ 데이터 BIT 값 계산 중...', 'warning');
             }

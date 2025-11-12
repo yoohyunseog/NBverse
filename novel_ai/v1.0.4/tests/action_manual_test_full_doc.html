@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI 전체 문서</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #080b16;
+      color: #f2f4ff;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+    }
+    .top-banner {
+      padding: 1.6rem 2.6rem;
+      background: linear-gradient(135deg, rgba(36, 48, 112, 0.65), rgba(16, 20, 44, 0.92));
+      border-bottom: 1px solid rgba(118, 138, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    @media (max-width: 991.98px) {
+      .top-banner {
+        padding: 1.4rem 1.4rem;
+      }
+    }
+    .top-banner h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #f2f4ff;
+      letter-spacing: 0.02em;
+    }
+    .top-banner p {
+      margin: 0;
+      color: #c3ccff;
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 960px;
+    }
+    .doc-wrapper {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+    .doc-sidebar {
+      width: 280px;
+      min-width: 200px;
+      max-width: 50%;
+      background: rgba(12, 18, 38, 0.95);
+      border-right: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 2rem 1.5rem;
+      overflow-y: auto;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 991.98px) {
+      .doc-sidebar {
+        min-width: 180px;
+        max-width: 80%;
+        transform: translateX(-100%);
+      }
+      .doc-sidebar.open {
+        transform: translateX(0);
+      }
+    }
+    .doc-resizer {
+      position: fixed;
+      top: 0;
+      left: 280px;
+      width: 4px;
+      height: 100vh;
+      background: rgba(118, 138, 255, 0.3);
+      cursor: col-resize;
+      z-index: 101;
+      transition: background 0.2s ease;
+    }
+    .doc-resizer:hover {
+      background: rgba(118, 138, 255, 0.6);
+    }
+    .doc-resizer.dragging {
+      background: rgba(118, 138, 255, 0.8);
+    }
+    @media (max-width: 991.98px) {
+      .doc-resizer {
+        display: none;
+      }
+    }
+    .doc-sidebar h3 {
+      margin: 0 0 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #d0d7ff;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid rgba(118, 138, 255, 0.2);
+    }
+    .doc-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 2rem;
+    }
+    .doc-sidebar-nav li {
+      margin-bottom: 0.4rem;
+    }
+    .doc-sidebar-nav a {
+      display: block;
+      padding: 0.6rem 0.8rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.92rem;
+    }
+    .doc-sidebar-nav a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #e0e5ff;
+    }
+    .doc-sidebar-nav a.active {
+      background: rgba(118, 138, 255, 0.25);
+      color: #f2f4ff;
+      font-weight: 600;
+    }
+    .doc-toc {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .doc-toc li {
+      margin-bottom: 0.3rem;
+    }
+    .doc-toc a {
+      display: block;
+      padding: 0.5rem 0.8rem;
+      color: #a5b9ff;
+      text-decoration: none;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      font-size: 0.88rem;
+      border-left: 2px solid transparent;
+    }
+    .doc-toc a:hover {
+      background: rgba(118, 138, 255, 0.1);
+      color: #d0d7ff;
+      border-left-color: rgba(118, 138, 255, 0.5);
+    }
+    .doc-toc a.active {
+      background: rgba(118, 138, 255, 0.2);
+      color: #f2f4ff;
+      border-left-color: rgba(118, 138, 255, 0.9);
+      font-weight: 600;
+    }
+    .doc-toc .toc-h3 {
+      padding-left: 1.2rem;
+      font-size: 0.85rem;
+    }
+    .doc-container {
+      flex: 1;
+      margin-left: 280px;
+      padding: 2.4rem 3rem;
+      overflow-y: auto;
+      max-width: calc(100% - 280px);
+    }
+    @media (max-width: 991.98px) {
+      .doc-container {
+        margin-left: 0;
+        padding: 1.6rem 1.4rem;
+        max-width: 100%;
+      }
+    }
+    .doc-toggle-btn {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 102;
+      background: rgba(118, 138, 255, 0.9);
+      border: 1px solid rgba(118, 138, 255, 0.5);
+      color: #f2f4ff;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s ease;
+    }
+    .doc-toggle-btn:hover {
+      background: rgba(118, 138, 255, 1);
+    }
+    @media (max-width: 991.98px) {
+      .doc-toggle-btn {
+        display: block;
+      }
+    }
+    .doc-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+    @media (max-width: 991.98px) {
+      .doc-overlay.open {
+        display: block;
+      }
+    }
+    .doc-section {
+      margin-bottom: 3rem;
+      background: rgba(12, 18, 38, 0.6);
+      border: 1px solid rgba(118, 138, 255, 0.22);
+      border-radius: 20px;
+      padding: 2.4rem;
+      box-shadow: 0 35px 65px rgba(10, 15, 34, 0.45);
+    }
+    @media (max-width: 991.98px) {
+      .doc-section {
+        padding: 1.6rem 1.4rem;
+        border-radius: 18px;
+      }
+    }
+    .doc-section h2 {
+      margin: 0 0 1.2rem;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.015em;
+      border-bottom: 2px solid rgba(118, 138, 255, 0.3);
+      padding-bottom: 0.8rem;
+    }
+    .doc-section h3 {
+      margin: 1.8rem 0 0.8rem;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #d3daff;
+    }
+    .doc-section h4 {
+      margin: 1.4rem 0 0.6rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #c8d1ff;
+    }
+    .doc-section p {
+      margin: 0 0 1rem;
+      color: #b7c1ff;
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+    .doc-section ul, .doc-section ol {
+      margin: 0 0 1.2rem;
+      padding-left: 1.8rem;
+      color: #c0c9ff;
+      line-height: 1.8;
+    }
+    .doc-section li {
+      margin-bottom: 0.5rem;
+    }
+    .endpoint {
+      display: inline-block;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      color: #a5b9ff;
+      background: rgba(20, 28, 62, 0.65);
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      margin-right: 0.5rem;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+    }
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+    }
+    .method.post {
+      background: rgba(74, 144, 226, 0.3);
+      color: #7bb3ff;
+      border: 1px solid rgba(74, 144, 226, 0.5);
+    }
+    .method.get {
+      background: rgba(105, 220, 150, 0.3);
+      color: #8dffc4;
+      border: 1px solid rgba(105, 220, 150, 0.5);
+    }
+    pre {
+      margin: 1.2rem 0;
+      background: rgba(15, 21, 46, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      color: #d8dcff;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+    }
+    code {
+      color: #a5b9ff;
+      background: rgba(20, 28, 62, 0.5);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      background: rgba(18, 24, 46, 0.6);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 0.8rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(118, 138, 255, 0.15);
+    }
+    .param-table th {
+      background: rgba(30, 42, 84, 0.6);
+      color: #dce2ff;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+    .param-table td {
+      color: #c0c9ff;
+      font-size: 0.9rem;
+    }
+    .param-table tr:last-child td {
+      border-bottom: none;
+    }
+    .param-table code {
+      font-size: 0.85em;
+    }
+    .note {
+      background: rgba(255, 200, 120, 0.15);
+      border-left: 4px solid rgba(255, 200, 120, 0.8);
+      padding: 1rem 1.2rem;
+      border-radius: 8px;
+      margin: 1.2rem 0;
+      color: #ffe5be;
+    }
+    .note strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: #ffd89a;
+    }
+    .warning {
+      background: rgba(255, 120, 120, 0.15);
+      border-left: 4px solid rgba(255, 120, 120, 0.8);
+      padding: 1rem 1.2rem;
+      border-radius: 8px;
+      margin: 1.2rem 0;
+      color: #ffcccc;
+    }
+    .warning strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: #ffaaaa;
+    }
+    .info {
+      background: rgba(120, 180, 255, 0.15);
+      border-left: 4px solid rgba(120, 180, 255, 0.8);
+      padding: 1rem 1.2rem;
+      border-radius: 8px;
+      margin: 1.2rem 0;
+      color: #cce5ff;
+    }
+    .info strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: #aad5ff;
+    }
+    .example-box {
+      background: rgba(16, 22, 40, 0.7);
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .example-box h4 {
+      margin: 0 0 0.8rem;
+      font-size: 1rem;
+      color: #d0d7ff;
+    }
+    .diagram {
+      background: rgba(20, 28, 50, 0.8);
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.2rem 0;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.85rem;
+      color: #d0d7ff;
+      white-space: pre;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-banner">
+    <h1>Novel AI 전체 문서</h1>
+    <p>
+      Novel AI 시스템의 전체 아키텍처, BIT 계산 알고리즘, 데이터 구조, API 사용법, 그리고 모든 기능에 대한 포괄적인 문서입니다.
+    </p>
+  </header>
+
+  <button class="doc-toggle-btn" id="docToggleBtn">☰ 목차</button>
+  <div class="doc-overlay" id="docOverlay"></div>
+
+  <div class="doc-wrapper">
+    <aside class="doc-sidebar" id="docSidebar">
+      <h3>메뉴</h3>
+      <ul class="doc-sidebar-nav">
+        <li><a href="action_manual_test.html">📝 수동 입력 테스트</a></li>
+        <li><a href="action_manual_test_doc.html">📚 API 문서</a></li>
+        <li><a href="action_manual_test_example.html">🧪 API 예제</a></li>
+        <li><a href="action_manual_test_full_doc.html" class="active">📖 전체 문서</a></li>
+      </ul>
+      <h3>목차</h3>
+      <ul class="doc-toc" id="docToc">
+        <!-- JavaScript로 자동 생성 -->
+      </ul>
+    </aside>
+    <div class="doc-resizer" id="docResizer"></div>
+
+    <div class="doc-container">
+      <!-- 1. 시스템 개요 -->
+      <section class="doc-section" id="section-overview">
+        <h2>1. 시스템 개요</h2>
+        <p>
+          Novel AI는 소설 구성 데이터를 속성(Attribute)과 데이터(Data)로 분리하여 저장하는 시스템입니다.
+          각 속성은 고유한 BIT 값(MAX/MIN)을 가지며, 이 값에 따라 중첩된 폴더 구조에 저장됩니다.
+        </p>
+        
+        <h3>1.1 핵심 개념</h3>
+        <ul>
+          <li><strong>속성 (Attribute)</strong>: 데이터를 분류하는 계층적 경로 (예: "다크 판타지 → 챕터 1: 제1장 → 구성")</li>
+          <li><strong>데이터 (Data)</strong>: 실제 저장되는 텍스트 내용</li>
+          <li><strong>BIT 값</strong>: 속성 텍스트를 기반으로 계산되는 고유한 숫자 값 (MAX/MIN 쌍)</li>
+          <li><strong>폴더 구조</strong>: BIT 값의 각 자릿수를 폴더명으로 사용하는 중첩 구조</li>
+        </ul>
+
+        <h3>1.2 저장 규칙</h3>
+        <div class="note">
+          <strong>중요:</strong> 데이터는 자신의 BIT 값을 계산하지 않습니다. 
+          오직 속성의 BIT 값만으로 저장 위치가 결정되며, 한 번의 저장 요청으로 
+          MAX 폴더와 MIN 폴더에 각각 1개씩 총 2개의 레코드가 저장됩니다.
+        </div>
+
+        <h3>1.3 시스템 아키텍처</h3>
+        <div class="diagram">데이터 흐름:
+┌─────────────┐
+│ 클라이언트  │
+└──────┬──────┘
+       │ POST /api/attributes/data
+       ▼
+┌─────────────────┐
+│ 서버 (server.js)│
+│ 1. BIT 계산     │
+│ 2. 검증        │
+│ 3. 저장        │
+└──────┬──────────┘
+       │
+       ├─► data/max/[BIT 경로]/log.ndjson
+       └─► data/min/[BIT 경로]/log.ndjson
+        </div>
+      </section>
+
+      <!-- 2. BIT 계산 알고리즘 -->
+      <section class="doc-section" id="section-bit">
+        <h2>2. BIT 계산 알고리즘</h2>
+        <p>
+          BIT (Binary Index Tree) 값은 텍스트를 고유한 숫자 값으로 변환하는 알고리즘입니다.
+          각 텍스트는 MAX와 MIN 두 개의 BIT 값을 가지며, 이 값들은 폴더 구조를 생성하는 데 사용됩니다.
+        </p>
+
+        <h3>2.1 계산 과정</h3>
+        <ol>
+          <li><strong>텍스트 전처리</strong>: 기본 접두사("안 녕 한 국 인 터 넷 . 한 국")와 입력 텍스트를 결합</li>
+          <li><strong>유니코드 변환</strong>: 각 문자를 유니코드 코드 포인트로 변환하고 언어별 접두사 추가</li>
+          <li><strong>BIT 계산</strong>: 변환된 숫자 배열을 기반으로 MAX/MIN BIT 값 계산</li>
+        </ol>
+
+        <h3>2.2 언어별 접두사</h3>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>언어</th>
+              <th>유니코드 범위</th>
+              <th>접두사</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>한글</td><td>0xAC00-0xD7AF</td><td>1000000</td></tr>
+            <tr><td>히라가나</td><td>0x3040-0x309F</td><td>2000000</td></tr>
+            <tr><td>가타카나</td><td>0x30A0-0x30FF</td><td>3000000</td></tr>
+            <tr><td>한자</td><td>0x4E00-0x9FFF</td><td>4000000</td></tr>
+            <tr><td>키릴 문자</td><td>0x0410-0x044F</td><td>5000000</td></tr>
+            <tr><td>라틴 문자</td><td>0x0041-0x007A</td><td>6000000</td></tr>
+            <tr><td>히브리어</td><td>0x0590-0x05FF</td><td>7000000</td></tr>
+            <tr><td>라틴 확장</td><td>0x00C0-0x00FD</td><td>8000000</td></tr>
+            <tr><td>태국어</td><td>0x0E00-0x0E7F</td><td>9000000</td></tr>
+          </tbody>
+        </table>
+
+        <h3>2.3 BIT 계산 상수</h3>
+        <ul>
+          <li><code>BIT_COUNT</code>: 50 (각 문자당 생성되는 BIT 배열 크기)</li>
+          <li><code>BIT_BASE_VALUE</code>: 5.5 (기본 BIT 값)</li>
+          <li><code>BIT_DEFAULT_PREFIX</code>: "안 녕 한 국 인 터 넷 . 한 국"</li>
+        </ul>
+
+        <div class="info">
+          <strong>참고:</strong> BIT 계산은 클라이언트와 서버에서 동일한 알고리즘을 사용합니다.
+          서버는 클라이언트가 전송한 BIT 값을 재계산하여 검증합니다.
+        </div>
+      </section>
+
+      <!-- 3. 데이터 구조 -->
+      <section class="doc-section" id="section-data-structure">
+        <h2>3. 데이터 구조</h2>
+        
+        <h3>3.1 저장 레코드 형식</h3>
+        <p>각 레코드는 NDJSON (Newline Delimited JSON) 형식으로 저장됩니다:</p>
+        <pre><code>{
+  "timestamp": "2025-11-11T01:00:00.000Z",
+  "t": 1728600000000,
+  "s": "데이터 본문 텍스트",
+  "max": null,
+  "min": null,
+  "attribute": {
+    "text": "다크 판타지 → 챕터 1: 제1장 → 구성",
+    "bitMax": 3.065276923076923,
+    "bitMin": 2.659123076923078
+  },
+  "data": {
+    "text": "데이터 본문 텍스트",
+    "bitMax": null,
+    "bitMin": null
+  },
+  "novel": {
+    "title": "다크 판타지",
+    "bitMax": 3.0614201680672273,
+    "bitMin": 2.6035798319327736
+  },
+  "chapter": {
+    "number": 1,
+    "title": "제1장",
+    "description": "회의실의 긴장",
+    "bitMax": 3.123456789012345,
+    "bitMin": 2.987654321098765
+  }
+}</code></pre>
+
+        <h3>3.2 필드 설명</h3>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>타입</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>timestamp</code></td><td>string</td><td>ISO 8601 형식의 저장 시각</td></tr>
+            <tr><td><code>t</code></td><td>number</td><td>Unix 타임스탬프 (밀리초)</td></tr>
+            <tr><td><code>s</code></td><td>string</td><td>데이터 본문 (data.text와 동일)</td></tr>
+            <tr><td><code>attribute</code></td><td>object</td><td>속성 정보 (text, bitMax, bitMin)</td></tr>
+            <tr><td><code>data</code></td><td>object</td><td>데이터 정보 (text, bitMax는 항상 null)</td></tr>
+            <tr><td><code>novel</code></td><td>object</td><td>소설 정보 (선택사항)</td></tr>
+            <tr><td><code>chapter</code></td><td>object</td><td>챕터 정보 (선택사항)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 4. 폴더 구조 -->
+      <section class="doc-section" id="section-folder-structure">
+        <h2>4. 폴더 구조</h2>
+        
+        <h3>4.1 중첩 폴더 구조</h3>
+        <p>
+          BIT 값의 각 자릿수(소수점 제외)를 폴더명으로 사용하여 중첩된 폴더 구조를 생성합니다.
+          예를 들어, BIT MAX 값이 <code>3.065276923076923</code>인 경우:
+        </p>
+        <div class="diagram">data/
+├── max/
+│   └── 3/
+│       └── 0/
+│           └── 6/
+│               └── 5/
+│                   └── 2/
+│                       └── 7/
+│                           └── 6/
+│                               └── ...
+│                                   └── max_bit/
+│                                       └── log.ndjson
+└── min/
+    └── 2/
+        └── 6/
+            └── 5/
+                └── 9/
+                    └── 1/
+                        └── 2/
+                            └── ...
+                                └── min_bit/
+                                    └── log.ndjson</div>
+
+        <h3>4.2 파일 저장 규칙</h3>
+        <ul>
+          <li>각 폴더의 최하위에는 <code>max_bit</code> 또는 <code>min_bit</code> 폴더가 생성됩니다</li>
+          <li>실제 레코드는 <code>log.ndjson</code> 파일에 NDJSON 형식으로 저장됩니다</li>
+          <li>같은 폴더에 여러 레코드가 저장될 수 있으며, 각 레코드는 한 줄로 구분됩니다</li>
+        </ul>
+
+        <h3>4.3 폴더 구조 조회</h3>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/tests/folders</span>
+        </p>
+        <p>MAX/MIN 폴더별 파일·레코드 개수를 집계합니다.</p>
+        <pre><code>curl "http://127.0.0.1:8123/api/tests/folders?includeFiles=true"</code></pre>
+      </section>
+
+      <!-- 5. API 엔드포인트 -->
+      <section class="doc-section" id="section-api">
+        <h2>5. API 엔드포인트</h2>
+
+        <h3>5.1 데이터 저장</h3>
+        <p>
+          <span class="method post">POST</span>
+          <span class="endpoint">/api/attributes/data</span>
+        </p>
+        <p>속성과 데이터를 저장합니다. 서버가 속성 BIT 값을 재계산하여 검증합니다.</p>
+        
+        <h4>요청 본문</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>타입</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>attributeText</code></td><td>string</td><td>✓</td><td>속성 전체 경로</td></tr>
+            <tr><td><code>text</code></td><td>string</td><td>✓</td><td>데이터 본문</td></tr>
+            <tr><td><code>attributeBitMax</code></td><td>number</td><td>✓</td><td>속성 BIT MAX (서버에서 검증)</td></tr>
+            <tr><td><code>attributeBitMin</code></td><td>number</td><td>✓</td><td>속성 BIT MIN (서버에서 검증)</td></tr>
+            <tr><td><code>novelTitle</code></td><td>string</td><td></td><td>소설 제목 (속성 필터로 사용)</td></tr>
+            <tr><td><code>chapter</code></td><td>object</td><td></td><td>챕터 정보</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.2 속성 입력으로 조회</h3>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/attributes/data</span>
+        </p>
+        <p>속성 BIT 값으로 데이터를 조회합니다. 유사도 기반 검색을 지원합니다.</p>
+        
+        <h4>쿼리 파라미터</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>파라미터</th>
+              <th>타입</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>bitMax</code></td><td>number</td><td>✓</td><td>속성 BIT MAX</td></tr>
+            <tr><td><code>bitMin</code></td><td>number</td><td>✓</td><td>속성 BIT MIN</td></tr>
+            <tr><td><code>similarity</code></td><td>boolean</td><td></td><td>유사도 검색 활성화</td></tr>
+            <tr><td><code>threshold</code></td><td>number</td><td></td><td>유사도 임계값 (기본: 0.1)</td></tr>
+            <tr><td><code>limit</code></td><td>number</td><td></td><td>최대 반환 개수 (기본: 100)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.3 전체 데이터 조회</h3>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/tests/records</span>
+        </p>
+        <p>저장된 모든 레코드를 조회합니다. 소설 제목으로 필터링 가능합니다.</p>
+
+        <h3>5.4 데이터 삭제</h3>
+        <p>
+          <span class="method post">POST</span>
+          <span class="endpoint">/api/attributes/data/delete</span>
+        </p>
+        <p>속성 BIT 값과 데이터 텍스트로 레코드를 삭제합니다.</p>
+
+        <h3>5.5 모든 속성 조회</h3>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/attributes/all</span>
+        </p>
+        <p>저장된 모든 속성 목록을 조회합니다.</p>
+
+        <h3>5.6 필터링된 속성 조회</h3>
+        <p>
+          <span class="method get">GET</span>
+          <span class="endpoint">/api/attributes/filtered</span>
+        </p>
+        <p>소설 제목, 챕터 번호, 검색 키워드 등으로 속성을 필터링합니다.</p>
+      </section>
+
+      <!-- 6. 속성 필터링 -->
+      <section class="doc-section" id="section-filtering">
+        <h2>6. 속성 필터링</h2>
+        
+        <h3>6.1 소설 제목 필터</h3>
+        <p>
+          소설 제목을 입력하면 해당 소설의 속성만 조회됩니다. 
+          필터링은 다음 두 가지 방법으로 수행됩니다:
+        </p>
+        <ul>
+          <li><code>item.novel.title</code>이 소설 제목과 정확히 일치하는 경우</li>
+          <li><code>item.attribute.text</code>가 소설 제목으로 시작하는 경우 (예: "다크 판타지 → ...")</li>
+        </ul>
+
+        <h3>6.2 사용 예제</h3>
+        <pre><code>// 소설 제목 입력
+const novelTitle = "다크 판타지";
+
+// 속성 경로 자동 구성
+const attributeText = `${novelTitle} → 챕터 1: 제1장 → 구성`;
+
+// 조회 시 필터링
+const response = await fetch(`/api/attributes/data?bitMax=...&bitMin=...`);
+const data = await response.json();
+
+// 클라이언트 측 필터링
+if (novelTitle) {
+  data.items = data.items.filter(item => {
+    return item.novel?.title === novelTitle || 
+           item.attribute?.text?.startsWith(novelTitle + ' →');
+  });
+}</code></pre>
+      </section>
+
+      <!-- 7. 사용 예제 -->
+      <section class="doc-section" id="section-examples">
+        <h2>7. 사용 예제</h2>
+
+        <h3>7.1 기본 저장 예제</h3>
+        <pre><code>const attributeText = "다크 판타지 → 챕터 1: 제1장 → 구성";
+const bits = calculateBitValues(attributeText);
+
+const response = await fetch('http://127.0.0.1:8123/api/attributes/data', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    attributeText,
+    attributeBitMax: bits.max,
+    attributeBitMin: bits.min,
+    text: "소설 본문 내용...",
+    novelTitle: "다크 판타지"
+  })
+});
+
+const result = await response.json();
+console.log('저장 완료:', result);</code></pre>
+
+        <h3>7.2 조회 예제</h3>
+        <pre><code>// 속성 BIT 값으로 조회
+const response = await fetch(
+  `http://127.0.0.1:8123/api/attributes/data?bitMax=${bits.max}&bitMin=${bits.min}`
+);
+const data = await response.json();
+
+// 유사도 기반 검색
+const response2 = await fetch(
+  `http://127.0.0.1:8123/api/attributes/data?bitMax=${bits.max}&bitMin=${bits.min}&similarity=true&threshold=0.1`
+);
+const data2 = await response.json();</code></pre>
+
+        <h3>7.3 삭제 예제</h3>
+        <pre><code>const response = await fetch('http://127.0.0.1:8123/api/attributes/data/delete', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    attributeBitMax: bits.max,
+    attributeBitMin: bits.min,
+    text: "삭제할 데이터 본문"
+  })
+});
+
+const result = await response.json();
+console.log('삭제 완료:', result.deletedCount);</code></pre>
+      </section>
+
+      <!-- 8. FAQ -->
+      <section class="doc-section" id="section-faq">
+        <h2>8. FAQ</h2>
+
+        <h3>8.1 BIT 값이 일치하지 않는다는 오류가 발생합니다</h3>
+        <div class="warning">
+          <strong>원인:</strong> 클라이언트에서 계산한 BIT 값과 서버에서 재계산한 BIT 값이 다를 수 있습니다.
+          <br><strong>해결:</strong> 서버가 제공한 <code>expected</code> BIT 값을 사용하여 자동 재시도하거나, 
+          클라이언트의 BIT 계산 로직을 확인하세요.
+        </div>
+
+        <h3>8.2 데이터가 중복으로 저장됩니다</h3>
+        <div class="info">
+          <strong>설명:</strong> 한 번의 저장 요청으로 MAX 폴더와 MIN 폴더에 각각 1개씩 저장되는 것이 정상입니다.
+          이는 속성 BIT 값의 MAX와 MIN에 따라 각각 저장되기 때문입니다.
+        </div>
+
+        <h3>8.3 소설 제목 필터가 작동하지 않습니다</h3>
+        <div class="note">
+          <strong>확인사항:</strong>
+          <ul>
+            <li>소설 제목이 정확히 일치하는지 확인</li>
+            <li>속성 경로가 "소설 제목 → ..." 형식으로 시작하는지 확인</li>
+            <li>클라이언트 측 필터링 로직이 올바르게 구현되었는지 확인</li>
+          </ul>
+        </div>
+
+        <h3>8.4 폴더 구조가 너무 깊습니다</h3>
+        <div class="info">
+          <strong>설명:</strong> BIT 값의 자릿수만큼 폴더가 중첩됩니다. 
+          이는 데이터 분산과 검색 성능을 위한 설계입니다.
+        </div>
+      </section>
+
+      <!-- 9. 버전 정보 -->
+      <section class="doc-section" id="section-version">
+        <h2>9. 버전 정보</h2>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>버전</th>
+              <th>날짜</th>
+              <th>주요 변경사항</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>v1.0.4</td>
+              <td>2025-11-11</td>
+              <td>
+                <ul style="margin: 0; padding-left: 1.2rem;">
+                  <li>데이터 BIT 계산 제거 (속성 BIT만 사용)</li>
+                  <li>소설 제목 속성 필터 추가</li>
+                  <li>자동 재시도 기능 추가</li>
+                  <li>전체 문서 페이지 추가</li>
+                </ul>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_KEY = 'fullDocSidebarWidth';
+      const DEFAULT_WIDTH = 280;
+      let sidebarWidth = parseInt(localStorage.getItem(STORAGE_KEY)) || DEFAULT_WIDTH;
+
+      function applySidebarWidth(width) {
+        const sidebar = document.getElementById('docSidebar');
+        const resizer = document.getElementById('docResizer');
+        const container = document.querySelector('.doc-container');
+        if (sidebar && resizer && container) {
+          sidebar.style.width = `${width}px`;
+          resizer.style.left = `${width}px`;
+          container.style.marginLeft = `${width}px`;
+          container.style.maxWidth = `calc(100% - ${width}px)`;
+        }
+      }
+
+      function initResizer() {
+        const resizer = document.getElementById('docResizer');
+        if (!resizer) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        function handleMouseDown(e) {
+          isDragging = true;
+          startX = e.clientX;
+          startWidth = sidebarWidth;
+          resizer.classList.add('dragging');
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+          e.preventDefault();
+        }
+
+        function handleMouseMove(e) {
+          if (!isDragging) return;
+          const diff = e.clientX - startX;
+          const newWidth = Math.max(200, Math.min(window.innerWidth * 0.5, startWidth + diff));
+          sidebarWidth = newWidth;
+          applySidebarWidth(newWidth);
+        }
+
+        function handleMouseUp() {
+          isDragging = false;
+          resizer.classList.remove('dragging');
+          localStorage.setItem(STORAGE_KEY, sidebarWidth.toString());
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+        }
+
+        resizer.addEventListener('mousedown', handleMouseDown);
+      }
+
+      function initMobileToggle() {
+        const btn = document.getElementById('docToggleBtn');
+        const sidebar = document.getElementById('docSidebar');
+        const overlay = document.getElementById('docOverlay');
+        if (!btn || !sidebar || !overlay) return;
+
+        function toggle() {
+          sidebar.classList.toggle('open');
+          overlay.classList.toggle('open');
+        }
+
+        btn.addEventListener('click', toggle);
+        overlay.addEventListener('click', toggle);
+      }
+
+      function generateTOC() {
+        const toc = document.getElementById('docToc');
+        const sections = document.querySelectorAll('.doc-section h2, .doc-section h3');
+        if (!toc) return;
+
+        sections.forEach((heading, index) => {
+          const id = heading.id || `section-${index}`;
+          if (!heading.id) heading.id = id;
+
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = `#${id}`;
+          a.textContent = heading.textContent;
+          
+          if (heading.tagName === 'H3') {
+            a.classList.add('toc-h3');
+          }
+          
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (window.innerWidth <= 991.98) {
+              document.getElementById('docSidebar').classList.remove('open');
+              document.getElementById('docOverlay').classList.remove('open');
+            }
+          });
+
+          li.appendChild(a);
+          toc.appendChild(li);
+        });
+      }
+
+      function updateActiveTOC(activeId) {
+        const tocLinks = document.querySelectorAll('.doc-toc a');
+        tocLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === `#${activeId}`) {
+            link.classList.add('active');
+          }
+        });
+      }
+
+      function handleScroll() {
+        const sections = document.querySelectorAll('.doc-section');
+        const container = document.querySelector('.doc-container');
+        if (!container) return;
+
+        const scrollTop = container.scrollTop;
+        let activeId = '';
+
+        sections.forEach(section => {
+          const heading = section.querySelector('h2');
+          if (!heading) return;
+          const offsetTop = section.offsetTop - container.offsetTop;
+          if (scrollTop >= offsetTop - 100) {
+            activeId = heading.id;
+          }
+        });
+
+        if (activeId) updateActiveTOC(activeId);
+      }
+
+      function setActiveNavItem() {
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('.doc-sidebar-nav a');
+        navLinks.forEach(link => {
+          link.classList.remove('active');
+          const href = link.getAttribute('href');
+          if (currentPath.endsWith(href)) {
+            link.classList.add('active');
+          }
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        setActiveNavItem();
+        applySidebarWidth(sidebarWidth);
+        initResizer();
+        initMobileToggle();
+        generateTOC();
+        const container = document.querySelector('.doc-container');
+        if (container) {
+          container.addEventListener('scroll', handleScroll);
+          handleScroll();
+        }
+        window.addEventListener('resize', () => {
+          const maxWidth = window.innerWidth <= 991.98 ? window.innerWidth * 0.8 : window.innerWidth * 0.5;
+          if (sidebarWidth > maxWidth) {
+            applySidebarWidth(Math.min(sidebarWidth, maxWidth));
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
+

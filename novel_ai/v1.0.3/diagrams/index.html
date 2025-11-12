@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N/B Novel AI 시스템 다이어그램</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="diagram-body">
+    <div class="diagram-shell">
+        <aside class="diagram-sidebar">
+            <div class="sidebar-header">
+                <h2>설명서 목차</h2>
+                <p>프로그램 핵심 흐름과 로그 시스템을 순서대로 살펴보세요.</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#overview">1. 프로그램 개요</a>
+                <a href="#flow">2. 처리 흐름 다이어그램</a>
+                <a href="#ui">3. UI & 입력 구성</a>
+                <a href="#bit">4. BIT 계산·저장</a>
+                <a href="#logs">5. 로그 시스템 안내</a>
+                <a href="#actions">6. 동작 액션 다이어그램</a>
+                <a href="#data-flow">7. 데이터 텍스트 저장 절차</a>
+                <a href="#mermaid">8. Mermaid 설계 다이어그램</a>
+                <a href="#guideline">9. 활용 가이드</a>
+            </nav>
+        </aside>
+
+        <main class="diagram-main">
+            <div class="diagram-wrapper">
+                <header class="diagram-header" id="overview">
+                    <div class="header-left">
+                        <h1>N/B Novel AI – 전체 흐름 다이어그램</h1>
+                        <p class="header-desc">
+                            이 페이지는 Novel AI 도구가 입력을 수신하고 BIT 값을 계산한 뒤 데이터를 저장하며,
+                            로그 시스템과 시각화 도구가 어떻게 상호작용하는지 단계별로 설명합니다.
+                        </p>
+                    </div>
+                    <a class="back-link" href="../index.html">← 메인 화면으로 돌아가기</a>
+                </header>
+
+        <section class="overview-section">
+            <h2>동작 개요</h2>
+            <div class="mermaid overview-diagram">
+flowchart LR
+    A[입력 패널&lt;br/&gt;속성·데이터] --> B[BIT 계산&lt;br/&gt;calculateBitValues]
+    B --> C[서버 저장&lt;br/&gt;NDJSON 기록]
+    C --> D[로그 발행&lt;br/&gt;localStorage 저장]
+    D --> E[시각화 페이지&lt;br/&gt;다이어그램 · 뷰어]
+    E --> A
+            </div>
+            <p class="section-desc">Mermaid 플로우차트로 전체 동작 루프를 한눈에 파악할 수 있습니다. 이후 섹션에서는 세부 절차와 로그 구조를 차례로 설명합니다.</p>
+        </section>
+
+        <section class="flow-section" id="flow">
+            <div class="section-heading">
+                <h2>전체 시스템 흐름</h2>
+                <p class="section-desc">최근 로그를 분석해 동적으로 생성한 Mermaid 플로우차트입니다. 단계 색상은 상태(정상/경고/오류)를 나타냅니다.</p>
+            </div>
+            <div id="systemFlowDiagram" class="mermaid"></div>
+            <p id="flowFallbackMessage" class="flow-fallback hidden">아직 기록된 로그가 없습니다. 메인 화면에서 작업을 수행한 뒤 새로고침해주세요.</p>
+        </section>
+
+        <section class="detail-section">
+            <div class="section-heading">
+                <h2>단계별 상세 로그</h2>
+                <div class="detail-meta">
+                    <span id="detailTitle">단계를 선택하세요.</span>
+                    <span id="detailCount" class="detail-count"></span>
+                </div>
+            </div>
+            <div id="detailStepSelector" class="detail-step-selector"></div>
+            <div id="detailDiagram" class="mermaid hidden"></div>
+            <p id="detailEmptyMessage" class="detail-empty">해당 단계의 로그가 없습니다.</p>
+            <ul id="detailLogList" class="log-list"></ul>
+        </section>
+
+        <section class="ui-section" id="ui">
+            <div class="section-heading">
+                <h2>UI 구성 · 입력 · 버튼 · 목록 단계</h2>
+                <p class="section-desc">입력 필드, 버튼 이벤트, 화면 흐름을 Mermaid 플로우차트로 통합했습니다.</p>
+            </div>
+            <div class="mermaid ui-diagram">
+flowchart LR
+    subgraph Inputs[입력 필드]
+        A1[소설 제목&lt;br/&gt;&lt;code&gt;novelTitleInput&lt;/code&gt;]
+        A2[속성 텍스트&lt;br/&gt;&lt;code&gt;attributeInput&lt;/code&gt;]
+        A3[데이터 텍스트&lt;br/&gt;&lt;code&gt;dataInput&lt;/code&gt;]
+        A4[필터 입력&lt;br/&gt;&lt;code&gt;attributeFilterInput&lt;/code&gt;]
+    end
+    subgraph Actions[버튼 · 이벤트]
+        B1[자동 저장&lt;br/&gt;saveAttributeAndData]
+        B2[새로고침&lt;br/&gt;&lt;code&gt;refreshBtn&lt;/code&gt;]
+        B3[필터 초기화&lt;br/&gt;&lt;code&gt;clearFilterBtn&lt;/code&gt;]
+        B4[로그 제어&lt;br/&gt;&lt;code&gt;toggleLogBtn / clearLogBtn&lt;/code&gt;]
+    end
+    subgraph Flow[화면 흐름]
+        C1[입력 감지·디바운스]
+        C2[BIT 계산]
+        C3[서버 저장 요청]
+        C4[좌측 목록 갱신]
+        C5[로그 기록 → localStorage]
+    end
+    Inputs --> C1
+    Actions --> C1
+    C1 --> C2 --> C3 --> C4 --> C5
+    Actions --> C4
+    C5 --> Viewers[다이어그램·뷰어 업데이트]
+            </div>
+        </section>
+
+        <section class="bit-section" id="bit">
+            <div class="section-heading">
+                <h2>BIT 값 계산 · 저장 구조</h2>
+                <p class="section-desc">
+                    BIT 값은 텍스트를 숫자로 치환하고 정규화하는 과정에서 생성됩니다. 속성과 데이터가 모두 동일하면
+                    BIT도 같으며, 이 BIT가 폴더 구조를 결정합니다.
+                </p>
+            </div>
+            <div class="mermaid bit-diagram">
+flowchart TD
+    A[텍스트 정규화&lt;br/&gt;wordNbUnicodeFormat] --> B[문자 코드 배열&lt;br/&gt;codes]
+    B --> C[BIT 계산&lt;br/&gt;BIT_MAX_NB / BIT_MIN_NB]
+    C --> D{중복 검사}
+    D -- 중복 발견 --> E[저장 생략<br/>중복 로그 기록]
+    D -- 신규 --> F[폴더 경로 결정&lt;br/&gt;nestedPathFromNumber]
+    F --> G[NDJSON 기록&lt;br/&gt;attribute/data/novel/chapter/meta]
+    G --> H[로그 발행&lt;br/&gt;addLog & localStorage]
+    H --> I[다이어그램 · 뷰어 동기화]
+            </div>
+            <div class="bit-summary-mermaid">
+                <div class="bit-summary-meta">
+                    <span id="bitSummaryInfo" class="bit-summary-info">최근 BIT 로그 없음</span>
+                </div>
+                <div id="bitSummaryDiagram" class="mermaid"></div>
+            </div>
+            <div class="bit-log-view">
+                <div class="bit-log-header">
+                    <h3>BIT 관련 로그 (최근)</h3>
+                    <span id="bitFlowLogCount" class="bit-log-count"></span>
+                </div>
+                <p id="bitFlowLogEmpty" class="bit-log-empty">BIT 계산과 관련된 로그가 아직 없습니다.</p>
+                <ul id="bitFlowLogList" class="log-list"></ul>
+            </div>
+        </section>
+
+        <section class="log-section" id="logs">
+            <div class="section-heading">
+                <h2>로그 시스템 설명서</h2>
+                <p class="section-desc">로그 기록 방식과 보기 도구에 대한 안내입니다. 문제 발생 시 어떤 로그를 참고하면 되는지 확인하세요.</p>
+            </div>
+            <div class="log-doc">
+                <article>
+                    <h3>1. 기록되는 로그</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>유형</th>
+                                <th>설명</th>
+                                <th>예시</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>info</td>
+                                <td>일반 정보 · API 요청/응답 상태</td>
+                                <td>[Fetch Start] [Attribute] Data saved</td>
+                            </tr>
+                            <tr>
+                                <td>message</td>
+                                <td>콘솔 일반 출력 · UI 업데이트</td>
+                                <td>model changed to gpt-4o</td>
+                            </tr>
+                            <tr>
+                                <td>warn</td>
+                                <td>중복/미입력 등 경고 상황</td>
+                                <td>BIT 계산 실패 · 저장 중단</td>
+                            </tr>
+                            <tr>
+                                <td>error</td>
+                                <td>오류 발생 · 네트워크 실패</td>
+                                <td>[Fetch Error] Failed to fetch</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </article>
+                <article>
+                    <h3>2. 저장 방식</h3>
+                    <ul>
+                        <li>상단 로그에 추가 → 메모리에 유지</li>
+                        <li>동시에 `localStorage`에 직렬화(`novel_ai_log_history`)</li>
+                        <li>탭 간 변경은 `storage` 이벤트로 실시간 동기화</li>
+                        <li>하단 로그(`addLeftLog`, `addRightLog`)도 동일한 타입으로 저장</li>
+                    </ul>
+                </article>
+                <article>
+                    <h3>3. 확인 도구</h3>
+                    <ul>
+                        <li><strong>메인 화면 상단:</strong> 유형별 그래프 + 상세 목록, 로그 클릭 시 모달</li>
+                        <li><strong>log_viewer :</strong> 단계 플로우/막대 다이어그램, 세부 로그 목록</li>
+                        <li><strong>diagrams 페이지:</strong> 시스템 전반 흐름과 로그 설명 문서</li>
+                    </ul>
+                </article>
+                <article>
+                    <h3>4. 문제 해결 팁</h3>
+                    <ol>
+                        <li>에러 발생 시 `error` 유형을 우선 필터링해 스택/요청 세부 확인</li>
+                        <li>데이터 저장 문제는 `storage` 단계(서버 응답)와 BIT 계산 로그를 순서대로 추적</li>
+                        <li>필요한 경우 `novel_ai/log_viewer`에서 흐름을 재검토하고, BIT 경로를 직접 확인</li>
+                    </ol>
+                </article>
+            </div>
+        </section>
+
+        <section class="action-section" id="actions">
+            <div class="section-heading">
+                <h2>동작 액션 다이어그램</h2>
+                <p class="section-desc">사용자가 입력·버튼·저장 등 주요 액션을 수행했을 때 프로그램이 어떻게 반응하는지 다이어그램으로 정리했습니다.</p>
+            </div>
+            <div class="mermaid action-diagram">
+flowchart TD
+    Start[사용자 입력/버튼] --> Detect[입력 감지&lt;br/&gt;1초 디바운스]
+    Detect --> LocalStore[임시 저장&lt;br/&gt;localStorage]
+    LocalStore --> BitCalc[BIT 계산&lt;br/&gt;attributeBitMax/Min]
+    BitCalc --> Trigger[saveAttributeAndData 호출]
+    Trigger --> Request[POST /api/attributes/data]
+    Request --> Result{응답 결과}
+    Result -- 성공 --> Update[좌측 목록 갱신]
+    Result -- 중복 --> Duplicate[중복 안내 로그]
+    Result -- 오류 --> Error[[Save error 로그]]
+    Update --> Log[상단 로그 기록]
+    Duplicate --> Log
+    Error --> Log
+    Log --> Sync[logHistory 공유&lt;br/&gt;다이어그램/뷰어]
+
+    subgraph Buttons[주요 버튼]
+        Refresh[새로고침&lt;br/&gt;refreshBtn]
+        ClearFilter[필터 초기화&lt;br/&gt;clearFilterBtn]
+        ToggleLog[로그 토글/초기화]
+    end
+
+    Refresh --> Update
+    ClearFilter --> Log
+    ToggleLog --> Log
+            </div>
+        </section>
+
+        <section class="data-flow-section" id="data-flow">
+            <div class="section-heading">
+                <h2>데이터 텍스트 저장 절차</h2>
+                <p class="section-desc">우측 패널의 <em>데이터 텍스트</em> 입력 이후 자동으로 수행되는 세부 단계를 문서형 다이어그램으로 구성했습니다.</p>
+            </div>
+            <div class="mermaid data-flow-diagram">
+sequenceDiagram
+    participant User as 사용자
+    participant UI as UI/클라이언트
+    participant API as 서버 API
+    participant FS as 파일 시스템
+
+    User->>UI: 데이터 텍스트 입력
+    UI->>UI: 1초 디바운스 & 임시 저장
+    UI->>UI: attributeBitMax/Min 재사용
+    UI->>API: POST /api/attributes/data&lt;br/&gt;payload { attribute, data, novel, chapter, meta }
+    API->>API: 중복 검사
+    API-->>UI: 결과 (ok / duplicate / error)
+    API->>FS: NDJSON 기록 (max/min)
+    UI->>UI: 로그 기록 & 목록 갱신
+    UI->>LogViewer: storage 이벤트로 동기화
+            </div>
+            <div class="data-flow-logs">
+                <div class="data-flow-logs-header">
+                    <h3>관련 로그 (최근)</h3>
+                    <span id="dataFlowLogCount" class="data-flow-logs-count"></span>
+                </div>
+                <p id="dataFlowLogEmpty" class="data-flow-empty">아직 데이터 텍스트 저장과 관련된 로그가 없습니다.</p>
+                <ul id="dataFlowLogList" class="log-list"></ul>
+            </div>
+        </section>
+
+        <section class="mermaid-section" id="mermaid">
+            <div class="section-heading">
+                <h2>Mermaid 설계 다이어그램</h2>
+                <p class="section-desc">Mermaid Markdown 문법으로 시스템 흐름을 문서화하고, 동일 구문을 활용해 다른 페이지에서도 다이어그램을 설계할 수 있습니다.</p>
+            </div>
+            <article class="mermaid-card">
+                <h3>1. 전체 프로그램 흐름</h3>
+                <div class="mermaid">
+flowchart TD
+    A[사용자 입력<br/>속성·데이터 텍스트] --> B[BIT 계산<br/>calculateBitValues]
+    B --> C{중복 검사}
+    C -- 중복 아님 --> D[서버 저장<br/>/api/attributes/data]
+    D --> E[NDJSON 기록<br/>server/data/max|min]
+    E --> F[로그 발행<br/>addLog & localStorage]
+    F --> G[다이어그램/뷰어 반영]
+    C -- 중복 --> F
+                </div>
+                <p class="mermaid-desc">Mermaid 블록은 <code>flowchart TD</code>로 시작하고, 각 노드는 HTML 줄바꿈을 <code>&amp;lt;br/&amp;gt;</code>로 넣어 가독성을 높입니다.</p>
+            </article>
+            <article class="mermaid-card">
+                <h3>2. BIT 계산 · 저장 구조</h3>
+                <div class="mermaid">
+sequenceDiagram
+    participant UI as UI 입력
+    participant BIT as BIT 계산 모듈
+    participant API as 서버 API
+    participant FS as 파일 시스템
+
+    UI->>BIT: attributeText/dataText 전송
+    BIT-->>UI: bitMax / bitMin 반환
+    UI->>API: POST /api/attributes/data<br/>payload { attribute, data, novel, chapter, meta }
+    API->>FS: NDJSON append (max/min 분기)
+    API-->>UI: 저장 결과 (ok / duplicate)
+    UI->>UI: logHistory 추가 및 다이어그램 갱신
+                </div>
+                <p class="mermaid-desc">시퀀스 다이어그램으로 각 계층이 BIT 값을 어떻게 전달·활용하는지 정리했습니다.</p>
+            </article>
+            <article class="mermaid-card">
+                <h3>3. 저장 Payload 상세</h3>
+                <div class="mermaid">
+classDiagram
+    class AttributePayload {
+        +string text
+        +number bitMax
+        +number bitMin
+    }
+    class DataPayload {
+        +string text
+        +number bitMax
+        +number bitMin
+    }
+    class NovelPayload {
+        +string title
+        +number bitMax
+        +number bitMin
+    }
+    class ChapterPayload {
+        +string name
+        +number bitMax
+        +number bitMin
+    }
+    class MetaPayload {
+        +number createdAt
+        +number updatedAt
+        +string sessionId
+    }
+    class SaveRequest {
+        +AttributePayload attribute
+        +DataPayload data
+        +NovelPayload novel
+        +ChapterPayload chapter
+        +MetaPayload meta
+    }
+
+    SaveRequest --> AttributePayload
+    SaveRequest --> DataPayload
+    SaveRequest --> NovelPayload
+    SaveRequest --> ChapterPayload
+    SaveRequest --> MetaPayload
+                </div>
+                <p class="mermaid-desc">클래스 다이어그램을 사용하면 API payload와 BIT 필드 구성을 시각적으로 정의할 수 있습니다.</p>
+            </article>
+            <article class="mermaid-card">
+                <h3>4. Mermaid 활용 가이드</h3>
+                <ul>
+                    <li><strong>작성 위치:</strong> <code>&lt;div class="mermaid"&gt;...&lt;/div&gt;</code> 내부에 텍스트 다이어그램을 입력합니다.</li>
+                    <li><strong>렌더링:</strong> 이 페이지 하단의 초기화 스크립트가 자동으로 SVG로 변환합니다.</li>
+                    <li><strong>공유:</strong> 동일한 Mermaid 텍스트를 `index.html`이나 `log_viewer`에도 삽입하면 일관된 다이어그램을 재사용할 수 있습니다.</li>
+                    <li><strong>테마:</strong> `mermaid.initialize` 설정을 통해 다크/라이트 테마, 보안 레벨 등을 변경할 수 있습니다.</li>
+                </ul>
+            </article>
+        </section>
+
+        <section class="guideline-section" id="guideline">
+            <h2>페이지 활용 가이드</h2>
+            <ol>
+                <li><strong>메인 화면에서 작업</strong> – 데이터를 입력하고 저장하면 상단 로그에 항목이 추가됩니다.</li>
+                <li><strong>이 페이지 새로고침</strong> – `localStorage`에 기록된 로그를 바탕으로 플로우가 자동 갱신됩니다.</li>
+                <li><strong>노드 클릭</strong> – 해당 단계의 최근 로그, 경고/오류 여부, 비율을 확인할 수 있습니다.</li>
+                <li><strong>BIT 계산 단계 참고</strong> – 문제가 발생하면 BIT 계산 코드와 저장 경로를 빠르게 추적할 수 있습니다.</li>
+            </ol>
+        </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        if (window.mermaid) {
+            window.mermaid.initialize({
+                startOnLoad: false,
+                theme: 'dark',
+                securityLevel: 'loose',
+                flowchart: { useMaxWidth: true },
+                sequence: { disableSync: true }
+            });
+        }
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>
+

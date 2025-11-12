@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서버 로그 센터 · N/B Novel AI</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="server-log-body">
+    <div class="server-log-shell">
+        <aside class="server-log-sidebar">
+            <div class="sidebar-header">
+                <h2>서버 로그 목차</h2>
+                <p>실시간 서버 로그 파일과 상세 데이터를 한 곳에서 확인하세요.</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#overview">1. 서버 로그 개요</a>
+                <a href="#files">2. 로그 파일 목록</a>
+                <a href="#viewer">3. 로그 상세 뷰어</a>
+                <a href="#guide">4. 검색 · 필터 가이드</a>
+            </nav>
+        </aside>
+
+        <main class="server-log-main">
+            <div class="server-log-wrapper">
+                <header class="server-log-header" id="overview">
+                    <div class="header-left">
+                        <h1>서버 로그 센터</h1>
+                        <p class="header-desc">
+                            Express 서버에서 발생하는 주요 이벤트를 <strong>NDJSON</strong> 형태로 저장하고,
+                            날짜별 파일을 모아 시각적으로 탐색할 수 있는 페이지입니다.
+                            BIT 검증, 속성 저장, 오류 상황까지 모두 기록되어 추적이 간편합니다.
+                        </p>
+                    </div>
+                    <a class="back-link" href="../index.html">← 메인 화면으로</a>
+                </header>
+
+                <section class="overview-section">
+                    <h2>주요 특징</h2>
+                    <div class="overview-grid">
+                        <article class="overview-card">
+                            <h3>실시간 파일 감지</h3>
+                            <p>서버는 하루 단위로 <code>server-YYYYMMDD.ndjson</code> 파일을 생성합니다. 이 페이지는 최신 파일을 우선 불러옵니다.</p>
+                        </article>
+                        <article class="overview-card">
+                            <h3>BIT 검증 로그</h3>
+                            <p>속성·데이터 BIT 값 불일치, 중복 저장 등 핵심 이벤트를 <code>appendServerLog</code>로 기록합니다.</p>
+                        </article>
+                        <article class="overview-card">
+                            <h3>검색 &amp; 필터</h3>
+                            <p>레벨별 필터, 키워드 검색, 페이지네이션을 지원해 대용량 로그도 빠르게 탐색할 수 있습니다.</p>
+                        </article>
+                        <article class="overview-card">
+                            <h3>다운로드 가능</h3>
+                            <p>각 로그 카드는 원본 NDJSON 파일의 URL을 제공하므로,
+                               외부 분석 도구(예: jq, pandas)와 연동하기 쉽습니다.</p>
+                        </article>
+                    </div>
+                </section>
+
+                <section class="files-section" id="files">
+                    <div class="section-heading">
+                        <h2>로그 파일 목록</h2>
+                        <p class="section-desc">현재 서버에 축적된 로그 파일입니다. 최신 파일이 위에 표시됩니다.</p>
+                    </div>
+                    <div id="logFileCards" class="file-card-grid"></div>
+                    <p id="logFileEmpty" class="empty-state hidden">아직 생성된 서버 로그 파일이 없습니다.</p>
+                </section>
+
+                <section class="viewer-section" id="viewer">
+                    <div class="section-heading">
+                        <h2>로그 상세 뷰어</h2>
+                        <p class="section-desc">선택한 로그 파일을 토대로 레벨별 요약과 상세 행을 확인하고, 필터를 적용할 수 있습니다.</p>
+                    </div>
+
+                    <div class="viewer-controls">
+                        <div class="control-group">
+                            <label for="logFileSelect">로그 파일</label>
+                            <select id="logFileSelect"></select>
+                        </div>
+                        <div class="control-group">
+                            <label for="logLevelSelect">레벨</label>
+                            <select id="logLevelSelect">
+                                <option value="all">전체</option>
+                                <option value="info">info</option>
+                                <option value="warn">warn</option>
+                                <option value="error">error</option>
+                                <option value="debug">debug</option>
+                            </select>
+                        </div>
+                        <div class="control-group search">
+                            <label for="logSearchInput">검색어</label>
+                            <input id="logSearchInput" type="search" placeholder="메시지 또는 메타 데이터 검색">
+                        </div>
+                        <div class="control-group">
+                            <label for="logLimitSelect">표시 행 수</label>
+                            <select id="logLimitSelect">
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                                <option value="200" selected>200</option>
+                                <option value="500">500</option>
+                            </select>
+                        </div>
+                    <div class="control-group checkbox">
+                        <label for="hideMismatchToggle">
+                            <input type="checkbox" id="hideMismatchToggle" checked>
+                            BIT mismatch 오류 숨기기
+                        </label>
+                    </div>
+                        <div class="control-actions">
+                            <button id="logRefreshBtn" class="btn-primary">새로고침</button>
+                        </div>
+                    </div>
+
+                    <div class="viewer-summary">
+                        <div class="summary-card">
+                            <h3>현재 파일</h3>
+                            <p id="selectedFileInfo" class="summary-text">-</p>
+                        </div>
+                        <div class="summary-card">
+                            <h3>레벨 분포</h3>
+                            <ul id="levelSummary" class="level-summary"></ul>
+                        </div>
+                        <div class="summary-card">
+                            <h3>필터 결과</h3>
+                            <p id="filterResultInfo" class="summary-text">-</p>
+                        </div>
+                    </div>
+
+                    <div class="viewer-table-wrapper">
+                        <table class="viewer-table">
+                            <thead>
+                                <tr>
+                                    <th>시간</th>
+                                    <th>레벨</th>
+                                    <th>메시지</th>
+                                    <th>세부 정보</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTableBody"></tbody>
+                        </table>
+                        <p id="logTableEmpty" class="empty-state hidden">표시할 로그가 없습니다.</p>
+                    </div>
+                </section>
+
+                <section class="guide-section" id="guide">
+                    <h2>검색 · 필터 가이드</h2>
+                    <ol>
+                        <li><strong>레벨 선택:</strong> <code>info</code>는 일반 이벤트, <code>warn</code>은 주의, <code>error</code>는 저장 실패나 검증 실패를 의미합니다.</li>
+                        <li><strong>검색어 필터:</strong> 메시지 본문과 메타(JSON)을 모두 검색하므로 <code>attributeText</code>, <code>novelTitle</code> 등 키워드로 빠르게 추적할 수 있습니다.</li>
+                        <li><strong>파일 다운로드:</strong> 카드의 “원본 다운로드” 링크를 클릭하면 NDJSON 원본을 내려받아 외부 툴에서 분석 가능합니다.</li>
+                        <li><strong>API 사용:</strong> <code>GET /api/server/logs</code> 엔드포인트는 동일한 파라미터를 지원하므로, 자동화 스크립트나 모니터링 도구와 연동할 수 있습니다.</li>
+                    </ol>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="logDiagramOverlay" class="log-diagram-overlay hidden" aria-hidden="true">
+        <div class="log-diagram-dialog" role="dialog" aria-modal="true" aria-labelledby="logDiagramTitle">
+            <button type="button" id="logDiagramCloseBtn" class="log-diagram-close" aria-label="다이어그램 닫기">
+                <span aria-hidden="true">×</span>
+            </button>
+            <header class="log-diagram-header">
+                <span id="logDiagramLevel" class="log-diagram-level level-info">INFO</span>
+                <div class="log-diagram-heading">
+                    <h3 id="logDiagramTitle">로그 상세</h3>
+                    <p id="logDiagramTimestamp" class="log-diagram-timestamp">-</p>
+                </div>
+            </header>
+            <section class="log-diagram-summary">
+                <p id="logDiagramSummary">선택한 로그의 흐름과 메타 데이터를 확인하려면 표에서 행을 클릭하세요.</p>
+            </section>
+            <section class="log-diagram-mermaid">
+                <div id="logDiagramMermaid" class="mermaid"></div>
+                <p id="logDiagramMermaidFallback" class="log-diagram-fallback hidden">Mermaid 다이어그램을 초기화할 수 없습니다.</p>
+            </section>
+            <section class="log-diagram-meta">
+                <h4>핵심 메타 데이터</h4>
+                <ul id="logDiagramMetaList" class="log-diagram-meta-list"></ul>
+                <p id="logDiagramMetaEmpty" class="log-diagram-meta-empty hidden">표시할 메타 데이터가 없습니다.</p>
+            </section>
+            <section class="log-diagram-raw">
+                <details>
+                    <summary>원본 로그 JSON</summary>
+                    <pre id="logDiagramRawJson">{}</pre>
+                </details>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" defer></script>
+    <script src="app.js" defer></script>
+</body>
+</html>
+

@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Novel AI API 문서</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #080b16;
+      color: #f2f4ff;
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+    }
+    .top-banner {
+      padding: 1.6rem 2.6rem;
+      background: linear-gradient(135deg, rgba(36, 48, 112, 0.65), rgba(16, 20, 44, 0.92));
+      border-bottom: 1px solid rgba(118, 138, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    @media (max-width: 991.98px) {
+      .top-banner {
+        padding: 1.4rem 1.4rem;
+      }
+    }
+    .top-banner h1 {
+      margin: 0;
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #f2f4ff;
+      letter-spacing: 0.02em;
+    }
+    .top-banner p {
+      margin: 0;
+      color: #c3ccff;
+      font-size: 1rem;
+      line-height: 1.6;
+      max-width: 960px;
+    }
+    .doc-wrapper {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+    .doc-sidebar {
+      width: 280px;
+      min-width: 200px;
+      max-width: 50%;
+      background: rgba(12, 18, 38, 0.95);
+      border-right: 1px solid rgba(118, 138, 255, 0.25);
+      padding: 2rem 1.5rem;
+      overflow-y: auto;
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh;
+      z-index: 100;
+      transition: transform 0.3s ease;
+    }
+    @media (max-width: 991.98px) {
+      .doc-sidebar {
+        min-width: 180px;
+        max-width: 80%;
+        transform: translateX(-100%);
+      }
+      .doc-sidebar.open {
+        transform: translateX(0);
+      }
+    }
+    .doc-resizer {
+      position: fixed;
+      top: 0;
+      left: 280px;
+      width: 4px;
+      height: 100vh;
+      background: rgba(118, 138, 255, 0.3);
+      cursor: col-resize;
+      z-index: 101;
+      transition: background 0.2s ease;
+    }
+    .doc-resizer:hover {
+      background: rgba(118, 138, 255, 0.6);
+    }
+    .doc-resizer.dragging {
+      background: rgba(118, 138, 255, 0.8);
+    }
+    @media (max-width: 991.98px) {
+      .doc-resizer {
+        display: none;
+      }
+    }
+    .doc-sidebar h3 {
+      margin: 0 0 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .doc-toc {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .doc-toc li {
+      margin-bottom: 0.5rem;
+    }
+    .doc-toc a {
+      display: block;
+      padding: 0.6rem 0.8rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      font-size: 0.92rem;
+      line-height: 1.4;
+    }
+    .doc-toc a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #d3daff;
+      transform: translateX(4px);
+    }
+    .doc-toc a.active {
+      background: rgba(118, 138, 255, 0.25);
+      color: #e0e5ff;
+      font-weight: 600;
+      border-left: 3px solid rgba(118, 138, 255, 0.8);
+    }
+    .doc-toc .sub-item {
+      padding-left: 1.8rem;
+      font-size: 0.88rem;
+      color: #9aa5d9;
+    }
+    .doc-toc .sub-item a {
+      padding: 0.45rem 0.8rem;
+    }
+    .doc-sidebar-nav {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(118, 138, 255, 0.2);
+      padding-bottom: 1.5rem;
+    }
+    .doc-sidebar-nav li {
+      margin: 0;
+    }
+    .doc-sidebar-nav a {
+      display: block;
+      padding: 0.8rem 1rem;
+      color: #b7c1ff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      font-size: 0.94rem;
+      line-height: 1.4;
+      border: 1px solid rgba(118, 138, 255, 0.2);
+    }
+    .doc-sidebar-nav a:hover {
+      background: rgba(118, 138, 255, 0.15);
+      color: #d3daff;
+      transform: translateX(4px);
+      border-color: rgba(118, 138, 255, 0.4);
+    }
+    .doc-sidebar-nav a.active {
+      background: rgba(118, 138, 255, 0.25);
+      color: #e0e5ff;
+      font-weight: 600;
+      border-left: 3px solid rgba(118, 138, 255, 0.8);
+    }
+    .doc-container {
+      flex: 1;
+      padding: 2.8rem 2.4rem;
+      max-width: 1200px;
+      margin-left: 284px;
+      width: calc(100% - 284px);
+      overflow-y: auto;
+      transition: margin-left 0.2s ease, width 0.2s ease;
+    }
+    @media (max-width: 991.98px) {
+      .doc-container {
+        padding: 1.8rem 1.2rem;
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+    .doc-toggle-btn {
+      display: none;
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 102;
+      background: rgba(118, 138, 255, 0.9);
+      border: 1px solid rgba(118, 138, 255, 0.5);
+      color: #f2f4ff;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: background 0.2s ease;
+    }
+    .doc-toggle-btn:hover {
+      background: rgba(118, 138, 255, 1);
+    }
+    @media (max-width: 991.98px) {
+      .doc-toggle-btn {
+        display: block;
+      }
+    }
+    .doc-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 99;
+    }
+    @media (max-width: 991.98px) {
+      .doc-overlay.open {
+        display: block;
+      }
+    }
+    .doc-section {
+      margin-bottom: 3rem;
+      background: rgba(12, 18, 38, 0.6);
+      border: 1px solid rgba(118, 138, 255, 0.22);
+      border-radius: 20px;
+      padding: 2.4rem;
+      box-shadow: 0 35px 65px rgba(10, 15, 34, 0.45);
+    }
+    @media (max-width: 991.98px) {
+      .doc-section {
+        padding: 1.6rem 1.4rem;
+        border-radius: 18px;
+      }
+    }
+    .doc-section h2 {
+      margin: 0 0 1.2rem;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e0e5ff;
+      letter-spacing: 0.015em;
+      border-bottom: 2px solid rgba(118, 138, 255, 0.3);
+      padding-bottom: 0.8rem;
+    }
+    .doc-section h3 {
+      margin: 1.8rem 0 0.8rem;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #d3daff;
+    }
+    .doc-section p {
+      margin: 0 0 1rem;
+      color: #b7c1ff;
+      line-height: 1.7;
+      font-size: 0.98rem;
+    }
+    .doc-section ul, .doc-section ol {
+      margin: 0 0 1.2rem;
+      padding-left: 1.8rem;
+      color: #c0c9ff;
+      line-height: 1.8;
+    }
+    .doc-section li {
+      margin-bottom: 0.5rem;
+    }
+    .endpoint {
+      display: inline-block;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.95rem;
+      color: #a5b9ff;
+      background: rgba(20, 28, 62, 0.65);
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      margin-right: 0.5rem;
+      border: 1px solid rgba(118, 138, 255, 0.35);
+    }
+    .method {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-right: 0.5rem;
+    }
+    .method.post {
+      background: rgba(74, 144, 226, 0.3);
+      color: #7bb3ff;
+      border: 1px solid rgba(74, 144, 226, 0.5);
+    }
+    .method.get {
+      background: rgba(105, 220, 150, 0.3);
+      color: #8dffc4;
+      border: 1px solid rgba(105, 220, 150, 0.5);
+    }
+    pre {
+      margin: 1.2rem 0;
+      background: rgba(15, 21, 46, 0.85);
+      border: 1px solid rgba(118, 138, 255, 0.3);
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 0.9rem;
+      color: #d8dcff;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-x: auto;
+    }
+    code {
+      color: #a5b9ff;
+      background: rgba(20, 28, 62, 0.5);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2rem 0;
+      background: rgba(18, 24, 46, 0.6);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .param-table th,
+    .param-table td {
+      padding: 0.8rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(118, 138, 255, 0.15);
+    }
+    .param-table th {
+      background: rgba(30, 42, 84, 0.6);
+      color: #dce2ff;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+    .param-table td {
+      color: #c0c9ff;
+      font-size: 0.9rem;
+    }
+    .param-table tr:last-child td {
+      border-bottom: none;
+    }
+    .param-table code {
+      font-size: 0.85em;
+    }
+    .note {
+      background: rgba(255, 200, 120, 0.15);
+      border-left: 4px solid rgba(255, 200, 120, 0.8);
+      padding: 1rem 1.2rem;
+      border-radius: 8px;
+      margin: 1.2rem 0;
+      color: #ffe5be;
+    }
+    .note strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: #ffd89a;
+    }
+    .example-box {
+      background: rgba(16, 22, 40, 0.7);
+      border: 1px solid rgba(118, 138, 255, 0.2);
+      border-radius: 12px;
+      padding: 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .example-box h4 {
+      margin: 0 0 0.8rem;
+      font-size: 1rem;
+      color: #d0d7ff;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-banner">
+    <h1>Novel AI API 문서</h1>
+    <p>
+      Novel AI 서버의 속성·데이터 저장 및 조회 API 사용 가이드입니다.
+      BIT 계산 기반의 폴더 구조를 사용하여 데이터를 MAX/MIN 디렉터리에 저장합니다.
+    </p>
+  </header>
+
+  <button class="doc-toggle-btn" id="docToggleBtn">☰ 목차</button>
+  <div class="doc-overlay" id="docOverlay"></div>
+
+  <div class="doc-wrapper">
+    <aside class="doc-sidebar" id="docSidebar">
+      <h3>메뉴</h3>
+      <ul class="doc-sidebar-nav">
+        <li><a href="action_manual_test.html">📝 수동 입력 테스트</a></li>
+        <li><a href="action_manual_test_doc.html" class="active">📚 API 문서</a></li>
+        <li><a href="action_manual_test_example.html">🧪 API 예제</a></li>
+        <li><a href="action_manual_test_full_doc.html">📖 전체 문서</a></li>
+      </ul>
+      <h3>목차</h3>
+      <ul class="doc-toc" id="docToc">
+        <!-- JavaScript로 자동 생성 -->
+      </ul>
+    </aside>
+    <div class="doc-resizer" id="docResizer"></div>
+
+    <div class="doc-container">
+      <!-- 개요 -->
+      <section class="doc-section" id="section-overview">
+        <h2>개요</h2>
+      <p>
+        Novel AI API는 소설 구성 데이터를 속성(attribute)과 데이터(data)로 분리하여 저장합니다.
+        각 속성은 BIT 값(MAX/MIN)을 기반으로 중첩된 폴더 구조에 저장되며,
+        데이터는 속성 BIT 값으로만 저장됩니다 (데이터 자체의 BIT 계산은 하지 않음).
+      </p>
+      <p>
+        <strong>저장 규칙:</strong> 한 번의 저장 요청으로 속성 BIT MAX와 MIN 값에 따라
+        총 2개의 레코드가 각각 <code>data/max/...</code>와 <code>data/min/...</code> 폴더에 저장됩니다.
+      </p>
+    </section>
+
+      <!-- API 엔드포인트 -->
+      <section class="doc-section" id="section-endpoints">
+        <h2>API 엔드포인트</h2>
+
+      <h3>1. 데이터 저장</h3>
+      <p>
+        <span class="method post">POST</span>
+        <span class="endpoint">/api/attributes/data</span>
+      </p>
+      <p>속성과 데이터를 저장합니다. 서버가 속성 BIT 값을 재계산하여 검증하고, MAX/MIN 폴더에 각각 저장합니다.</p>
+
+      <div class="example-box">
+        <h4>요청 본문 (Request Body)</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>타입</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>attributeText</code></td>
+              <td>string</td>
+              <td>✓</td>
+              <td>속성 전체 경로 (예: "다크 판타지 → 챕터 1: 제1장 → 구성")</td>
+            </tr>
+            <tr>
+              <td><code>text</code></td>
+              <td>string</td>
+              <td>✓</td>
+              <td>저장할 데이터 본문</td>
+            </tr>
+            <tr>
+              <td><code>attributeBitMax</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>속성 BIT MAX 값 (서버에서 재검증됨)</td>
+            </tr>
+            <tr>
+              <td><code>attributeBitMin</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>속성 BIT MIN 값 (서버에서 재검증됨)</td>
+            </tr>
+            <tr>
+              <td><code>novelTitle</code></td>
+              <td>string</td>
+              <td></td>
+              <td>소설 제목 (선택사항)</td>
+            </tr>
+            <tr>
+              <td><code>novelTitleBitMax</code></td>
+              <td>number</td>
+              <td></td>
+              <td>소설 제목 BIT MAX (선택사항)</td>
+            </tr>
+            <tr>
+              <td><code>novelTitleBitMin</code></td>
+              <td>number</td>
+              <td></td>
+              <td>소설 제목 BIT MIN (선택사항)</td>
+            </tr>
+            <tr>
+              <td><code>chapter</code></td>
+              <td>object</td>
+              <td></td>
+              <td>챕터 정보 객체 (number, title, description 포함)</td>
+            </tr>
+            <tr>
+              <td><code>chapterBitMax</code></td>
+              <td>number</td>
+              <td></td>
+              <td>챕터 BIT MAX (선택사항)</td>
+            </tr>
+            <tr>
+              <td><code>chapterBitMin</code></td>
+              <td>number</td>
+              <td></td>
+              <td>챕터 BIT MIN (선택사항)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <strong>참고:</strong> <code>dataBitMax</code>와 <code>dataBitMin</code>은 전달하지 않아도 됩니다.
+        서버는 데이터의 BIT 값을 계산하지 않고, 속성 BIT 값만으로 저장 위치를 결정합니다.
+      </div>
+
+      <h4>예제 요청</h4>
+      <pre><code>curl -X POST http://127.0.0.1:8123/api/attributes/data \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeText": "다크 판타지 → 챕터 1: 제1장 → 구성",
+    "attributeBitMax": 3.065276923076923,
+    "attributeBitMin": 2.659123076923078,
+    "text": "소설 본문 내용...",
+    "novelTitle": "다크 판타지"
+  }'</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true,
+  "record": {
+    "timestamp": "2025-11-11T01:00:00.000Z",
+    "t": 1728600000000,
+    "s": "소설 본문 내용...",
+    "attribute": {
+      "text": "다크 판타지 → 챕터 1: 제1장 → 구성",
+      "bitMax": 3.065276923076923,
+      "bitMin": 2.659123076923078
+    },
+    "data": {
+      "text": "소설 본문 내용...",
+      "bitMax": null,
+      "bitMin": null
+    }
+  },
+  "files": {
+    "attributeMax": "data/max/3/0/6/5/.../max_bit/...ndjson",
+    "attributeMin": "data/min/2/6/5/9/.../min_bit/...ndjson"
+  }
+}</code></pre>
+
+      <h3>2. 데이터 조회</h3>
+      <p>
+        <span class="method get">GET</span>
+        <span class="endpoint">/api/tests/records</span>
+      </p>
+      <p>저장된 모든 레코드를 조회합니다. MAX/MIN 폴더를 재귀적으로 스캔하여 반환합니다.</p>
+
+      <h3>2-1. 속성 입력으로 조회</h3>
+      <p>
+        <span class="method get">GET</span>
+        <span class="endpoint">/api/attributes/data</span>
+      </p>
+      <p>속성 BIT 값을 사용하여 해당 속성에 연결된 데이터를 조회합니다. 정확한 일치 또는 유사도 기반 검색을 지원합니다.</p>
+
+      <div class="example-box">
+        <h4>쿼리 파라미터</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>파라미터</th>
+              <th>타입</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>bitMax</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>속성 BIT MAX 값</td>
+            </tr>
+            <tr>
+              <td><code>bitMin</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>속성 BIT MIN 값</td>
+            </tr>
+            <tr>
+              <td><code>similarity</code></td>
+              <td>boolean</td>
+              <td></td>
+              <td>true일 경우 유사도 기반 검색 (기본값: false, 정확한 일치)</td>
+            </tr>
+            <tr>
+              <td><code>threshold</code></td>
+              <td>number</td>
+              <td></td>
+              <td>유사도 검색 시 사용할 임계값 (기본값: 0.1)</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td></td>
+              <td>최대 반환 개수 (기본값: 100, 최대: 1000)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>예제 요청 (정확한 일치)</h4>
+      <pre><code>curl "http://127.0.0.1:8123/api/attributes/data?bitMax=3.065276923076923&bitMin=2.659123076923078"</code></pre>
+
+      <h4>예제 요청 (유사도 검색)</h4>
+      <pre><code>curl "http://127.0.0.1:8123/api/attributes/data?bitMax=3.065276923076923&bitMin=2.659123076923078&similarity=true&threshold=0.1&limit=50"</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true,
+  "count": 1,
+  "items": [
+    {
+      "timestamp": "2025-11-11T01:00:00.000Z",
+      "t": 1728600000000,
+      "s": "소설 본문 내용...",
+      "attribute": {
+        "text": "다크 판타지 → 챕터 1: 제1장 → 구성",
+        "bitMax": 3.065276923076923,
+        "bitMin": 2.659123076923078
+      },
+      "data": {
+        "text": "소설 본문 내용...",
+        "bitMax": null,
+        "bitMin": null
+      },
+      "_similarity": 1.0,
+      "_distance": 0
+    }
+  ]
+}</code></pre>
+
+      <div class="note">
+        <strong>참고:</strong> 
+        <ul style="margin: 0.5rem 0 0; padding-left: 1.5rem;">
+          <li><code>similarity=false</code> (기본값): 속성 BIT 값이 정확히 일치하는 레코드만 반환</li>
+          <li><code>similarity=true</code>: 유사한 BIT 값을 가진 레코드를 <code>threshold</code> 범위 내에서 검색하여 반환. 유사도가 높은 순으로 정렬됨</li>
+          <li>유사도 검색 시 응답에 <code>_similarity</code> (0~1, 높을수록 유사)와 <code>_distance</code> (BIT 값 차이)가 포함됨</li>
+        </ul>
+      </div>
+
+      <div class="example-box">
+        <h4>쿼리 파라미터</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>파라미터</th>
+              <th>타입</th>
+              <th>기본값</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>novelTitle</code></td>
+              <td>string</td>
+              <td></td>
+              <td>소설 제목으로 필터링 (선택사항)</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td>200</td>
+              <td>최대 반환 개수 (1-500)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>예제 요청</h4>
+      <pre><code>curl "http://127.0.0.1:8123/api/tests/records?limit=50"</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true,
+  "count": 2,
+  "items": [
+    {
+      "id": "다크 판타지 → 챕터 1: 제1장 → 구성::소설 본문 내용...::data/max/.../file.ndjson::1728600000000",
+      "novelTitle": "다크 판타지",
+      "attributeText": "다크 판타지 → 챕터 1: 제1장 → 구성",
+      "attributeBits": {
+        "max": 3.065276923076923,
+        "min": 2.659123076923078
+      },
+      "dataText": "소설 본문 내용...",
+      "dataBits": {
+        "max": null,
+        "min": null
+      },
+      "source": {
+        "file": "E:/GameTools/dev/novel_ai/v1.0.4/server/data/max/.../file.ndjson",
+        "line": 1
+      }
+    }
+  ]
+}</code></pre>
+
+      <h3>3. 데이터 삭제</h3>
+      <p>
+        <span class="method post">POST</span>
+        <span class="endpoint">/api/attributes/data/delete</span>
+      </p>
+      <p>특정 속성 BIT 값을 가진 레코드를 삭제합니다. 속성 BIT와 데이터 BIT 모두 일치해야 삭제됩니다.</p>
+
+      <div class="example-box">
+        <h4>요청 본문</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>필드</th>
+              <th>타입</th>
+              <th>필수</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>attributeBitMax</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>삭제할 속성 BIT MAX</td>
+            </tr>
+            <tr>
+              <td><code>attributeBitMin</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>삭제할 속성 BIT MIN</td>
+            </tr>
+            <tr>
+              <td><code>dataBitMax</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>삭제할 데이터 BIT MAX (데이터 텍스트로 계산)</td>
+            </tr>
+            <tr>
+              <td><code>dataBitMin</code></td>
+              <td>number</td>
+              <td>✓</td>
+              <td>삭제할 데이터 BIT MIN (데이터 텍스트로 계산)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>예제 요청</h4>
+      <pre><code>curl -X POST http://127.0.0.1:8123/api/attributes/data/delete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeBitMax": 3.065276923076923,
+    "attributeBitMin": 2.659123076923078,
+    "dataBitMax": 2.8649999999999993,
+    "dataBitMin": 2.902142857142857
+  }'</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true,
+  "deletedCount": 2,
+  "filesProcessed": 2,
+  "details": [
+    {
+      "file": "data/max/.../file.ndjson",
+      "deleted": 1
+    },
+    {
+      "file": "data/min/.../file.ndjson",
+      "deleted": 1
+    }
+  ]
+}</code></pre>
+
+      <h3>4. 폴더 구조 조회</h3>
+      <p>
+        <span class="method get">GET</span>
+        <span class="endpoint">/api/tests/folders</span>
+      </p>
+      <p>MAX/MIN 폴더별 파일·레코드 개수를 집계합니다.</p>
+
+      <div class="example-box">
+        <h4>쿼리 파라미터</h4>
+        <table class="param-table">
+          <thead>
+            <tr>
+              <th>파라미터</th>
+              <th>타입</th>
+              <th>기본값</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>includeFiles</code></td>
+              <td>boolean</td>
+              <td>false</td>
+              <td>true일 경우 각 폴더의 파일 경로도 포함</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>예제 요청</h4>
+      <pre><code>curl "http://127.0.0.1:8123/api/tests/folders?includeFiles=true"</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true,
+  "generatedAt": "2025-11-11T01:00:00.000Z",
+  "summary": {
+    "maxFolders": 12,
+    "maxFiles": 28,
+    "maxRecords": 84,
+    "minFolders": 12,
+    "minFiles": 28,
+    "minRecords": 84
+  },
+  "max": [
+    {
+      "folder": "max/2/4/6/1/3/8/0/9/5/2/3/8/0/9/5/2/max_bit",
+      "files": 1,
+      "records": 1
+    }
+  ],
+  "min": [
+    {
+      "folder": "min/2/6/5/9/1/2/3/0/7/6/9/2/3/0/7/8/min_bit",
+      "files": 1,
+      "records": 1
+    }
+  ]
+}</code></pre>
+
+      <h3>5. 전체 데이터 초기화</h3>
+      <p>
+        <span class="method post">POST</span>
+        <span class="endpoint">/api/tests/reset-all</span>
+      </p>
+      <p>모든 테스트 데이터를 삭제합니다. <code>data/max</code>, <code>data/min</code>, <code>logs</code> 디렉터리를 모두 제거합니다.</p>
+
+      <h4>예제 요청</h4>
+      <pre><code>curl -X POST http://127.0.0.1:8123/api/tests/reset-all \
+  -H "Content-Type: application/json" \
+  -d '{"confirm": "RESET"}'</code></pre>
+
+      <h4>응답 예제</h4>
+      <pre><code>{
+  "ok": true
+}</code></pre>
+    </section>
+
+      <!-- 데이터 구조 -->
+      <section class="doc-section" id="section-data-structure">
+        <h2>데이터 구조</h2>
+      <h3>저장 형식</h3>
+      <p>각 레코드는 NDJSON(Newline Delimited JSON) 형식으로 저장됩니다.</p>
+      <pre><code>{
+  "timestamp": "2025-11-11T01:00:00.000Z",
+  "t": 1728600000000,
+  "s": "데이터 본문 텍스트",
+  "max": null,
+  "min": null,
+  "attribute": {
+    "text": "다크 판타지 → 챕터 1: 제1장 → 구성",
+    "bitMax": 3.065276923076923,
+    "bitMin": 2.659123076923078
+  },
+  "data": {
+    "text": "데이터 본문 텍스트",
+    "bitMax": null,
+    "bitMin": null
+  },
+  "novel": {
+    "title": "다크 판타지",
+    "bitMax": 3.2487,
+    "bitMin": 2.4412
+  },
+  "chapter": {
+    "number": "1",
+    "title": "제1장",
+    "description": "회의실의 긴장",
+    "bitMax": 2.9876,
+    "bitMin": 2.1234
+  }
+}</code></pre>
+
+      <h3>폴더 구조</h3>
+      <p>
+        BIT 값의 각 자릿수를 폴더명으로 사용하여 중첩된 디렉터리 구조를 만듭니다.
+        예를 들어 BIT MAX 값이 <code>3.065276923076923</code>인 경우:
+      </p>
+      <pre><code>data/
+  max/
+    3/
+      0/
+        6/
+          5/
+            2/
+              7/
+                6/
+                  9/
+                    2/
+                      3/
+                        0/
+                          7/
+                            6/
+                              9/
+                                2/
+                                  3/
+                                    max_bit/
+                                      1762817910716-xxxxx.ndjson
+  min/
+    2/
+      6/
+        5/
+          9/
+            ...
+              min_bit/
+                1762817910716-xxxxx.ndjson</code></pre>
+    </section>
+
+      <!-- BIT 계산 -->
+      <section class="doc-section" id="section-bit-calculation">
+        <h2>BIT 계산 방식</h2>
+      <p>
+        BIT(Bit Indexed Text) 값은 텍스트를 숫자로 변환하여 생성됩니다.
+        속성 텍스트에 대해서만 BIT 값을 계산하며, 데이터 텍스트는 BIT 계산을 하지 않습니다.
+      </p>
+      <p>
+        <strong>계산 규칙:</strong>
+      </p>
+      <ul>
+        <li>각 문자를 유니코드 코드 포인트로 변환</li>
+        <li>언어별로 다른 prefix 값을 적용 (한글: 1000000, 일본어: 2000000 등)</li>
+        <li>50개 단위로 배열을 나누어 MAX/MIN 값을 계산</li>
+        <li>기본값(BIT_BASE_VALUE)은 5.5</li>
+      </ul>
+      <div class="note">
+        <strong>중요:</strong> 데이터는 BIT 계산 없이 속성 BIT 값으로만 저장 위치가 결정됩니다.
+        따라서 같은 속성을 가진 데이터는 항상 같은 MAX/MIN 폴더에 저장됩니다.
+      </div>
+    </section>
+
+      <!-- 사용 예제 -->
+      <section class="doc-section" id="section-examples">
+        <h2>사용 예제</h2>
+      <h3>전체 워크플로우</h3>
+      <pre><code># 1. 속성과 데이터 저장
+curl -X POST http://127.0.0.1:8123/api/attributes/data \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeText": "다크 판타지 → 챕터 1: 제1장 → 구성",
+    "attributeBitMax": 3.065276923076923,
+    "attributeBitMin": 2.659123076923078,
+    "text": "리사는 조용히 회의실 문을 열었다...",
+    "novelTitle": "다크 판타지"
+  }'
+
+# 2. 저장된 데이터 조회
+curl "http://127.0.0.1:8123/api/tests/records?limit=10"
+
+# 2-1. 속성 BIT 값으로 데이터 조회
+curl "http://127.0.0.1:8123/api/attributes/data?bitMax=3.065276923076923&bitMin=2.659123076923078"
+
+# 2-2. 속성 BIT 값으로 유사도 검색
+curl "http://127.0.0.1:8123/api/attributes/data?bitMax=3.065276923076923&bitMin=2.659123076923078&similarity=true&threshold=0.1"
+
+# 3. 폴더 구조 확인
+curl "http://127.0.0.1:8123/api/tests/folders"
+
+# 4. 특정 데이터 삭제 (데이터 텍스트로 BIT 계산 필요)
+# 데이터 텍스트: "리사는 조용히 회의실 문을 열었다..."
+# 데이터 BIT 계산 후 삭제 요청
+curl -X POST http://127.0.0.1:8123/api/attributes/data/delete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "attributeBitMax": 3.065276923076923,
+    "attributeBitMin": 2.659123076923078,
+    "dataBitMax": 2.8649999999999993,
+    "dataBitMin": 2.902142857142857
+  }'</code></pre>
+    </section>
+
+      <!-- 에러 처리 -->
+      <section class="doc-section" id="section-error-handling">
+        <h2>에러 처리</h2>
+      <p>모든 API는 에러 발생 시 다음과 같은 형식으로 응답합니다:</p>
+      <pre><code>{
+  "ok": false,
+  "error": "에러 메시지"
+}</code></pre>
+
+      <h3>주요 에러 코드</h3>
+      <ul>
+        <li><strong>400 Bad Request:</strong> 필수 파라미터 누락, BIT 값 불일치</li>
+        <li><strong>500 Internal Server Error:</strong> 서버 내부 오류</li>
+      </ul>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      // 사이드바 너비 관리
+      const STORAGE_KEY = 'docSidebarWidth';
+      const DEFAULT_WIDTH = 280;
+      let sidebarWidth = parseInt(localStorage.getItem(STORAGE_KEY)) || DEFAULT_WIDTH;
+
+      // 사이드바 너비 적용
+      function applySidebarWidth(width) {
+        const sidebar = document.getElementById('docSidebar');
+        const resizer = document.getElementById('docResizer');
+        const container = document.querySelector('.doc-container');
+        
+        if (sidebar && resizer && container) {
+          sidebar.style.width = `${width}px`;
+          resizer.style.left = `${width}px`;
+          container.style.marginLeft = `${width + 4}px`;
+          container.style.width = `calc(100% - ${width + 4}px)`;
+          sidebarWidth = width;
+          localStorage.setItem(STORAGE_KEY, width.toString());
+        }
+      }
+
+      // 리사이저 초기화
+      function initResizer() {
+        const resizer = document.getElementById('docResizer');
+        const sidebar = document.getElementById('docSidebar');
+        if (!resizer || !sidebar) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        resizer.addEventListener('mousedown', (e) => {
+          isDragging = true;
+          startX = e.clientX;
+          startWidth = sidebarWidth;
+          resizer.classList.add('dragging');
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+          e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+          if (!isDragging) return;
+          
+          const diff = e.clientX - startX;
+          const newWidth = Math.max(200, Math.min(window.innerWidth * 0.5, startWidth + diff));
+          applySidebarWidth(newWidth);
+        });
+
+        document.addEventListener('mouseup', () => {
+          if (isDragging) {
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+          }
+        });
+
+        // 터치 이벤트 지원 (모바일)
+        resizer.addEventListener('touchstart', (e) => {
+          isDragging = true;
+          startX = e.touches[0].clientX;
+          startWidth = sidebarWidth;
+          resizer.classList.add('dragging');
+          e.preventDefault();
+        });
+
+        document.addEventListener('touchmove', (e) => {
+          if (!isDragging) return;
+          
+          const diff = e.touches[0].clientX - startX;
+          const newWidth = Math.max(180, Math.min(window.innerWidth * 0.8, startWidth + diff));
+          applySidebarWidth(newWidth);
+          e.preventDefault();
+        });
+
+        document.addEventListener('touchend', () => {
+          if (isDragging) {
+            isDragging = false;
+            resizer.classList.remove('dragging');
+          }
+        });
+      }
+
+      // 모바일 토글 기능
+      function initMobileToggle() {
+        const toggleBtn = document.getElementById('docToggleBtn');
+        const sidebar = document.getElementById('docSidebar');
+        const overlay = document.getElementById('docOverlay');
+        
+        if (!toggleBtn || !sidebar || !overlay) return;
+
+        function openSidebar() {
+          sidebar.classList.add('open');
+          overlay.classList.add('open');
+        }
+
+        function closeSidebar() {
+          sidebar.classList.remove('open');
+          overlay.classList.remove('open');
+        }
+
+        toggleBtn.addEventListener('click', () => {
+          if (sidebar.classList.contains('open')) {
+            closeSidebar();
+          } else {
+            openSidebar();
+          }
+        });
+
+        overlay.addEventListener('click', closeSidebar);
+
+        // ESC 키로 닫기
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && sidebar.classList.contains('open')) {
+            closeSidebar();
+          }
+        });
+      }
+
+      // 목차 자동 생성
+      function generateTOC() {
+        const toc = document.getElementById('docToc');
+        if (!toc) return;
+
+        const sections = document.querySelectorAll('.doc-section[id^="section-"]');
+        const tocItems = [];
+
+        sections.forEach(section => {
+          const id = section.id;
+          const h2 = section.querySelector('h2');
+          if (!h2) return;
+
+          const title = h2.textContent.trim();
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = `#${id}`;
+          a.textContent = title;
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            updateActiveTOC(id);
+          });
+          li.appendChild(a);
+          tocItems.push({ li, id, title });
+
+          // h3 서브 항목도 추가
+          const h3s = section.querySelectorAll('h3');
+          h3s.forEach((h3, index) => {
+            const h3Id = `${id}-sub-${index}`;
+            h3.id = h3Id;
+            const subLi = document.createElement('li');
+            subLi.className = 'sub-item';
+            const subA = document.createElement('a');
+            subA.href = `#${h3Id}`;
+            subA.textContent = h3.textContent.trim();
+            subA.addEventListener('click', (e) => {
+              e.preventDefault();
+              h3.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              updateActiveTOC(h3Id);
+            });
+            subLi.appendChild(subA);
+            tocItems.push({ li: subLi, id: h3Id, title: h3.textContent.trim() });
+          });
+        });
+
+        tocItems.forEach(item => toc.appendChild(item.li));
+      }
+
+      // 활성 목차 항목 업데이트
+      function updateActiveTOC(activeId) {
+        const tocLinks = document.querySelectorAll('.doc-toc a');
+        tocLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === `#${activeId}`) {
+            link.classList.add('active');
+          }
+        });
+      }
+
+      // 스크롤 감지로 활성 섹션 업데이트
+      function handleScroll() {
+        const container = document.querySelector('.doc-container');
+        if (!container) return;
+
+        const scrollPos = container.scrollTop + 200;
+        const sections = document.querySelectorAll('.doc-section[id^="section-"]');
+
+        let currentSection = null;
+        sections.forEach(section => {
+          const top = section.offsetTop;
+          const bottom = top + section.offsetHeight;
+          if (scrollPos >= top && scrollPos < bottom) {
+            currentSection = section.id;
+
+            // 해당 섹션 내의 h3도 체크
+            const h3s = section.querySelectorAll('h3[id^="section-"]');
+            h3s.forEach(h3 => {
+              const h3Top = h3.offsetTop;
+              const h3Bottom = h3Top + h3.offsetHeight;
+              if (scrollPos >= h3Top && scrollPos < h3Bottom) {
+                currentSection = h3.id;
+              }
+            });
+          }
+        });
+
+        if (currentSection) {
+          updateActiveTOC(currentSection);
+        }
+      }
+
+      // 현재 페이지 감지 및 active 클래스 설정
+      function setActiveNavItem() {
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('.doc-sidebar-nav a');
+        navLinks.forEach(link => {
+          link.classList.remove('active');
+          const href = link.getAttribute('href');
+          if (currentPath.endsWith(href) || (href === 'action_manual_test_doc.html' && currentPath.endsWith('action_manual_test_doc.html'))) {
+            link.classList.add('active');
+          }
+        });
+      }
+
+      // 초기화
+      document.addEventListener('DOMContentLoaded', () => {
+        // 현재 페이지 active 설정
+        setActiveNavItem();
+        
+        // 초기 사이드바 너비 적용
+        applySidebarWidth(sidebarWidth);
+        
+        // 리사이저 초기화
+        initResizer();
+        
+        // 모바일 토글 초기화
+        initMobileToggle();
+        
+        // 목차 생성
+        generateTOC();
+        
+        // 스크롤 감지
+        const container = document.querySelector('.doc-container');
+        if (container) {
+          container.addEventListener('scroll', handleScroll);
+          handleScroll(); // 초기 활성 항목 설정
+        }
+
+        // 윈도우 리사이즈 시 사이드바 너비 재적용
+        window.addEventListener('resize', () => {
+          const maxWidth = window.innerWidth <= 991.98 ? window.innerWidth * 0.8 : window.innerWidth * 0.5;
+          if (sidebarWidth > maxWidth) {
+            applySidebarWidth(Math.min(sidebarWidth, maxWidth));
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
+

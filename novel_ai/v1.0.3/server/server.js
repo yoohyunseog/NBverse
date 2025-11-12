@@ -34,6 +34,7 @@ const MEMORY_DIR = path.join(DATA_DIR, 'memory');
 const NOVELS_DIR = path.join(DATA_DIR, 'novels');
 const HONEYCOMB_DIR = path.join(DATA_DIR, 'honeycomb');
 const HIERARCHY_DIR = path.join(HONEYCOMB_DIR, 'hierarchy');
+const SERVER_LOGS_DIR = path.join(__dirname, 'logs');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(CHARACTERS_DIR)) fs.mkdirSync(CHARACTERS_DIR, { recursive: true });
@@ -42,6 +43,7 @@ if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
 if (!fs.existsSync(NOVELS_DIR)) fs.mkdirSync(NOVELS_DIR, { recursive: true });
 if (!fs.existsSync(HONEYCOMB_DIR)) fs.mkdirSync(HONEYCOMB_DIR, { recursive: true });
 if (!fs.existsSync(HIERARCHY_DIR)) fs.mkdirSync(HIERARCHY_DIR, { recursive: true });
+if (!fs.existsSync(SERVER_LOGS_DIR)) fs.mkdirSync(SERVER_LOGS_DIR, { recursive: true });
 // 중앙 로그 파일은 비활성화
 // if (!fs.existsSync(LOG_FILE)) fs.writeFileSync(LOG_FILE, '', 'utf8');
 
@@ -60,6 +62,330 @@ function getApiKey() {
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
+
+app.get('/api/server/logs/files', (req, res) => {
+  try {
+    const files = listServerLogFiles();
+    return res.json({ ok: true, count: files.length, files });
+  } catch (error) {
+    console.error('[ServerLog] files endpoint error:', error);
+    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get('/api/server/logs', (req, res) => {
+  try {
+    const files = listServerLogFiles();
+    if (!files.length) {
+      return res.json({ ok: true, entries: [], total: 0, offset: 0, limit: 0, availableFiles: [] });
+    }
+
+    const requestedFile = req.query.file ? path.basename(String(req.query.file)) : null;
+    const selectedFile = requestedFile
+      ? files.find(file => file.name === requestedFile)
+      : files[0];
+
+    if (!selectedFile) {
+      return res.status(404).json({ ok: false, error: 'Log file not found' });
+    }
+
+    let entries = readServerLogEntries(selectedFile.path);
+    const levelFilter = req.query.level ? String(req.query.level).toLowerCase() : null;
+    if (levelFilter) {
+      entries = entries.filter(entry => (entry.level || '').toLowerCase() === levelFilter);
+    }
+
+    const searchFilter = req.query.search ? String(req.query.search).toLowerCase() : null;
+    if (searchFilter) {
+      entries = entries.filter(entry => {
+        const messageMatch = (entry.message || '').toLowerCase().includes(searchFilter);
+        const metaMatch = JSON.stringify(entry.meta || {}).toLowerCase().includes(searchFilter);
+        return messageMatch || metaMatch;
+      });
+    }
+
+    const total = entries.length;
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+    const limitRaw = parseInt(String(req.query.limit || '200'), 10);
+    const limit = Math.min(Math.max(limitRaw || 200, 1), 1000);
+    const paged = entries.slice(offset, offset + limit);
+
+    return res.json({
+      ok: true,
+      total,
+      offset,
+      limit,
+      file: {
+        name: selectedFile.name,
+        date: selectedFile.date,
+        url: selectedFile.url,
+        size: selectedFile.size,
+        entries: selectedFile.entries
+      },
+      entries: paged,
+      availableFiles: files.map(file => ({
+        name: file.name,
+        date: file.date,
+        entries: file.entries,
+        url: file.url,
+        size: file.size
+      }))
+    });
+  } catch (error) {
+    console.error('[ServerLog] logs endpoint error:', error);
+    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+const BIT_COUNT = 50;
+const BIT_BASE_VALUE = 5.5;
+const BIT_DEFAULT_PREFIX = '안 녕 한 국 인 터 넷 . 한 국';
+let SUPER_BIT = 0;
+const LANGUAGE_RANGES = [
+  { range: [0xAC00, 0xD7AF], prefix: 1000000 },
+  { range: [0x3040, 0x309F], prefix: 2000000 },
+  { range: [0x30A0, 0x30FF], prefix: 3000000 },
+  { range: [0x4E00, 0x9FFF], prefix: 4000000 },
+  { range: [0x0410, 0x044F], prefix: 5000000 },
+  { range: [0x0041, 0x007A], prefix: 6000000 },
+  { range: [0x0590, 0x05FF], prefix: 7000000 },
+  { range: [0x00C0, 0x00FD], prefix: 8000000 },
+  { range: [0x0E00, 0x0E7F], prefix: 9000000 }
+];
+
+function wordNbUnicodeFormat(text = '') {
+  let domain = BIT_DEFAULT_PREFIX;
+  if (text && text.length > 0) {
+    domain = `${BIT_DEFAULT_PREFIX}:${text}`;
+  }
+  const chars = Array.from(domain);
+  return chars.map(char => {
+    const codePoint = char.codePointAt(0);
+    const lang = LANGUAGE_RANGES.find(
+      ({ range: [start, end] }) => codePoint >= start && codePoint <= end
+    );
+    const prefix = lang ? lang.prefix : 0;
+    return prefix + codePoint;
+  });
+}
+
+function initializeBitArrays(len) {
+  return {
+    BIT_START_A50: new Array(len).fill(0),
+    BIT_START_A100: new Array(len).fill(0),
+    BIT_START_B50: new Array(len).fill(0),
+    BIT_START_B100: new Array(len).fill(0),
+    BIT_START_NBA100: new Array(len).fill(0)
+  };
+}
+
+function calculateBit(nb, bit = BIT_BASE_VALUE, reverse = false) {
+  if (!nb || nb.length < 2) return bit / 100;
+  const BIT_NB = bit;
+  const max = Math.max(...nb);
+  const min = Math.min(...nb);
+  const negativeRange = min < 0 ? Math.abs(min) : 0;
+  const positiveRange = max > 0 ? max : 0;
+  const denom = (BIT_COUNT * nb.length - 1) || 1;
+  const negativeIncrement = negativeRange / denom;
+  const positiveIncrement = positiveRange / denom;
+  const arrays = initializeBitArrays(BIT_COUNT * nb.length);
+  let count = 0;
+  for (const value of nb) {
+    for (let i = 0; i < BIT_COUNT; i++) {
+      const BIT_END = 1;
+      const A50 = value < 0
+        ? min + negativeIncrement * (count + 1)
+        : min + positiveIncrement * (count + 1);
+      const A100 = (count + 1) * BIT_NB / (BIT_COUNT * nb.length);
+      const B50 = value < 0 ? A50 - negativeIncrement * 2 : A50 - positiveIncrement * 2;
+      const B100 = value < 0 ? A50 + negativeIncrement : A50 + positiveIncrement;
+      const NBA100 = A100 / (nb.length - BIT_END);
+      arrays.BIT_START_A50[count] = A50;
+      arrays.BIT_START_A100[count] = A100;
+      arrays.BIT_START_B50[count] = B50;
+      arrays.BIT_START_B100[count] = B100;
+      arrays.BIT_START_NBA100[count] = NBA100;
+      count++;
+    }
+  }
+  if (reverse) arrays.BIT_START_NBA100.reverse();
+  let NB50 = 0;
+  for (const value of nb) {
+    for (let a = 0; a < arrays.BIT_START_NBA100.length; a++) {
+      if (arrays.BIT_START_B50[a] <= value && arrays.BIT_START_B100[a] >= value) {
+        NB50 += arrays.BIT_START_NBA100[Math.min(a, arrays.BIT_START_NBA100.length - 1)];
+        break;
+      }
+    }
+  }
+  if (nb.length === 2) return bit - NB50;
+  return NB50;
+}
+
+function updateSuperBit(value) {
+  SUPER_BIT = value;
+}
+
+function BIT_MAX_NB(nb, bit = BIT_BASE_VALUE) {
+  const result = calculateBit(nb, bit, false);
+  if (!Number.isFinite(result) || Number.isNaN(result) || result > 100 || result < -100) {
+    return SUPER_BIT;
+  }
+  updateSuperBit(result);
+  return result;
+}
+
+function BIT_MIN_NB(nb, bit = BIT_BASE_VALUE) {
+  const result = calculateBit(nb, bit, true);
+  if (!Number.isFinite(result) || Number.isNaN(result) || result > 100 || result < -100) {
+    return SUPER_BIT;
+  }
+  updateSuperBit(result);
+  return result;
+}
+
+function calculateBitValues(text = '') {
+  const arr = wordNbUnicodeFormat(text || '');
+  return { max: BIT_MAX_NB(arr), min: BIT_MIN_NB(arr), length: arr.length };
+}
+
+function numbersAlmostEqual(a, b, tolerance = 1e-6) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(a - b) <= tolerance;
+}
+
+function toPlainNumberString(num) {
+  if (!Number.isFinite(num)) return '0';
+  const abs = Math.abs(num);
+  let str = abs.toString();
+  if (!/e/i.test(str)) return str;
+
+  const [mantissa, exponentPart] = str.split('e');
+  const exponent = parseInt(exponentPart, 10);
+  let [intPart, fracPart = ''] = mantissa.split('.');
+  if (!intPart) intPart = '0';
+  fracPart = fracPart || '';
+  const digits = intPart + fracPart;
+
+  if (exponent >= 0) {
+    const targetLength = intPart.length + exponent;
+    if (targetLength >= digits.length) {
+      return digits.padEnd(targetLength, '0');
+    }
+    return `${digits.slice(0, targetLength)}.${digits.slice(targetLength)}`;
+  }
+
+  const targetIndex = intPart.length + exponent;
+  if (targetIndex <= 0) {
+    return `0.${'0'.repeat(Math.abs(targetIndex))}${digits}`;
+  }
+
+  return `${digits.slice(0, targetIndex)}.${digits.slice(targetIndex)}`;
+}
+
+function numberToDigits(num) {
+  if (!Number.isFinite(num)) return ['0'];
+  let plain = toPlainNumberString(Math.abs(num));
+  if (plain.includes('.')) {
+    plain = plain.replace(/\.?0+$/, '').replace('.', '');
+  }
+  plain = plain.replace(/^0+/, '');
+  if (!plain.length) plain = '0';
+  return plain.split('');
+}
+
+function parseFiniteNumber(value) {
+  if (value === undefined || value === null) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getServerLogFile(date = new Date()) {
+  const day = new Date(date).toISOString().slice(0, 10).replace(/-/g, '');
+  return path.join(SERVER_LOGS_DIR, `server-${day}.ndjson`);
+}
+
+function appendServerLog(level = 'info', message = '', meta = {}) {
+  try {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      meta
+    };
+    const filePath = getServerLogFile();
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf8');
+    if (!app.__recentServerLogs) app.__recentServerLogs = [];
+    app.__recentServerLogs.unshift(entry);
+    if (app.__recentServerLogs.length > 500) {
+      app.__recentServerLogs.length = 500;
+    }
+  } catch (error) {
+    console.error('[ServerLog] append failed:', error);
+  }
+}
+
+function listServerLogFiles() {
+  try {
+    const names = fs.readdirSync(SERVER_LOGS_DIR)
+      .filter(name => name.endsWith('.ndjson'))
+      .sort((a, b) => (a < b ? 1 : -1));
+    return names.map(name => {
+      const fullPath = path.join(SERVER_LOGS_DIR, name);
+      const stats = fs.statSync(fullPath);
+      let entries = 0;
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        entries = content ? content.split(/\r?\n/).filter(Boolean).length : 0;
+      } catch {
+        entries = 0;
+      }
+      const dateMatch = name.match(/server-(\d{4})(\d{2})(\d{2})/);
+      const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : null;
+      return {
+        name,
+        path: fullPath,
+        url: `/novel_ai/v1.0.3/server/logs/${name}`,
+        size: stats.size,
+        mtime: stats.mtime,
+        ctime: stats.ctime,
+        entries,
+        date
+      };
+    });
+  } catch (error) {
+    console.error('[ServerLog] list files failed:', error);
+    return [];
+  }
+}
+
+function readServerLogEntries(filePath) {
+  if (!filePath) return [];
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const text = fs.readFileSync(filePath, 'utf8');
+    if (!text) return [];
+    return text.split(/\r?\n/).filter(Boolean).map((line, index) => {
+      try {
+        const parsed = JSON.parse(line);
+        return { index, ...parsed };
+      } catch (error) {
+        return {
+          index,
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          message: 'Failed to parse log line',
+          meta: { line, error: error.message }
+        };
+      }
+    });
+  } catch (error) {
+    console.error('[ServerLog] read entries failed:', error);
+    return [];
+  }
+}
 
 // Health
 app.get('/health', (_req, res) => {
@@ -262,8 +588,7 @@ app.get('/database/index.html', (req, res, next) => {
 });
 
 function nestedPathFromNumber(label, num) {
-  const str = Math.abs(num).toFixed(10).replace('.', '');
-  const digits = (str.match(/\d/g) || []);
+  const digits = numberToDigits(num);
   const baseDir = path.join(DATA_DIR, label, ...digits);
   const leaf = label === 'max' ? 'max_bit' : 'min_bit';
   const targetDir = path.join(baseDir, leaf);
@@ -1335,11 +1660,24 @@ function getAttributeFilePath(bitMax, bitMin, type = 'max') {
 // 속성에 데이터 저장 - 기존 MAX/MIN 폴더 구조 사용
 app.post('/api/attributes/data', (req, res) => {
   try {
-    let { attributeBitMax, attributeBitMin, attributeText, dataBitMax, dataBitMin, novelTitle, novelTitleBitMax, novelTitleBitMin, chapter, chapterBitMax, chapterBitMin } = req.body || {};
-    
-    // text 필드는 req.body에서 직접 가져오기 (destructuring으로는 빈 문자열이 제거될 수 있음)
-    // 'text' in req.body로 존재 여부 확인 후, 값이 빈 문자열이어도 허용
-    let text = req.body?.text;
+    let {
+      attributeBitMax,
+      attributeBitMin,
+      attributeText,
+      dataBitMax,
+      dataBitMin,
+      novelTitle,
+      novelTitleBitMax,
+      novelTitleBitMin,
+      chapter,
+      chapterBitMax,
+      chapterBitMin
+    } = req.body || {};
+
+    // text 필드는 req.body에서 직접 가져오기 (빈 문자열도 허용)
+    let text = Object.prototype.hasOwnProperty.call(req.body || {}, 'text') ? req.body.text : undefined;
+    const originalAttributeTextInput = typeof attributeText === 'string' ? attributeText : '';
+    attributeText = originalAttributeTextInput.trim();
     
     // 디버깅: 받은 chapter 정보 확인
     console.log('[서버] /api/attributes/data 요청 받음:', {
@@ -1361,15 +1699,27 @@ app.post('/api/attributes/data', (req, res) => {
       전체body: JSON.stringify(req.body).substring(0, 500)
     });
     
-    if (attributeBitMax === undefined || attributeBitMin === undefined) {
+    attributeBitMax = parseFiniteNumber(attributeBitMax);
+    attributeBitMin = parseFiniteNumber(attributeBitMin);
+    if (attributeBitMax === null || attributeBitMin === null) {
+      appendServerLog('error', 'Attribute save failed: missing attribute BIT values', {
+        attributeText: originalAttributeTextInput,
+        receivedMax: req.body?.attributeBitMax,
+        receivedMin: req.body?.attributeBitMin,
+        novelTitle
+      });
       return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
     }
+
+    novelTitleBitMax = parseFiniteNumber(novelTitleBitMax);
+    novelTitleBitMin = parseFiniteNumber(novelTitleBitMin);
+    dataBitMax = parseFiniteNumber(dataBitMax);
+    dataBitMin = parseFiniteNumber(dataBitMin);
+    chapterBitMax = parseFiniteNumber(chapterBitMax);
+    chapterBitMin = parseFiniteNumber(chapterBitMin);
+    const originalAttributeText = attributeText;
     
     // 속성 텍스트 보정: 소설 제목이 포함되어 있지 않다면 자동으로 붙여줌
-    if (typeof attributeText !== 'string') {
-      attributeText = attributeText != null ? String(attributeText) : '';
-    }
-    attributeText = attributeText.trim();
     const novelPrefix = novelTitle ? `${novelTitle} → ` : '';
     if (novelPrefix) {
       if (attributeText.startsWith(novelPrefix)) {
@@ -1387,6 +1737,10 @@ app.post('/api/attributes/data', (req, res) => {
       console.error('[서버] text 필드가 req.body에 없음:', {
         reqBodyKeys: Object.keys(req.body || {}),
         reqBodyStringified: JSON.stringify(req.body).substring(0, 500)
+      });
+      appendServerLog('error', 'Attribute save failed: text field missing', {
+        attributeText: originalAttributeTextInput,
+        novelTitle
       });
       return res.status(400).json({ ok: false, error: 'text required' });
     }
@@ -1411,6 +1765,10 @@ app.post('/api/attributes/data', (req, res) => {
       // 변환 후에도 'undefined' 문자열이면 오류
       if (text === 'undefined') {
         console.error('[서버] text 필드를 문자열로 변환할 수 없음:', text);
+        appendServerLog('error', 'Attribute save failed: text not convertible to string', {
+          attributeText,
+          novelTitle
+        });
         return res.status(400).json({ ok: false, error: 'text required' });
       }
     }
@@ -1423,6 +1781,67 @@ app.post('/api/attributes/data', (req, res) => {
       isEmpty: text === '',
       isNull: req.body?.text === null
     });
+
+    // 서버에서 속성 BIT 재계산 및 검증
+    const attributeBitValues = calculateBitValues(attributeText);
+    if (
+      !numbersAlmostEqual(attributeBitMax, attributeBitValues.max) ||
+      !numbersAlmostEqual(attributeBitMin, attributeBitValues.min)
+    ) {
+      console.error('[서버] attribute BIT mismatch', {
+        attributeText,
+        originalAttributeText,
+        providedMax: attributeBitMax,
+        providedMin: attributeBitMin,
+        computedMax: attributeBitValues.max,
+        computedMin: attributeBitValues.min
+      });
+      appendServerLog('error', 'Attribute BIT mismatch', {
+        attributeText,
+        novelTitle,
+        provided: { max: attributeBitMax, min: attributeBitMin },
+        computed: attributeBitValues
+      });
+      return res.status(400).json({
+        ok: false,
+        error: 'attributeBit values do not match attributeText',
+        expected: attributeBitValues,
+        received: { max: attributeBitMax, min: attributeBitMin }
+      });
+    }
+    attributeBitMax = attributeBitValues.max;
+    attributeBitMin = attributeBitValues.min;
+
+    // 데이터 BIT 검증 (값이 전달된 경우)
+    const dataBitValues = calculateBitValues(text || '');
+    if (
+      dataBitMax !== null &&
+      dataBitMin !== null &&
+      (!numbersAlmostEqual(dataBitMax, dataBitValues.max) ||
+       !numbersAlmostEqual(dataBitMin, dataBitValues.min))
+    ) {
+      console.error('[서버] data BIT mismatch', {
+        textSample: text.substring(0, 120),
+        providedMax: dataBitMax,
+        providedMin: dataBitMin,
+        computedMax: dataBitValues.max,
+        computedMin: dataBitValues.min
+      });
+      appendServerLog('error', 'Data BIT mismatch', {
+        attributeText,
+        novelTitle,
+        provided: { max: dataBitMax, min: dataBitMin },
+        computed: dataBitValues
+      });
+      return res.status(400).json({
+        ok: false,
+        error: 'dataBit values do not match text',
+        expected: dataBitValues,
+        received: { max: dataBitMax, min: dataBitMin }
+      });
+    }
+    dataBitMax = dataBitValues.max;
+    dataBitMin = dataBitValues.min;
     
     // 중복 체크: 같은 속성+데이터 조합이 이미 존재하는지 확인
     const checkDuplicate = (files) => {
@@ -1463,6 +1882,11 @@ app.post('/api/attributes/data', (req, res) => {
     if (fs.existsSync(checkFile)) duplicateFiles.push(checkFile);
     duplicateFiles.push(...listRecordFiles(checkDir).filter(f => f !== checkFile));
     if (checkDuplicate(duplicateFiles)) {
+      appendServerLog('warn', 'Duplicate attribute/data combination skipped', {
+        attributeText,
+        novelTitle,
+        chapter: chapter?.number || null
+      });
       return res.json({ ok: true, duplicate: true, message: '이미 동일한 속성-데이터 조합이 저장되어 있습니다.' });
     }
     
@@ -1651,10 +2075,26 @@ app.post('/api/attributes/data', (req, res) => {
     }
     
     console.log('[Attribute] Data saved:', { attributeBitMax, attributeBitMin, textLength: text.length, files: written });
+    appendServerLog('info', 'Attribute data saved', {
+      attributeText,
+      attributeBitMax,
+      attributeBitMin,
+      dataBitMax,
+      dataBitMin,
+      textLength: text.length,
+      novelTitle,
+      chapter: chapter?.number || null,
+      files: written
+    });
     
     return res.json({ ok: true, record, files: written });
   } catch (e) {
     console.error('[Attribute] Save error:', e);
+    appendServerLog('error', 'Attribute data save failed', {
+      error: e.message,
+      stack: e.stack,
+      payloadPreview: JSON.stringify(req.body || {}).substring(0, 500)
+    });
     return res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });
