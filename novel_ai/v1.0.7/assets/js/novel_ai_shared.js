@@ -142,6 +142,19 @@
 
   async function saveRecord(baseUrl, payload) {
     if (!baseUrl) throw new Error('baseUrl required');
+    
+    // 저장 전 중복 체크 (선택적)
+    if (payload.attributeBitMax !== undefined && payload.attributeBitMin !== undefined && payload.text) {
+      const isDuplicate = await verifyRecord(baseUrl, {
+        max: payload.attributeBitMax,
+        min: payload.attributeBitMin
+      }, payload.text);
+      
+      if (isDuplicate) {
+        throw new Error('이미 동일한 속성-데이터 조합이 저장되어 있습니다.');
+      }
+    }
+    
     const response = await fetch(`${baseUrl}/api/attributes/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -150,6 +163,12 @@
     const text = await response.text().catch(() => '');
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+    
+    // 서버에서 중복 응답이 오면 에러로 처리
+    if (json?.duplicate) {
+      throw new Error(json.message || '이미 동일한 속성-데이터 조합이 저장되어 있습니다.');
+    }
+    
     if (!response.ok || !json?.ok) {
       const message = json?.error || text || `HTTP ${response.status}`;
       throw new Error(message);

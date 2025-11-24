@@ -6,6 +6,9 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { exec } from 'child_process';
 
 dotenv.config();
 
@@ -20,10 +23,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const PUBLIC_ROOT = PROJECT_ROOT; // serve the whole current folder
 
-// Data directory
-const DATA_DIR = path.join(__dirname, 'data');
+// Data directory - v1.0.7 data folder (max/min only)
+const DATA_DIR = path.join(PROJECT_ROOT, 'novel_ai', 'v1.0.7', 'data');
 const LOG_FILE = path.join(DATA_DIR, 'log.ndjson');
 const API_KEY_FILE = path.join(DATA_DIR, 'gpt_api_key.txt');
+// max/min 폴더만 사용 - 다른 폴더는 제거됨
+// 기존 폴더 변수들은 호환성을 위해 정의하지만 사용하지 않음
 const CHARACTERS_DIR = path.join(DATA_DIR, 'characters');
 const WORLD_DIR = path.join(DATA_DIR, 'world');
 const MEMORY_DIR = path.join(DATA_DIR, 'memory');
@@ -32,12 +37,8 @@ const HONEYCOMB_DIR = path.join(DATA_DIR, 'honeycomb');
 const HIERARCHY_DIR = path.join(HONEYCOMB_DIR, 'hierarchy');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(CHARACTERS_DIR)) fs.mkdirSync(CHARACTERS_DIR, { recursive: true });
-if (!fs.existsSync(WORLD_DIR)) fs.mkdirSync(WORLD_DIR, { recursive: true });
-if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
-if (!fs.existsSync(NOVELS_DIR)) fs.mkdirSync(NOVELS_DIR, { recursive: true });
-if (!fs.existsSync(HONEYCOMB_DIR)) fs.mkdirSync(HONEYCOMB_DIR, { recursive: true });
-if (!fs.existsSync(HIERARCHY_DIR)) fs.mkdirSync(HIERARCHY_DIR, { recursive: true });
+// max/min 폴더는 nestedPathFromNumber 함수에서 자동 생성됨
+// 다른 폴더는 생성하지 않음 (max/min만 허용)
 // 중앙 로그 파일은 비활성화
 // if (!fs.existsSync(LOG_FILE)) fs.writeFileSync(LOG_FILE, '', 'utf8');
 
@@ -65,6 +66,323 @@ function getApiKey() {
   return null;
 }
 
+// OAuth 설정 파일 경로
+const OAUTH_CONFIG_FILE = path.join(DATA_DIR, 'oauth_config.json');
+
+// OAuth 설정 로드 함수
+function getOAuthConfig() {
+  try {
+    if (fs.existsSync(OAUTH_CONFIG_FILE)) {
+      const content = fs.readFileSync(OAUTH_CONFIG_FILE, 'utf8');
+      return JSON.parse(content);
+    }
+  } catch (e) {
+    console.warn('[OAuth] 설정 파일 읽기 실패:', e);
+  }
+  
+  // 환경 변수에서 로드
+  const baseUrl = process.env.BASE_URL || `http://127.0.0.1:${PORT}`;
+  
+  return {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      redirectUri: process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/auth/google/callback`
+    },
+    naver: {
+      clientId: process.env.NAVER_CLIENT_ID || '',
+      clientSecret: process.env.NAVER_CLIENT_SECRET || '',
+      redirectUri: process.env.NAVER_REDIRECT_URI || `${baseUrl}/api/auth/naver/callback`
+    },
+    kakao: {
+      clientId: process.env.KAKAO_REST_API_KEY || '',
+      clientSecret: process.env.KAKAO_CLIENT_SECRET || '',
+      redirectUri: process.env.KAKAO_REDIRECT_URI || `${baseUrl}/api/auth/kakao/callback`
+    }
+  };
+}
+
+// OAuth 설정 저장 함수
+function saveOAuthConfig(config) {
+  try {
+    fs.writeFileSync(OAUTH_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('[OAuth] 설정 파일 저장 실패:', e);
+    return false;
+  }
+}
+
+// ==================== BIT 계산 함수 ====================
+const BIT_COUNT = 50;
+const BIT_BASE_VALUE = 5.5;
+const BIT_DEFAULT_PREFIX = '안 녕 한 국 인 터 넷 . 한 국';
+let SUPER_BIT = 0;
+const LANGUAGE_RANGES = [
+  { range: [0xAC00, 0xD7AF], prefix: 1000000 },
+  { range: [0x3040, 0x309F], prefix: 2000000 },
+  { range: [0x30A0, 0x30FF], prefix: 3000000 },
+  { range: [0x4E00, 0x9FFF], prefix: 4000000 },
+  { range: [0x0410, 0x044F], prefix: 5000000 },
+  { range: [0x0041, 0x007A], prefix: 6000000 },
+  { range: [0x0590, 0x05FF], prefix: 7000000 },
+  { range: [0x00C0, 0x00FD], prefix: 8000000 },
+  { range: [0x0E00, 0x0E7F], prefix: 9000000 }
+];
+
+function wordNbUnicodeFormat(text = '') {
+  let domain = BIT_DEFAULT_PREFIX;
+  if (text && text.length > 0) {
+    domain = `${BIT_DEFAULT_PREFIX}:${text}`;
+  }
+  const chars = Array.from(domain);
+  return chars.map(char => {
+    const codePoint = char.codePointAt(0);
+    const lang = LANGUAGE_RANGES.find(
+      ({ range: [start, end] }) => codePoint >= start && codePoint <= end
+    );
+    const prefix = lang ? lang.prefix : 0;
+    return prefix + codePoint;
+  });
+}
+
+function initializeBitArrays(len) {
+  return {
+    BIT_START_A50: new Array(len).fill(0),
+    BIT_START_A100: new Array(len).fill(0),
+    BIT_START_B50: new Array(len).fill(0),
+    BIT_START_B100: new Array(len).fill(0),
+    BIT_START_NBA100: new Array(len).fill(0)
+  };
+}
+
+function calculateBit(nb, bit = BIT_BASE_VALUE, reverse = false) {
+  if (!nb || nb.length < 2) return bit / 100;
+  const BIT_NB = bit;
+  const max = Math.max(...nb);
+  const min = Math.min(...nb);
+  const negativeRange = min < 0 ? Math.abs(min) : 0;
+  const positiveRange = max > 0 ? max : 0;
+  const denom = (BIT_COUNT * nb.length - 1) || 1;
+  const negativeIncrement = negativeRange / denom;
+  const positiveIncrement = positiveRange / denom;
+  const arrays = initializeBitArrays(BIT_COUNT * nb.length);
+  let count = 0;
+  for (const value of nb) {
+    for (let i = 0; i < BIT_COUNT; i++) {
+      const BIT_END = 1;
+      const A50 = value < 0
+        ? min + negativeIncrement * (count + 1)
+        : min + positiveIncrement * (count + 1);
+      const A100 = (count + 1) * BIT_NB / (BIT_COUNT * nb.length);
+      const B50 = value < 0 ? A50 - negativeIncrement * 2 : A50 - positiveIncrement * 2;
+      const B100 = value < 0 ? A50 + negativeIncrement : A50 + positiveIncrement;
+      const NBA100 = A100 / (nb.length - BIT_END);
+      arrays.BIT_START_A50[count] = A50;
+      arrays.BIT_START_A100[count] = A100;
+      arrays.BIT_START_B50[count] = B50;
+      arrays.BIT_START_B100[count] = B100;
+      arrays.BIT_START_NBA100[count] = NBA100;
+      count++;
+    }
+  }
+  if (reverse) arrays.BIT_START_NBA100.reverse();
+  let NB50 = 0;
+  for (const value of nb) {
+    for (let a = 0; a < arrays.BIT_START_NBA100.length; a++) {
+      if (arrays.BIT_START_B50[a] <= value && arrays.BIT_START_B100[a] >= value) {
+        NB50 += arrays.BIT_START_NBA100[Math.min(a, arrays.BIT_START_NBA100.length - 1)];
+        break;
+      }
+    }
+  }
+  if (nb.length === 2) return bit - NB50;
+  return NB50;
+}
+
+function updateSuperBit(value) {
+  SUPER_BIT = value;
+}
+
+function BIT_MAX_NB(nb, bit = BIT_BASE_VALUE) {
+  const result = calculateBit(nb, bit, false);
+  if (!Number.isFinite(result) || Number.isNaN(result) || result > 100 || result < -100) {
+    return SUPER_BIT;
+  }
+  updateSuperBit(result);
+  return result;
+}
+
+function BIT_MIN_NB(nb, bit = BIT_BASE_VALUE) {
+  const result = calculateBit(nb, bit, true);
+  if (!Number.isFinite(result) || Number.isNaN(result) || result > 100 || result < -100) {
+    return SUPER_BIT;
+  }
+  updateSuperBit(result);
+  return result;
+}
+
+// ==================== 사용자 인증 및 BIT 계산 ====================
+const JWT_SECRET = process.env.JWT_SECRET || 'novel_ai_secret_key_change_in_production';
+const USERS_DIR = path.join(DATA_DIR, 'users');
+const USERS_DB_FILE = path.join(USERS_DIR, 'users.json');
+
+// 디렉토리 생성 함수
+function ensureDirectory(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+// 사용자 데이터베이스 초기화
+function initializeUsersDatabase() {
+  ensureDirectory(USERS_DIR);
+  if (!fs.existsSync(USERS_DB_FILE)) {
+    fs.writeFileSync(USERS_DB_FILE, JSON.stringify({ users: [] }, null, 2), 'utf8');
+  }
+}
+
+// 사용자 BIT 계산 함수 (ID 또는 닉네임 기반)
+function calculateUserBit(userIdOrNickname) {
+  const text = String(userIdOrNickname || '');
+  const arr = wordNbUnicodeFormat(text);
+  const max = BIT_MAX_NB(arr);
+  const min = BIT_MIN_NB(arr);
+  return { max, min };
+}
+
+// 사용자 데이터 저장 경로 생성
+function getUserDataPath(userBitMax, userBitMin) {
+  const userDir = path.join(USERS_DIR, String(userBitMax), String(userBitMin));
+  ensureDirectory(userDir);
+  return {
+    base: userDir,
+    novels: path.join(userDir, 'novels'),
+    chapters: path.join(userDir, 'chapters'),
+    characters: path.join(userDir, 'characters'),
+    backgrounds: path.join(userDir, 'backgrounds'),
+    stories: path.join(userDir, 'stories'),
+    items: path.join(userDir, 'items')
+  };
+}
+
+// 사용자 데이터베이스 읽기/쓰기
+function readUsersDB() {
+  try {
+    const data = fs.readFileSync(USERS_DB_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    return { users: [] };
+  }
+}
+
+function writeUsersDB(data) {
+  // UTF-8 인코딩으로 저장 (한글 지원)
+  fs.writeFileSync(USERS_DB_FILE, JSON.stringify(data, null, 2), { encoding: 'utf8' });
+}
+
+// JWT 토큰 생성
+function generateToken(user) {
+  return jwt.sign(
+    { id: user.id, email: user.email, nickname: user.nickname },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
+// JWT 토큰 검증 미들웨어
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({ error: '인증 토큰이 필요합니다.' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: '유효하지 않은 토큰입니다.' });
+    }
+    req.user = user;
+    next();
+  });
+}
+
+// 사용자 정보 가져오기 (토큰에서)
+function getUserFromToken(req) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return null;
+  
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+}
+
+// 사용자 데이터베이스 초기화 실행
+initializeUsersDatabase();
+
+// ==================== OAuth 설정 API ====================
+
+// OAuth 설정 조회
+app.get('/api/auth/config', (req, res) => {
+  try {
+    const config = getOAuthConfig();
+    // 시크릿 키는 제외하고 반환
+    const safeConfig = {
+      google: {
+        clientId: config.google?.clientId || '',
+        redirectUri: config.google?.redirectUri || ''
+      },
+      naver: {
+        clientId: config.naver?.clientId || '',
+        redirectUri: config.naver?.redirectUri || ''
+      },
+      kakao: {
+        clientId: config.kakao?.clientId || '',
+        redirectUri: config.kakao?.redirectUri || ''
+      }
+    };
+    return res.json({ ok: true, config: safeConfig });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
+// OAuth 설정 저장
+app.post('/api/auth/config', (req, res) => {
+  try {
+    const { google, naver, kakao } = req.body || {};
+    const config = getOAuthConfig();
+    
+    if (google) {
+      if (google.clientId) config.google.clientId = google.clientId;
+      if (google.clientSecret) config.google.clientSecret = google.clientSecret;
+      if (google.redirectUri) config.google.redirectUri = google.redirectUri;
+    }
+    if (naver) {
+      if (naver.clientId) config.naver.clientId = naver.clientId;
+      if (naver.clientSecret) config.naver.clientSecret = naver.clientSecret;
+      if (naver.redirectUri) config.naver.redirectUri = naver.redirectUri;
+    }
+    if (kakao) {
+      if (kakao.clientId) config.kakao.clientId = kakao.clientId;
+      if (kakao.clientSecret) config.kakao.clientSecret = kakao.clientSecret;
+      if (kakao.redirectUri) config.kakao.redirectUri = kakao.redirectUri;
+    }
+    
+    if (saveOAuthConfig(config)) {
+      return res.json({ ok: true });
+    } else {
+      return res.status(500).json({ ok: false, error: '설정 저장 실패' });
+    }
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e) });
+  }
+});
+
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
@@ -90,17 +408,46 @@ function writeNovelMeta(novelId, meta) {
   fs.writeFileSync(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
 }
 
-// List novels
-app.get('/api/novels', (req, res) => {
+// List novels - max/min 폴더에서 속성 데이터로부터 소설 목록 추출
+app.get('/api/novels', async (req, res) => {
   try {
-    const items = [];
-    const dirs = fs.readdirSync(NOVELS_DIR, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => d.name);
-    for (const id of dirs) {
-      const meta = readNovelMeta(id);
-      if (meta) items.push({ id, title: meta.title || '제목 미정', genre: meta.genre || '', chapters: meta.chapters || 0, updated_time: meta.updated_time || meta.created_time });
+    // max/min 폴더에서 모든 속성을 수집하여 소설 목록 생성
+    const attributes = await collectAllAttributes();
+    const novelMap = new Map();
+    
+    for (const attr of attributes) {
+      const attrText = (attr.text || '').trim();
+      if (!attrText || !attrText.includes(' → ')) continue;
+      
+      const parts = attrText.split(' → ').map(p => p.trim()).filter(Boolean);
+      if (parts.length < 1) continue;
+      
+      const novelTitle = parts[0];
+      if (!novelMap.has(novelTitle)) {
+        // 챕터 수 계산
+        let chapterCount = 0;
+        const chapterSet = new Set();
+        for (const a of attributes) {
+          if (a.text && a.text.startsWith(novelTitle + ' → ')) {
+            const chapterMatch = a.text.match(/챕터\s*(\d+)/i);
+            if (chapterMatch) {
+              chapterSet.add(chapterMatch[1]);
+            }
+          }
+        }
+        chapterCount = chapterSet.size;
+        
+        novelMap.set(novelTitle, {
+          id: novelTitle.replace(/\s+/g, '_'),
+          title: novelTitle,
+          genre: '',
+          chapters: chapterCount,
+          updated_time: new Date().toISOString()
+        });
+      }
     }
+    
+    const items = Array.from(novelMap.values());
     res.json({ ok: true, items });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e.message || e) });
@@ -127,6 +474,38 @@ app.post('/api/novels', (req, res) => {
     writeNovelMeta(id, meta);
     res.json({ ok: true, novel: meta });
   } catch (e) {
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// Create or update novel (my novels endpoint - 속성 기반)
+app.post('/api/my/novels', (req, res) => {
+  try {
+    const { title, attributePath, topPath, topData, attributeData } = req.body || {};
+    
+    // 속성 기반 시스템에서는 실제로 별도의 소설 메타데이터를 저장하지 않음
+    // 대신 속성 데이터가 이미 /api/attributes/data로 저장되어 있으므로, 성공 응답만 반환
+    // 클라이언트에서 이미 BIT 값을 계산하여 저장했으므로, 여기서는 단순히 확인만 함
+    
+    console.log('[My Novels] 소설 정보 저장 확인:', {
+      title: title || '(없음)',
+      attributePath: attributePath ? attributePath.substring(0, 50) : '(없음)',
+      topPath: topPath ? topPath.substring(0, 50) : '(없음)',
+      hasTopData: !!topData,
+      hasAttributeData: !!attributeData
+    });
+    
+    res.json({ 
+      ok: true, 
+      title: title || null,
+      attributePath: attributePath || null,
+      topPath: topPath || null,
+      topData: topData || null,
+      attributeData: attributeData || null,
+      message: '소설 정보가 속성 데이터로 저장되었습니다.'
+    });
+  } catch (e) {
+    console.error('[My Novels] 오류:', e);
     res.status(500).json({ ok: false, error: String(e.message || e) });
   }
 });
@@ -1347,46 +1726,71 @@ app.post('/api/attributes/data', (req, res) => {
       return res.status(400).json({ ok: false, error: 'text must be a string' });
     }
     
-    // 중복 체크: 같은 속성+데이터 조합이 이미 존재하는지 확인
-    const checkDuplicate = (nestedFile) => {
-      if (!fs.existsSync(nestedFile)) return false;
+    // 중복 체크: 같은 속성 경로 + 데이터 텍스트 조합이 이미 존재하는지 확인 (속성 경로 BIT 값 기준)
+    const checkDuplicate = () => {
+      // 속성 경로 BIT 값이 없으면 중복 체크 불가
+      if (!Number.isFinite(attributeBitMax) || !Number.isFinite(attributeBitMin)) {
+        return false;
+      }
+      
+      // 속성 경로 BIT MAX 폴더 기준으로 중복 체크 (log_*.ndjson 파일들 모두 확인)
+      const { targetDir: checkDir } = nestedPathFromNumber('max', attributeBitMax);
+      if (!fs.existsSync(checkDir)) return false;
+      
       try {
-        const content = fs.readFileSync(nestedFile, 'utf8');
-        const lines = content.split(/\r?\n/).filter(Boolean);
-        for (const line of lines) {
+        // log_*.ndjson 파일들 모두 확인
+        const files = fs.readdirSync(checkDir);
+        const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+        
+        for (const logFile of logFiles) {
+          const logFilePath = path.join(checkDir, logFile);
           try {
-            const parsed = JSON.parse(line);
-            // 속성 BIT와 데이터 텍스트가 동일하고, 같은 소설/챕터면 중복
-            if (parsed.attribute) {
-              // 부동소수점 오차 허용
-              const epsilon = 1e-10;
-              const bitMaxMatch = Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
-              const bitMinMatch = Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
-              if (bitMaxMatch && bitMinMatch &&
-                  parsed.data && 
-                  parsed.data.text === text) {
-                // 소설 제목과 챕터 정보가 있으면 비교
-                if (novelTitle && chapter) {
-                  if (parsed.novel && parsed.novel.title === novelTitle &&
-                      parsed.chapter && parsed.chapter.number === chapter.number) {
-                    return true;
-                  }
-                } else {
-                  // 기존 데이터에는 없을 수 있으므로 일단 중복으로 간주
+            const content = fs.readFileSync(logFilePath, 'utf8');
+            const lines = content.split(/\r?\n/).filter(Boolean);
+            for (const line of lines) {
+              try {
+                const parsed = JSON.parse(line);
+                
+                // 부동소수점 오차 허용
+                const epsilon = 1e-10;
+                
+                // 속성 경로 BIT 값 일치 확인
+                const attributeBitMaxMatch = parsed.attribute && 
+                  Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+                const attributeBitMinMatch = parsed.attribute && 
+                  Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                
+                // 데이터 BIT 값 일치 확인
+                const existingDataBitMax = parsed.data?.bitMax || parsed.max || 0;
+                const existingDataBitMin = parsed.data?.bitMin || parsed.min || 0;
+                const dataBitMaxMatch = Math.abs(existingDataBitMax - (dataBitMax || 0)) < epsilon;
+                const dataBitMinMatch = Math.abs(existingDataBitMin - (dataBitMin || 0)) < epsilon;
+                
+                // 속성 경로와 데이터 텍스트 일치 확인
+                const existingAttributeText = (parsed.attribute?.text || '').trim();
+                const newAttributeText = (attributeText || '').trim();
+                const existingDataText = (parsed.data?.text || parsed.s || '').trim();
+                const newDataText = (text || '').trim();
+                
+                // 속성 경로 BIT, 데이터 BIT, 속성 텍스트, 데이터 텍스트가 모두 일치하면 중복
+                if (attributeBitMaxMatch && attributeBitMinMatch && 
+                    dataBitMaxMatch && dataBitMinMatch &&
+                    existingAttributeText === newAttributeText &&
+                    existingDataText === newDataText && 
+                    existingDataText !== '') {
                   return true;
                 }
-              }
+              } catch { /* skip */ }
             }
-          } catch { return false; }
+          } catch { /* skip */ }
         }
       } catch {}
       return false;
     };
     
-    // 중복 체크 (속성 MAX 파일 기준)
-    const { nestedFile: checkFile } = nestedPathFromNumber('max', attributeBitMax);
-    if (checkDuplicate(checkFile)) {
-      return res.json({ ok: true, duplicate: true, message: '이미 동일한 속성-데이터 조합이 저장되어 있습니다.' });
+    // 중복 체크
+    if (checkDuplicate()) {
+      return res.json({ ok: true, duplicate: true, message: '이미 동일한 속성 경로-데이터 조합이 저장되어 있습니다.' });
     }
     
     // BIT 값이 숫자인지 확인하고 전체 정밀도 유지
@@ -1437,87 +1841,11 @@ app.post('/api/attributes/data', (req, res) => {
     let written = { 
       novelTitleMax: null, novelTitleMin: null,
       chapterMax: null, chapterMin: null,
-      attributeMax: null, attributeMin: null, 
-      dataMax: null, dataMin: null,
-      attributeAsDataMax: null, attributeAsDataMin: null
+      attributeMax: null, attributeMin: null
     };
     const errors = []; // 저장 실패 에러 추적
     
-    // 데이터 텍스트가 입력되었을 때, 속성 텍스트를 데이터로 저장하는 레코드 생성 (속성 BIT 값으로 저장, 전체 정밀도 유지)
-    // 조건: 데이터 텍스트(text)가 입력되었고, 속성 텍스트(attributeText)도 있을 때
-    if (text && typeof text === 'string' && text.trim() && attributeText && typeof attributeText === 'string' && attributeText.trim()) {
-      const attributeAsDataRecord = {
-        timestamp: new Date().toISOString(),
-        t: Date.now(),
-        s: attributeText, // 속성 텍스트를 데이터 텍스트로 저장
-        max: ensureNumber(attributeBitMax), // 속성 BIT MAX를 데이터 BIT MAX로 사용 (전체 정밀도 유지)
-        min: ensureNumber(attributeBitMin), // 속성 BIT MIN을 데이터 BIT MIN으로 사용 (전체 정밀도 유지)
-        attribute: {
-          text: attributeText,
-          bitMax: ensureNumber(attributeBitMax), // 전체 정밀도 유지
-          bitMin: ensureNumber(attributeBitMin) // 전체 정밀도 유지
-        },
-        data: {
-          text: attributeText, // 속성 텍스트를 데이터로 저장
-          bitMax: ensureNumber(attributeBitMax), // 속성 BIT MAX를 데이터 BIT MAX로 사용 (전체 정밀도 유지)
-          bitMin: ensureNumber(attributeBitMin) // 속성 BIT MIN을 데이터 BIT MIN으로 사용 (전체 정밀도 유지)
-        }
-      };
-      
-      // 소설 제목과 챕터 정보도 포함 (전체 정밀도 유지)
-      if (novelTitle) {
-        attributeAsDataRecord.novel = {
-          title: novelTitle,
-          bitMax: ensureNumber(novelTitleBitMax), // 전체 정밀도 유지
-          bitMin: ensureNumber(novelTitleBitMin) // 전체 정밀도 유지
-        };
-      }
-      if (chapter) {
-        attributeAsDataRecord.chapter = {
-          number: chapter.number || null,
-          title: chapter.title || null,
-          description: chapter.description || null,
-          bitMax: ensureNumber(chapterBitMax), // 전체 정밀도 유지
-          bitMin: ensureNumber(chapterBitMin) // 전체 정밀도 유지
-        };
-      }
-      
-      const attributeAsDataLine = JSON.stringify(attributeAsDataRecord) + '\n';
-      
-      // 속성 BIT MAX로 MAX 폴더에 저장 (속성 텍스트를 데이터로)
-      if (Number.isFinite(attributeBitMax)) {
-        const { targetDir, nestedFile } = nestedPathFromNumber('max', attributeBitMax);
-        try { 
-          fs.mkdirSync(targetDir, { recursive: true }); 
-        } catch (_) {}
-        try { 
-          fs.appendFileSync(nestedFile, attributeAsDataLine, 'utf8'); 
-          console.log('[Attribute] 속성 텍스트를 데이터로 MAX 폴더에 저장:', nestedFile); 
-          written.attributeAsDataMax = nestedFile; 
-        } catch (e) { 
-          const errorMsg = `속성 텍스트 데이터 MAX 저장 실패: ${nestedFile}`;
-          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMax, attributeText });
-          errors.push({ type: 'attributeAsDataMax', file: nestedFile, error: e.message });
-        }
-      }
-      
-      // 속성 BIT MIN으로 MIN 폴더에 저장 (속성 텍스트를 데이터로)
-      if (Number.isFinite(attributeBitMin)) {
-        const { targetDir, nestedFile } = nestedPathFromNumber('min', attributeBitMin);
-        try { 
-          fs.mkdirSync(targetDir, { recursive: true }); 
-        } catch (_) {}
-        try { 
-          fs.appendFileSync(nestedFile, attributeAsDataLine, 'utf8'); 
-          console.log('[Attribute] 속성 텍스트를 데이터로 MIN 폴더에 저장:', nestedFile); 
-          written.attributeAsDataMin = nestedFile; 
-        } catch (e) { 
-          const errorMsg = `속성 텍스트 데이터 MIN 저장 실패: ${nestedFile}`;
-          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMin, attributeText });
-          errors.push({ type: 'attributeAsDataMin', file: nestedFile, error: e.message });
-        }
-      }
-    }
+    // 속성 텍스트를 데이터로 저장하는 로직 제거 - 데이터 BIT 값 기준으로만 저장
     
     // 1. 소설 제목 BIT MAX로 MAX 폴더에 저장
     if (novelTitleBitMax !== undefined && novelTitleBitMax !== null && Number.isFinite(novelTitleBitMax)) {
@@ -1587,71 +1915,179 @@ app.post('/api/attributes/data', (req, res) => {
       }
     }
     
-    // 5. 속성 BIT MAX로 MAX 폴더에 저장
+    // 속성 경로 BIT 값으로 경로 생성, 데이터는 그 경로에 저장
+    // 각 데이터마다 별도의 log.ndjson 파일 생성 (log_1.ndjson, log_2.ndjson 형식)
+    // 1. 속성 경로 BIT MAX로 MAX 폴더에 저장
     if (Number.isFinite(attributeBitMax)) {
-      const { targetDir, nestedFile } = nestedPathFromNumber('max', attributeBitMax);
+      const { targetDir } = nestedPathFromNumber('max', attributeBitMax);
       try { 
         fs.mkdirSync(targetDir, { recursive: true }); 
       } catch (_) {}
-      try { 
-        fs.appendFileSync(nestedFile, line, 'utf8'); 
-        console.log('[Attribute] 속성 MAX 폴더에 저장:', nestedFile); 
-        written.attributeMax = nestedFile; 
-      } catch (e) { 
-        const errorMsg = `속성 MAX 저장 실패: ${nestedFile}`;
-        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMax, attributeText, text });
-        errors.push({ type: 'attributeMax', file: nestedFile, error: e.message });
+      
+      // 기존 log_*.ndjson 파일들 확인하여 다음 번호 찾기
+      let fileNumber = 1;
+      let newFile = path.join(targetDir, `log_${fileNumber}.ndjson`);
+      
+      // 중복 체크: 기존 파일들에서 동일한 데이터가 있는지 확인
+      let isDuplicate = false;
+      if (fs.existsSync(targetDir)) {
+        try {
+          const files = fs.readdirSync(targetDir);
+          const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+          
+          // 기존 파일들에서 중복 확인
+          for (const logFile of logFiles) {
+            const logFilePath = path.join(targetDir, logFile);
+            try {
+              const content = fs.readFileSync(logFilePath, 'utf8');
+              const lines = content.split(/\r?\n/).filter(Boolean);
+              for (const existingLine of lines) {
+                try {
+                  const existing = JSON.parse(existingLine);
+                  const epsilon = 1e-10;
+                  
+                  // 속성 경로 BIT, 데이터 BIT, 텍스트가 모두 일치하면 중복
+                  const attributeBitMaxMatch = existing.attribute && 
+                    Math.abs((existing.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+                  const attributeBitMinMatch = existing.attribute && 
+                    Math.abs((existing.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                  const dataBitMaxMatch = existing.data && 
+                    Math.abs((existing.data.bitMax || 0) - (dataBitMax || 0)) < epsilon;
+                  const dataBitMinMatch = existing.data && 
+                    Math.abs((existing.data.bitMin || 0) - (dataBitMin || 0)) < epsilon;
+                  const textMatch = (existing.data?.text || '') === (text || '');
+                  
+                  if (attributeBitMaxMatch && attributeBitMinMatch && 
+                      dataBitMaxMatch && dataBitMinMatch && textMatch) {
+                    isDuplicate = true;
+                    break;
+                  }
+                } catch { /* skip */ }
+              }
+              if (isDuplicate) break;
+            } catch { /* skip */ }
+          }
+          
+          // 중복이 아니면 다음 번호 찾기
+          if (!isDuplicate) {
+            const numbers = logFiles
+              .map(f => {
+                const match = f.match(/^log_(\d+)\.ndjson$/);
+                return match ? parseInt(match[1], 10) : 0;
+              })
+              .filter(n => n > 0)
+              .sort((a, b) => b - a);
+            
+            if (numbers.length > 0) {
+              fileNumber = numbers[0] + 1;
+            }
+            newFile = path.join(targetDir, `log_${fileNumber}.ndjson`);
+          }
+        } catch (e) {
+          console.warn('[Attribute] 파일 번호 찾기 실패:', e.message);
+        }
+      }
+      
+      // 중복이 아니면 새 파일 생성
+      if (!isDuplicate) {
+        try { 
+          fs.writeFileSync(newFile, line, 'utf8'); 
+          console.log('[Attribute] 속성 경로 MAX 폴더에 새 파일 생성:', newFile); 
+          written.attributeMax = newFile; 
+        } catch (e) { 
+          const errorMsg = `속성 경로 MAX 저장 실패: ${newFile}`;
+          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMax, text });
+          errors.push({ type: 'attributeMax', file: newFile, error: e.message });
+        }
+      } else {
+        console.log('[Attribute] 중복 데이터 감지, 파일 생성 건너뜀:', { attributeBitMax, text: text?.substring(0, 50) });
       }
     }
     
-    // 6. 속성 BIT MIN으로 MIN 폴더에 저장
+    // 2. 속성 경로 BIT MIN으로 MIN 폴더에 저장
     if (Number.isFinite(attributeBitMin)) {
-      const { targetDir, nestedFile } = nestedPathFromNumber('min', attributeBitMin);
+      const { targetDir } = nestedPathFromNumber('min', attributeBitMin);
       try { 
         fs.mkdirSync(targetDir, { recursive: true }); 
       } catch (_) {}
-      try { 
-        fs.appendFileSync(nestedFile, line, 'utf8'); 
-        console.log('[Attribute] 속성 MIN 폴더에 저장:', nestedFile); 
-        written.attributeMin = nestedFile; 
-      } catch (e) { 
-        const errorMsg = `속성 MIN 저장 실패: ${nestedFile}`;
-        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMin, attributeText, text });
-        errors.push({ type: 'attributeMin', file: nestedFile, error: e.message });
+      
+      // 기존 log_*.ndjson 파일들 확인하여 다음 번호 찾기
+      let fileNumber = 1;
+      let newFile = path.join(targetDir, `log_${fileNumber}.ndjson`);
+      
+      // 중복 체크: 기존 파일들에서 동일한 데이터가 있는지 확인
+      let isDuplicate = false;
+      if (fs.existsSync(targetDir)) {
+        try {
+          const files = fs.readdirSync(targetDir);
+          const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+          
+          // 기존 파일들에서 중복 확인
+          for (const logFile of logFiles) {
+            const logFilePath = path.join(targetDir, logFile);
+            try {
+              const content = fs.readFileSync(logFilePath, 'utf8');
+              const lines = content.split(/\r?\n/).filter(Boolean);
+              for (const existingLine of lines) {
+                try {
+                  const existing = JSON.parse(existingLine);
+                  const epsilon = 1e-10;
+                  
+                  // 속성 경로 BIT, 데이터 BIT, 텍스트가 모두 일치하면 중복
+                  const attributeBitMaxMatch = existing.attribute && 
+                    Math.abs((existing.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon;
+                  const attributeBitMinMatch = existing.attribute && 
+                    Math.abs((existing.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                  const dataBitMaxMatch = existing.data && 
+                    Math.abs((existing.data.bitMax || 0) - (dataBitMax || 0)) < epsilon;
+                  const dataBitMinMatch = existing.data && 
+                    Math.abs((existing.data.bitMin || 0) - (dataBitMin || 0)) < epsilon;
+                  const textMatch = (existing.data?.text || '') === (text || '');
+                  
+                  if (attributeBitMaxMatch && attributeBitMinMatch && 
+                      dataBitMaxMatch && dataBitMinMatch && textMatch) {
+                    isDuplicate = true;
+                    break;
+                  }
+                } catch { /* skip */ }
+              }
+              if (isDuplicate) break;
+            } catch { /* skip */ }
+          }
+          
+          // 중복이 아니면 다음 번호 찾기
+          if (!isDuplicate) {
+            const numbers = logFiles
+              .map(f => {
+                const match = f.match(/^log_(\d+)\.ndjson$/);
+                return match ? parseInt(match[1], 10) : 0;
+              })
+              .filter(n => n > 0)
+              .sort((a, b) => b - a);
+            
+            if (numbers.length > 0) {
+              fileNumber = numbers[0] + 1;
+            }
+            newFile = path.join(targetDir, `log_${fileNumber}.ndjson`);
+          }
+        } catch (e) {
+          console.warn('[Attribute] 파일 번호 찾기 실패:', e.message);
+        }
       }
-    }
-    
-    // 7. 데이터 BIT MAX로 MAX 폴더에 저장
-    if (Number.isFinite(dataBitMax)) {
-      const { targetDir, nestedFile } = nestedPathFromNumber('max', dataBitMax);
-      try { 
-        fs.mkdirSync(targetDir, { recursive: true }); 
-      } catch (_) {}
-      try { 
-        fs.appendFileSync(nestedFile, line, 'utf8'); 
-        console.log('[Attribute] 데이터 MAX 폴더에 저장:', nestedFile); 
-        written.dataMax = nestedFile; 
-      } catch (e) { 
-        const errorMsg = `데이터 MAX 저장 실패: ${nestedFile}`;
-        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, dataBitMax, text });
-        errors.push({ type: 'dataMax', file: nestedFile, error: e.message });
-      }
-    }
-    
-    // 8. 데이터 BIT MIN으로 MIN 폴더에 저장
-    if (Number.isFinite(dataBitMin)) {
-      const { targetDir, nestedFile } = nestedPathFromNumber('min', dataBitMin);
-      try { 
-        fs.mkdirSync(targetDir, { recursive: true }); 
-      } catch (_) {}
-      try { 
-        fs.appendFileSync(nestedFile, line, 'utf8'); 
-        console.log('[Attribute] 데이터 MIN 폴더에 저장:', nestedFile); 
-        written.dataMin = nestedFile; 
-      } catch (e) { 
-        const errorMsg = `데이터 MIN 저장 실패: ${nestedFile}`;
-        console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, dataBitMin, text });
-        errors.push({ type: 'dataMin', file: nestedFile, error: e.message });
+      
+      // 중복이 아니면 새 파일 생성
+      if (!isDuplicate) {
+        try { 
+          fs.writeFileSync(newFile, line, 'utf8'); 
+          console.log('[Attribute] 속성 경로 MIN 폴더에 새 파일 생성:', newFile); 
+          written.attributeMin = newFile; 
+        } catch (e) { 
+          const errorMsg = `속성 경로 MIN 저장 실패: ${newFile}`;
+          console.error(`[Attribute] ${errorMsg}`, { error: e.message, stack: e.stack, attributeBitMin, text });
+          errors.push({ type: 'attributeMin', file: newFile, error: e.message });
+        }
+      } else {
+        console.log('[Attribute] 중복 데이터 감지, 파일 생성 건너뜀:', { attributeBitMin, text: text?.substring(0, 50) });
       }
     }
     
@@ -1717,14 +2153,34 @@ app.get('/api/attributes/data', (req, res) => {
     let allItems = [];
     const scoredItems = [];
     
-    // MAX 폴더에서 검색
+    // MAX 폴더에서 검색 (log.ndjson 및 log_*.ndjson 파일들 모두 확인)
     if (Number.isFinite(attributeBitMax)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attributeBitMax);
+      const { targetDir, nestedFile, baseDir, digits } = nestedPathFromNumber('max', attributeBitMax);
       
+      // log.ndjson 파일 확인 (기존 호환성)
+      const filesToRead = [];
       if (fs.existsSync(nestedFile)) {
+        filesToRead.push(nestedFile);
+      }
+      
+      // log_*.ndjson 파일들도 확인
+      if (fs.existsSync(targetDir)) {
         try {
-          const text = fs.readFileSync(nestedFile, 'utf8');
-        const lines = text.split(/\r?\n/).filter(Boolean);
+          const files = fs.readdirSync(targetDir);
+          const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+          for (const logFile of logFiles) {
+            filesToRead.push(path.join(targetDir, logFile));
+          }
+        } catch (e) {
+          console.warn('[Attribute] log_*.ndjson 파일 읽기 실패:', e.message);
+        }
+      }
+      
+      // 모든 파일에서 데이터 읽기
+      for (const fileToRead of filesToRead) {
+        try {
+          const text = fs.readFileSync(fileToRead, 'utf8');
+          const lines = text.split(/\r?\n/).filter(Boolean);
           const items = lines.map(l => {
             try { 
               const parsed = JSON.parse(l);
@@ -1760,10 +2216,12 @@ app.get('/api/attributes/data', (req, res) => {
             allItems.push(...items);
           }
         } catch (e) {
-          console.warn('[Attribute] max read error:', nestedFile, e);
+          console.warn('[Attribute] max read error:', fileToRead, e);
         }
-      } else {
-        // 하위 폴더 재귀 탐색
+      }
+      
+      // 파일이 없으면 하위 폴더 재귀 탐색
+      if (filesToRead.length === 0) {
         const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
         for (const logFile of allLogFiles) {
           try {
@@ -1803,8 +2261,8 @@ app.get('/api/attributes/data', (req, res) => {
             } else {
               allItems.push(...items);
             }
-      } catch (e) {
-        // 파일 읽기 실패 시 무시
+          } catch (e) {
+            // 파일 읽기 실패 시 무시
           }
         }
       }
@@ -1849,70 +2307,104 @@ app.get('/api/attributes/data', (req, res) => {
 
 // 속성 데이터 삭제
 app.post('/api/attributes/data/delete', (req, res) => {
+  console.log('[Delete] ===== 삭제 요청 수신 =====');
+  console.log('[Delete] 요청 본문:', JSON.stringify(req.body, null, 2));
+  console.log('[Delete] 요청 헤더:', req.headers);
+  
   try {
-    const { attributeBitMax, attributeBitMin, dataBitMax, dataBitMin } = req.body || {};
+    let { attributeBitMax, attributeBitMin, dataBitMax, dataBitMin, dataText } = req.body || {};
     
-    if (attributeBitMax === undefined || attributeBitMin === undefined) {
-      return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
+    // 문자열로 전달된 경우 숫자로 변환
+    attributeBitMax = parseFloat(attributeBitMax);
+    attributeBitMin = parseFloat(attributeBitMin);
+    dataBitMax = parseFloat(dataBitMax);
+    dataBitMin = parseFloat(dataBitMin);
+    
+    console.log('[Delete] 파라미터 추출 (숫자 변환 후):', { attributeBitMax, attributeBitMin, dataBitMax, dataBitMin, dataText });
+    
+    if (!Number.isFinite(attributeBitMax) || !Number.isFinite(attributeBitMin)) {
+      return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin must be valid numbers' });
     }
     
-    if (dataBitMax === undefined || dataBitMin === undefined) {
-      return res.status(400).json({ ok: false, error: 'dataBitMax and dataBitMin required' });
+    if (!Number.isFinite(dataBitMax) || !Number.isFinite(dataBitMin)) {
+      return res.status(400).json({ ok: false, error: 'dataBitMax and dataBitMin must be valid numbers' });
     }
+    
+    // dataText가 제공되면 디코딩
+    const decodedDataText = dataText ? decodeURIComponent(dataText) : null;
+    console.log('[Delete] 디코딩된 dataText:', decodedDataText);
     
     let deletedCount = 0;
     const filesProcessed = [];
     
-    // 삭제할 파일 목록: 속성 및 데이터 BIT 값으로 저장된 모든 파일
+    // 삭제할 파일 목록: 속성 경로 BIT와 데이터 BIT 경로 모두 확인 (log.ndjson 및 log_*.ndjson)
     const filesToCheck = [];
     
-    // 1. 속성 MAX 폴더
+    // 두 경로 모두 확인: novel_ai/v1.0.7/data와 server/data
+    const dataDirs = [
+      DATA_DIR, // novel_ai/v1.0.7/data
+      path.join(__dirname, 'data') // server/data
+    ];
+    
+    // 파일을 찾는 헬퍼 함수
+    const findFilesInPath = (bitValue, label, dataDir) => {
+      const str = Math.abs(bitValue).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+      const digits = (str.match(/\d/g) || []);
+      const baseDir = path.join(dataDir, label, ...digits);
+      const leaf = label === 'max' ? 'max_bit' : 'min_bit';
+      const targetDir = path.join(baseDir, leaf);
+      const foundFiles = [];
+      
+      // targetDir이 존재하면 그 안의 모든 로그 파일 확인
+      if (fs.existsSync(targetDir)) {
+        try {
+          const files = fs.readdirSync(targetDir);
+          // log.ndjson 파일 확인 (기존 호환성)
+          if (files.includes('log.ndjson')) {
+            foundFiles.push(path.join(targetDir, 'log.ndjson'));
+          }
+          // log_*.ndjson 파일들 확인
+          const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+          for (const logFile of logFiles) {
+            foundFiles.push(path.join(targetDir, logFile));
+          }
+        } catch (e) {
+          console.warn('[Delete] 로그 파일 읽기 실패:', e.message);
+        }
+      }
+      
+      // 파일이 없으면 하위 폴더 재귀 탐색
+      if (foundFiles.length === 0) {
+        const allLogFiles = findAllLogFiles(baseDir, label, digits);
+        foundFiles.push(...allLogFiles);
+      }
+      
+      return foundFiles;
+    };
+    
+    // MAX 폴더만 처리 (MIN 폴더는 백업으로 유지)
+    // 1. 속성 경로 BIT로 저장된 MAX 폴더 파일 찾기
     if (Number.isFinite(attributeBitMax)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attributeBitMax);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        // 하위 폴더 재귀 탐색
-        const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
-        filesToCheck.push(...allLogFiles);
+      for (const dataDir of dataDirs) {
+        const found = findFilesInPath(attributeBitMax, 'max', dataDir);
+        filesToCheck.push(...found);
       }
     }
     
-    // 2. 속성 MIN 폴더
-    if (Number.isFinite(attributeBitMin)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('min', attributeBitMin);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        const allLogFiles = findAllLogFiles(baseDir, 'min', digits);
-        filesToCheck.push(...allLogFiles);
-      }
-    }
-    
-    // 3. 데이터 MAX 폴더
+    // 2. 데이터 BIT로 저장된 MAX 폴더 파일 찾기 (실제 데이터가 저장된 경로)
     if (Number.isFinite(dataBitMax)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', dataBitMax);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
-        filesToCheck.push(...allLogFiles);
+      for (const dataDir of dataDirs) {
+        const found = findFilesInPath(dataBitMax, 'max', dataDir);
+        filesToCheck.push(...found);
       }
     }
     
-    // 4. 데이터 MIN 폴더
-    if (Number.isFinite(dataBitMin)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('min', dataBitMin);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        const allLogFiles = findAllLogFiles(baseDir, 'min', digits);
-        filesToCheck.push(...allLogFiles);
-      }
-    }
+    // MIN 폴더는 백업으로 유지하므로 처리하지 않음
     
     // 중복 제거
     const uniqueFiles = [...new Set(filesToCheck)];
+    
+    console.log(`[Delete] 검색할 파일 개수: ${uniqueFiles.length}`, uniqueFiles.map(f => path.basename(f)));
     
     // 각 파일에서 매칭되는 레코드 삭제
     for (const filePath of uniqueFiles) {
@@ -1928,21 +2420,50 @@ app.post('/api/attributes/data/delete', (req, res) => {
           try {
             const parsed = JSON.parse(line);
             
-            // 삭제 조건: attribute BIT와 data BIT가 정확히 일치하는 경우 (부동소수점 오차 허용)
-            const epsilon = 1e-10;
-            const attributeMatch = parsed.attribute && 
-              Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon &&
-              Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+            // dataText가 제공되면 data.text로 직접 비교 (가장 정확한 방법)
+            let shouldDelete = false;
             
-            const dataMatch = (parsed.data && 
-              parsed.data.bitMax === dataBitMax && 
-              parsed.data.bitMin === dataBitMin) ||
-              (parsed.max === dataBitMax && parsed.min === dataBitMin);
+            if (decodedDataText && parsed.data?.text) {
+              // data.text로 직접 비교
+              const textMatch = parsed.data.text === decodedDataText;
+              console.log(`[Delete] 텍스트 비교: 파일="${path.basename(filePath)}", 파일데이터="${parsed.data.text}", 요청데이터="${decodedDataText}", 일치=${textMatch}`);
+              
+              if (textMatch) {
+                // attribute BIT도 확인 (추가 검증)
+                const epsilon = 1e-6;
+                const attributeMatch = parsed.attribute && 
+                  Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon &&
+                  Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+                
+                console.log(`[Delete] 속성 BIT 비교: 일치=${attributeMatch}, 파일속성=${parsed.attribute?.bitMax}/${parsed.attribute?.bitMin}, 요청속성=${attributeBitMax}/${attributeBitMin}`);
+                
+                if (attributeMatch) {
+                  shouldDelete = true;
+                }
+              }
+            } else {
+              // dataText가 없으면 기존 방식 (BIT 값으로 비교)
+              const epsilon = 1e-6;
+              const attributeMatch = parsed.attribute && 
+                Math.abs((parsed.attribute.bitMax || 0) - (attributeBitMax || 0)) < epsilon &&
+                Math.abs((parsed.attribute.bitMin || 0) - (attributeBitMin || 0)) < epsilon;
+              
+              const dataMatch = (parsed.data && 
+                Math.abs((parsed.data.bitMax || 0) - (dataBitMax || 0)) < epsilon &&
+                Math.abs((parsed.data.bitMin || 0) - (dataBitMin || 0)) < epsilon) ||
+                (Math.abs((parsed.max || 0) - (dataBitMax || 0)) < epsilon &&
+                 Math.abs((parsed.min || 0) - (dataBitMin || 0)) < epsilon);
+              
+              if (attributeMatch && dataMatch) {
+                shouldDelete = true;
+              }
+            }
             
-            if (attributeMatch && dataMatch) {
+            if (shouldDelete) {
               // 이 레코드는 삭제 (remainingLines에 추가하지 않음)
               fileDeletedCount++;
               deletedCount++;
+              console.log(`[Delete] 레코드 삭제: 파일=${path.basename(filePath)}, 데이터="${parsed.data?.text || parsed.s || ''}"`);
             } else {
               // 나머지는 유지
               remainingLines.push(line);
@@ -2023,6 +2544,446 @@ app.post('/api/attributes/data/delete', (req, res) => {
   }
 });
 
+// 속성 경로의 파일 목록 조회
+app.get('/api/attributes/files', (req, res) => {
+  try {
+    const { attributeBitMax, attributeBitMin, dataBitMax, dataBitMin, requestedAttrBitMax, requestedAttrBitMin } = req.query || {};
+    
+    if (attributeBitMax === undefined || attributeBitMin === undefined) {
+      return res.status(400).json({ ok: false, error: 'attributeBitMax and attributeBitMin required' });
+    }
+    
+    // 최상위 경로 BIT (폴더 찾기용)
+    const topAttrMax = parseFloat(attributeBitMax);
+    const topAttrMin = parseFloat(attributeBitMin);
+    
+    if (!Number.isFinite(topAttrMax) || !Number.isFinite(topAttrMin)) {
+      return res.status(400).json({ ok: false, error: 'Invalid top attribute BIT values' });
+    }
+    
+    // 각 소설의 속성 경로 BIT (필터링용) - 없으면 필터링하지 않음
+    const filterByAttribute = requestedAttrBitMax !== undefined && requestedAttrBitMin !== undefined;
+    const requestedAttrMax = filterByAttribute ? parseFloat(requestedAttrBitMax) : null;
+    const requestedAttrMin = filterByAttribute ? parseFloat(requestedAttrBitMin) : null;
+    
+    if (filterByAttribute && (!Number.isFinite(requestedAttrMax) || !Number.isFinite(requestedAttrMin))) {
+      return res.status(400).json({ ok: false, error: 'Invalid requested attribute BIT values' });
+    }
+    
+    // dataBitMax와 dataBitMin이 제공되면 필터링, 없으면 모든 파일 반환
+    const filterByData = dataBitMax !== undefined && dataBitMin !== undefined;
+    const dataMax = filterByData ? parseFloat(dataBitMax) : null;
+    const dataMin = filterByData ? parseFloat(dataBitMin) : null;
+    
+    if (filterByData && (!Number.isFinite(dataMax) || !Number.isFinite(dataMin))) {
+      return res.status(400).json({ ok: false, error: 'Invalid data BIT values' });
+    }
+    
+    const files = { max: [], min: [] };
+    const dataDirs = [
+      DATA_DIR, // novel_ai/v1.0.7/data
+      path.join(__dirname, 'data') // server/data
+    ];
+    
+    const epsilon = 1e-10;
+    
+    // 파일 내용을 읽어서 매칭되는 레코드가 있는지 확인하는 함수
+    // 필터링이 요청된 경우에만 사용 (filterByAttribute 또는 filterByData가 true일 때)
+    const fileHasMatchingRecord = (filePath) => {
+      if (!fs.existsSync(filePath)) return false;
+      
+      // 필터링이 요청되지 않았으면 모든 파일 반환
+      if (!filterByAttribute && !filterByData) return true;
+      
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split(/\r?\n/).filter(Boolean);
+        
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            
+            // 속성 경로 BIT 필터링이 요청된 경우에만 확인
+            if (filterByAttribute) {
+              const attributeMatch = parsed.attribute && 
+                Math.abs((parsed.attribute.bitMax || 0) - requestedAttrMax) < epsilon &&
+                Math.abs((parsed.attribute.bitMin || 0) - requestedAttrMin) < epsilon;
+              
+              if (!attributeMatch) continue;
+            }
+            
+            // 데이터 BIT 필터링이 요청된 경우에만 확인
+            if (filterByData) {
+              const existingDataBitMax = parsed.data?.bitMax || parsed.max || 0;
+              const existingDataBitMin = parsed.data?.bitMin || parsed.min || 0;
+              const dataMatch = 
+                Math.abs(existingDataBitMax - dataMax) < epsilon &&
+                Math.abs(existingDataBitMin - dataMin) < epsilon;
+              
+              if (!dataMatch) continue;
+            }
+            
+            // 매칭되는 레코드 발견
+            return true;
+          } catch (e) {
+            // JSON 파싱 실패 시 무시
+            continue;
+          }
+        }
+      } catch (e) {
+        console.warn('[Files] 파일 읽기 실패:', filePath, e.message);
+        return false;
+      }
+      
+      return false;
+    };
+    
+    // 최상위 경로 BIT로 폴더 찾기 (실제 파일이 저장된 경로)
+    const foldersToCheck = [];
+    
+    // 최상위 경로 BIT로 폴더 찾기
+    if (Number.isFinite(topAttrMax)) {
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(topAttrMax).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'max', ...digits);
+        const targetDir = path.join(baseDir, 'max_bit');
+        if (fs.existsSync(targetDir)) {
+          foldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'max' });
+        }
+      }
+    }
+    
+    // MAX 폴더의 파일 목록
+    for (const folderInfo of foldersToCheck) {
+      try {
+        const dirFiles = fs.readdirSync(folderInfo.dir);
+        const logFiles = dirFiles.filter(f => 
+          f === 'log.ndjson' || (f.startsWith('log_') && f.endsWith('.ndjson'))
+        );
+        for (const logFile of logFiles) {
+          const filePath = path.join(folderInfo.dir, logFile);
+          
+          // 필터링이 요청된 경우 파일 내용 확인
+          if ((filterByAttribute || filterByData) && !fileHasMatchingRecord(filePath)) {
+            continue;
+          }
+          
+          const relativePath = path.relative(folderInfo.dataDir, filePath).replace(/\\/g, '/');
+          const baseUrl = req.protocol + '://' + req.get('host');
+          const url = `${baseUrl}/novel_ai/v1.0.7/data/${relativePath}`;
+          
+          if (!files.max.find(f => f.name === logFile && f.path === relativePath)) {
+            files.max.push({
+              name: logFile,
+              path: relativePath,
+              url: url
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Files] MAX 폴더 읽기 실패:', folderInfo.dir, e.message);
+      }
+    }
+    
+    // MIN 폴더도 동일하게 처리 - 최상위 경로 BIT로 폴더 찾기
+    const minFoldersToCheck = [];
+    
+    // 최상위 경로 BIT로 폴더 찾기
+    if (Number.isFinite(topAttrMin)) {
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(topAttrMin).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'min', ...digits);
+        const targetDir = path.join(baseDir, 'min_bit');
+        if (fs.existsSync(targetDir)) {
+          minFoldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'min' });
+        }
+      }
+    }
+    
+    // MIN 폴더의 파일 목록
+    for (const folderInfo of minFoldersToCheck) {
+      try {
+        const dirFiles = fs.readdirSync(folderInfo.dir);
+        const logFiles = dirFiles.filter(f => 
+          f === 'log.ndjson' || (f.startsWith('log_') && f.endsWith('.ndjson'))
+        );
+        for (const logFile of logFiles) {
+          const filePath = path.join(folderInfo.dir, logFile);
+          
+          // 필터링이 요청된 경우 파일 내용 확인
+          if ((filterByAttribute || filterByData) && !fileHasMatchingRecord(filePath)) {
+            continue;
+          }
+          
+          const relativePath = path.relative(folderInfo.dataDir, filePath).replace(/\\/g, '/');
+          const baseUrl = req.protocol + '://' + req.get('host');
+          const url = `${baseUrl}/novel_ai/v1.0.7/data/${relativePath}`;
+          
+          if (!files.min.find(f => f.name === logFile && f.path === relativePath)) {
+            files.min.push({
+              name: logFile,
+              path: relativePath,
+              url: url
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Files] MIN 폴더 읽기 실패:', folderInfo.dir, e.message);
+      }
+    }
+    
+    return res.json({ ok: true, files });
+  } catch (e) {
+    console.error('[Files] 오류:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// 속성 경로 BIT와 데이터 BIT로 파일 조회 (개별 소설용)
+app.get('/api/attributes/files/by-novel', (req, res) => {
+  console.log('[Files/ByNovel] 요청 받음:', req.query);
+  try {
+    const { attributePathBitMax, attributePathBitMin, dataBitMax, dataBitMin, topAttributeBitMax, topAttributeBitMin, dataText } = req.query || {};
+    
+    if (attributePathBitMax === undefined || attributePathBitMin === undefined) {
+      return res.status(400).json({ ok: false, error: 'attributePathBitMax and attributePathBitMin required' });
+    }
+    
+    if (dataBitMax === undefined || dataBitMin === undefined) {
+      return res.status(400).json({ ok: false, error: 'dataBitMax and dataBitMin required' });
+    }
+    
+    // dataText가 제공되면 디코딩
+    const decodedDataText = dataText ? decodeURIComponent(dataText) : null;
+    
+    const attrPathMax = parseFloat(attributePathBitMax);
+    const attrPathMin = parseFloat(attributePathBitMin);
+    const dataMax = parseFloat(dataBitMax);
+    const dataMin = parseFloat(dataBitMin);
+    
+    if (!Number.isFinite(attrPathMax) || !Number.isFinite(attrPathMin) || 
+        !Number.isFinite(dataMax) || !Number.isFinite(dataMin)) {
+      return res.status(400).json({ ok: false, error: 'Invalid BIT values' });
+    }
+    
+    // 최상위 속성 BIT가 제공되면 해당 폴더만 검색, 없으면 모든 폴더 검색
+    const topAttrMax = topAttributeBitMax !== undefined ? parseFloat(topAttributeBitMax) : null;
+    const topAttrMin = topAttributeBitMin !== undefined ? parseFloat(topAttributeBitMin) : null;
+    
+    const files = { max: [], min: [] };
+    const dataDirs = [
+      DATA_DIR, // novel_ai/v1.0.7/data
+      path.join(__dirname, 'data') // server/data
+    ];
+    
+    // 부동소수점 비교를 위한 epsilon (1e-6 정도면 충분, 너무 작으면 부동소수점 오차로 매칭 실패)
+    const epsilon = 1e-6;
+    
+    // 속성 경로 BIT 계산 함수
+    function calculateAttributePathBit(attributeText, dataText) {
+      // attribute.text가 이미 화살표로 끝나 있으면 추가하지 않음
+      const trimmedAttr = attributeText?.trim() || '';
+      const separator = trimmedAttr.endsWith('→') ? ' ' : ' → ';
+      const fullPath = `${trimmedAttr}${separator}${dataText}`;
+      const arr = wordNbUnicodeFormat(fullPath);
+      return {
+        max: BIT_MAX_NB(arr),
+        min: BIT_MIN_NB(arr)
+      };
+    }
+    
+    // 파일 내용을 읽어서 매칭되는 레코드가 있는지 확인하는 함수
+    const fileHasMatchingRecord = (filePath) => {
+      if (!fs.existsSync(filePath)) return false;
+      
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split(/\r?\n/).filter(Boolean);
+        
+        for (const line of lines) {
+          try {
+            const parsed = JSON.parse(line);
+            
+            // 데이터 BIT 일치 확인
+            const existingDataBitMax = parsed.data?.bitMax || parsed.max || 0;
+            const existingDataBitMin = parsed.data?.bitMin || parsed.min || 0;
+            const dataMaxDiff = Math.abs(existingDataBitMax - dataMax);
+            const dataMinDiff = Math.abs(existingDataBitMin - dataMin);
+            const dataMatch = 
+              dataMaxDiff < epsilon &&
+              dataMinDiff < epsilon;
+            
+            if (!dataMatch) {
+              // 데이터 BIT 불일치 시 로그 출력하지 않음 (너무 많음)
+              continue;
+            }
+            
+            // dataText가 제공되면 data.text와 직접 비교 (가장 정확한 방법)
+            if (decodedDataText && parsed.data?.text) {
+              if (parsed.data.text === decodedDataText) {
+                console.log(`[Files/ByNovel] ✓ 매칭 (dataText): 파일=${path.basename(filePath)}, 데이터="${parsed.data.text}"`);
+                return true;
+              } else {
+                // dataText 불일치
+                continue;
+              }
+            }
+            
+            // dataText가 없으면 속성 경로 BIT로 확인 (하위 호환성)
+            if (parsed.attribute?.text && parsed.data?.text) {
+              const calculatedBits = calculateAttributePathBit(parsed.attribute.text, parsed.data.text);
+              const attrMaxDiff = Math.abs(calculatedBits.max - attrPathMax);
+              const attrMinDiff = Math.abs(calculatedBits.min - attrPathMin);
+              const attributePathMatch = 
+                attrMaxDiff < epsilon &&
+                attrMinDiff < epsilon;
+              
+              // 매칭 결과만 로그 출력
+              if (attributePathMatch) {
+                console.log(`[Files/ByNovel] ✓ 매칭 (속성경로BIT): 파일=${path.basename(filePath)}, 데이터="${parsed.data.text}", 속성경로BIT=${calculatedBits.max.toFixed(6)}/${calculatedBits.min.toFixed(6)}`);
+                return true;
+              }
+            }
+          } catch (e) {
+            // JSON 파싱 실패 시 무시
+            console.warn(`[Files/ByNovel] JSON 파싱 실패: ${filePath}`, e.message);
+            continue;
+          }
+        }
+      } catch (e) {
+        console.warn('[Files/ByNovel] 파일 읽기 실패:', filePath, e.message);
+        return false;
+      }
+      
+      return false;
+    };
+    
+    // 검색할 폴더 목록 생성
+    const foldersToCheck = [];
+    
+    // 최상위 속성 BIT가 제공되면 해당 폴더만 검색
+    if (topAttrMax !== null && Number.isFinite(topAttrMax)) {
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(topAttrMax).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'max', ...digits);
+        const targetDir = path.join(baseDir, 'max_bit');
+        if (fs.existsSync(targetDir)) {
+          foldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'max' });
+        }
+      }
+    } else {
+      // 최상위 속성 BIT가 없으면 데이터 BIT로 폴더 찾기
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(dataMax).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'max', ...digits);
+        const targetDir = path.join(baseDir, 'max_bit');
+        if (fs.existsSync(targetDir)) {
+          foldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'max' });
+        }
+      }
+    }
+    
+    // MAX 폴더의 파일 목록
+    for (const folderInfo of foldersToCheck) {
+      try {
+        const dirFiles = fs.readdirSync(folderInfo.dir);
+        const logFiles = dirFiles.filter(f => 
+          f === 'log.ndjson' || (f.startsWith('log_') && f.endsWith('.ndjson'))
+        );
+        for (const logFile of logFiles) {
+          const filePath = path.join(folderInfo.dir, logFile);
+          
+          // 파일 내용을 직접 확인하여 정확히 매칭되는 레코드가 있는지 확인
+          if (!fileHasMatchingRecord(filePath)) {
+            continue;
+          }
+          
+          const relativePath = path.relative(folderInfo.dataDir, filePath).replace(/\\/g, '/');
+          const baseUrl = req.protocol + '://' + req.get('host');
+          const url = `${baseUrl}/novel_ai/v1.0.7/data/${relativePath}`;
+          
+          // 중복 체크: 같은 파일명과 경로가 이미 있는지 확인
+          const existingFile = files.max.find(f => f.name === logFile && f.path === relativePath);
+          if (!existingFile) {
+            files.max.push({
+              name: logFile,
+              path: relativePath,
+              url: url
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Files/ByNovel] MAX 폴더 읽기 실패:', folderInfo.dir, e.message);
+      }
+    }
+    
+    // MIN 폴더도 동일하게 처리
+    const minFoldersToCheck = [];
+    
+    if (topAttrMin !== null && Number.isFinite(topAttrMin)) {
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(topAttrMin).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'min', ...digits);
+        const targetDir = path.join(baseDir, 'min_bit');
+        if (fs.existsSync(targetDir)) {
+          minFoldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'min' });
+        }
+      }
+    } else {
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(dataMin).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'min', ...digits);
+        const targetDir = path.join(baseDir, 'min_bit');
+        if (fs.existsSync(targetDir)) {
+          minFoldersToCheck.push({ dir: targetDir, dataDir: dataDir, type: 'min' });
+        }
+      }
+    }
+    
+    // MIN 폴더의 파일 목록
+    for (const folderInfo of minFoldersToCheck) {
+      try {
+        const dirFiles = fs.readdirSync(folderInfo.dir);
+        const logFiles = dirFiles.filter(f => 
+          f === 'log.ndjson' || (f.startsWith('log_') && f.endsWith('.ndjson'))
+        );
+        for (const logFile of logFiles) {
+          const filePath = path.join(folderInfo.dir, logFile);
+          
+          if (!fileHasMatchingRecord(filePath)) {
+            continue;
+          }
+          
+          const relativePath = path.relative(folderInfo.dataDir, filePath).replace(/\\/g, '/');
+          const baseUrl = req.protocol + '://' + req.get('host');
+          const url = `${baseUrl}/novel_ai/v1.0.7/data/${relativePath}`;
+          
+          if (!files.min.find(f => f.name === logFile && f.path === relativePath)) {
+            files.min.push({
+              name: logFile,
+              path: relativePath,
+              url: url
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Files/ByNovel] MIN 폴더 읽기 실패:', folderInfo.dir, e.message);
+      }
+    }
+    
+    return res.json({ ok: true, files });
+  } catch (e) {
+    console.error('[Files/ByNovel] 오류:', e);
+    return res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // 속성 전체 삭제 (속성의 모든 데이터와 관련 폴더 삭제)
 app.post('/api/attributes/delete', (req, res) => {
   try {
@@ -2039,25 +3000,78 @@ app.post('/api/attributes/delete', (req, res) => {
     // 삭제할 파일 목록: 속성 BIT 값으로 저장된 모든 파일
     const filesToCheck = [];
     
+    // 두 경로 모두 확인: novel_ai/v1.0.7/data와 server/data
+    const dataDirs = [
+      DATA_DIR, // novel_ai/v1.0.7/data
+      path.join(__dirname, 'data') // server/data
+    ];
+    
     // 1. 속성 MAX 폴더
     if (Number.isFinite(attributeBitMax)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attributeBitMax);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
-        filesToCheck.push(...allLogFiles);
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(attributeBitMax).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'max', ...digits);
+        const targetDir = path.join(baseDir, 'max_bit');
+        const nestedFile = path.join(targetDir, 'log.ndjson');
+        
+        // targetDir이 존재하면 그 안의 모든 로그 파일 확인
+        if (fs.existsSync(targetDir)) {
+          try {
+            const files = fs.readdirSync(targetDir);
+            // log.ndjson 파일 확인 (기존 호환성)
+            if (files.includes('log.ndjson')) {
+              filesToCheck.push(path.join(targetDir, 'log.ndjson'));
+            }
+            // log_*.ndjson 파일들 확인
+            const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+            for (const logFile of logFiles) {
+              filesToCheck.push(path.join(targetDir, logFile));
+            }
+          } catch (e) {
+            console.warn('[Delete Attribute] 로그 파일 읽기 실패:', e.message);
+          }
+        }
+        
+        // 파일이 없으면 하위 폴더 재귀 탐색
+        if (filesToCheck.length === 0) {
+          const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
+          filesToCheck.push(...allLogFiles);
+        }
       }
     }
     
     // 2. 속성 MIN 폴더
     if (Number.isFinite(attributeBitMin)) {
-      const { nestedFile, baseDir, digits } = nestedPathFromNumber('min', attributeBitMin);
-      if (fs.existsSync(nestedFile)) {
-        filesToCheck.push(nestedFile);
-      } else {
-        const allLogFiles = findAllLogFiles(baseDir, 'min', digits);
-        filesToCheck.push(...allLogFiles);
+      for (const dataDir of dataDirs) {
+        const str = Math.abs(attributeBitMin).toFixed(20).replace(/\.?0+$/, '').replace('.', '');
+        const digits = (str.match(/\d/g) || []);
+        const baseDir = path.join(dataDir, 'min', ...digits);
+        const targetDir = path.join(baseDir, 'min_bit');
+        
+        // targetDir이 존재하면 그 안의 모든 로그 파일 확인
+        if (fs.existsSync(targetDir)) {
+          try {
+            const files = fs.readdirSync(targetDir);
+            // log.ndjson 파일 확인 (기존 호환성)
+            if (files.includes('log.ndjson')) {
+              filesToCheck.push(path.join(targetDir, 'log.ndjson'));
+            }
+            // log_*.ndjson 파일들 확인
+            const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+            for (const logFile of logFiles) {
+              filesToCheck.push(path.join(targetDir, logFile));
+            }
+          } catch (e) {
+            console.warn('[Delete Attribute] 로그 파일 읽기 실패:', e.message);
+          }
+        }
+        
+        // 파일이 없으면 하위 폴더 재귀 탐색
+        if (filesToCheck.length === 0) {
+          const allLogFiles = findAllLogFiles(baseDir, 'min', digits);
+          filesToCheck.push(...allLogFiles);
+        }
       }
     }
     
@@ -2191,6 +3205,7 @@ async function collectAllAttributes() {
   const maxDir = path.join(DATA_DIR, 'max');
   if (fs.existsSync(maxDir)) {
     const allLogFiles = findAllLogFilesInDir(maxDir);
+    console.log(`[collectAllAttributes] MAX 폴더에서 ${allLogFiles.length}개 파일 탐색 중...`);
     for (const logFile of allLogFiles) {
       try {
         const text = fs.readFileSync(logFile, 'utf8');
@@ -2218,6 +3233,10 @@ async function collectAllAttributes() {
       } catch {}
     }
   }
+  
+  // MIN 폴더는 백업용이므로 조회하지 않음 (MAX 폴더만 사용)
+  
+  console.log(`[collectAllAttributes] 총 ${attributes.size}개 속성 발견 (MAX 폴더만)`);
   
   // 각 속성의 데이터 수 계산 (간단히 파일 읽기로)
   for (const [cellId, attr] of attributes) {
@@ -2262,8 +3281,11 @@ function findAllLogFilesInDir(dir) {
         const fullPath = path.join(currentDir, entry.name);
         if (entry.isDirectory()) {
           walk(fullPath);
-        } else if (entry.isFile() && entry.name === 'log.ndjson') {
-          files.push(fullPath);
+        } else if (entry.isFile()) {
+          // log.ndjson 및 log_*.ndjson 파일 모두 포함
+          if (entry.name === 'log.ndjson' || (entry.name.startsWith('log_') && entry.name.endsWith('.ndjson'))) {
+            files.push(fullPath);
+          }
         }
       }
     } catch {}
@@ -2320,13 +3342,33 @@ app.get('/api/attributes/filtered', async (req, res) => {
     const attributesWithData = [];
     for (const attr of attributes.slice(0, limit)) {
       try {
-        // 속성 데이터 조회
-        const { nestedFile, baseDir, digits } = nestedPathFromNumber('max', attr.bitMax);
+        // 속성 데이터 조회 (log.ndjson 및 log_*.ndjson 파일 모두 확인)
+        const { targetDir, nestedFile, baseDir, digits } = nestedPathFromNumber('max', attr.bitMax);
         let allItems = [];
         
+        // log.ndjson 파일 확인 (기존 호환성)
+        const filesToRead = [];
         if (fs.existsSync(nestedFile)) {
+          filesToRead.push(nestedFile);
+        }
+        
+        // log_*.ndjson 파일들도 확인
+        if (fs.existsSync(targetDir)) {
           try {
-            const text = fs.readFileSync(nestedFile, 'utf8');
+            const files = fs.readdirSync(targetDir);
+            const logFiles = files.filter(f => f.startsWith('log_') && f.endsWith('.ndjson'));
+            for (const logFile of logFiles) {
+              filesToRead.push(path.join(targetDir, logFile));
+            }
+          } catch (e) {
+            console.warn('[Attribute] log_*.ndjson 파일 읽기 실패:', e.message);
+          }
+        }
+        
+        // 모든 파일에서 데이터 읽기
+        for (const fileToRead of filesToRead) {
+          try {
+            const text = fs.readFileSync(fileToRead, 'utf8');
             const lines = text.split(/\r?\n/).filter(Boolean);
             const items = lines.map(l => {
               try {
@@ -2341,10 +3383,12 @@ app.get('/api/attributes/filtered', async (req, res) => {
             }).filter(Boolean);
             allItems.push(...items);
           } catch (e) {
-            console.warn('[Attribute] max read error:', nestedFile, e);
+            console.warn('[Attribute] 파일 읽기 오류:', fileToRead, e);
           }
-        } else {
-          // 하위 폴더 재귀 탐색
+        }
+        
+        // 파일이 없으면 하위 폴더 재귀 탐색
+        if (filesToRead.length === 0) {
           const allLogFiles = findAllLogFiles(baseDir, 'max', digits);
           for (const logFile of allLogFiles) {
             try {
@@ -2812,10 +3856,664 @@ app.get('/api/attributes/data/by-parent', async (req, res) => {
   }
 });
 
+// ==================== 폴더 탐색기 열기 ====================
+
+// 파일 크기 포맷팅 함수
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// 폴더 경로를 URL로 변환하여 새 창에서 열기
+app.get('/api/folder/view', (req, res) => {
+  try {
+    const { folderPath } = req.query || {};
+    
+    if (!folderPath || typeof folderPath !== 'string') {
+      return res.status(400).json({ ok: false, error: 'folderPath required' });
+    }
+    
+    // 상대 경로를 절대 경로로 변환
+    let absolutePath;
+    if (path.isAbsolute(folderPath)) {
+      absolutePath = folderPath;
+    } else {
+      // data/max/... 형태의 상대 경로인 경우
+      if (folderPath.startsWith('data/')) {
+        absolutePath = path.join(PROJECT_ROOT, 'novel_ai', 'v1.0.7', folderPath.replace(/^data\//, 'data/'));
+      } else {
+        absolutePath = path.join(PROJECT_ROOT, folderPath);
+      }
+    }
+    
+    // 파일 경로인 경우 부모 폴더 열기
+    if (fs.existsSync(absolutePath)) {
+      const stats = fs.statSync(absolutePath);
+      if (stats.isFile()) {
+        absolutePath = path.dirname(absolutePath);
+      }
+    } else {
+      // 폴더가 없으면 부모 폴더 열기
+      absolutePath = path.dirname(absolutePath);
+    }
+    
+    // 폴더 내용 읽기
+    let files = [];
+    let directories = [];
+    
+    if (fs.existsSync(absolutePath) && fs.statSync(absolutePath).isDirectory()) {
+      const entries = fs.readdirSync(absolutePath, { withFileTypes: true });
+      for (const entry of entries) {
+        const entryPath = path.join(absolutePath, entry.name);
+        const relativePath = path.relative(DATA_DIR, entryPath);
+        const urlPath = relativePath.replace(/\\/g, '/');
+        
+        if (entry.isDirectory()) {
+          directories.push({ name: entry.name, path: urlPath });
+        } else {
+          const stats = fs.statSync(entryPath);
+          files.push({ 
+            name: entry.name, 
+            path: urlPath,
+            size: stats.size,
+            modified: stats.mtime
+          });
+        }
+      }
+    }
+    
+    // HTML 페이지 생성
+    const currentPath = path.relative(DATA_DIR, absolutePath).replace(/\\/g, '/');
+    const parentPath = path.dirname(currentPath).replace(/\\/g, '/');
+    
+    const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>폴더: ${currentPath}</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    .header {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #444;
+    }
+    .header h1 {
+      margin: 0 0 10px 0;
+      font-size: 1.5rem;
+      color: #fff;
+    }
+    .path {
+      color: #888;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+    .nav {
+      margin-bottom: 20px;
+    }
+    .nav a {
+      color: #4a9eff;
+      text-decoration: none;
+      padding: 5px 10px;
+      background: rgba(74, 158, 255, 0.1);
+      border-radius: 4px;
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .nav a:hover {
+      background: rgba(74, 158, 255, 0.2);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #252525;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th {
+      background: #333;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #fff;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #333;
+    }
+    tr:hover {
+      background: #2a2a2a;
+    }
+    .folder {
+      color: #4a9eff;
+    }
+    .file {
+      color: #e0e0e0;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .size {
+      color: #888;
+      font-size: 0.9rem;
+    }
+    .date {
+      color: #888;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📁 폴더 내용</h1>
+    <div class="path">${currentPath || '/'}</div>
+  </div>
+  <div class="nav">
+    ${parentPath && parentPath !== '.' ? `<a href="/api/folder/view?folderPath=${encodeURIComponent(parentPath)}">← 상위 폴더</a>` : ''}
+    <a href="javascript:location.reload()">🔄 새로고침</a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>이름</th>
+        <th>크기</th>
+        <th>수정일</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${directories.map(dir => `
+        <tr>
+          <td class="folder">📁 <a href="/api/folder/view?folderPath=${encodeURIComponent(dir.path)}">${dir.name}</a></td>
+          <td class="size">-</td>
+          <td class="date">-</td>
+        </tr>
+      `).join('')}
+      ${files.map(file => `
+        <tr>
+          <td class="file">📄 <a href="/novel_ai/v1.0.7/data/${file.path}" target="_blank">${file.name}</a></td>
+          <td class="size">${formatFileSize(file.size)}</td>
+          <td class="date">${file.modified.toLocaleString('ko-KR')}</td>
+        </tr>
+      `).join('')}
+      ${directories.length === 0 && files.length === 0 ? '<tr><td colspan="3" style="text-align: center; color: #888;">폴더가 비어있습니다.</td></tr>' : ''}
+    </tbody>
+  </table>
+  <script>
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+  </script>
+</body>
+</html>`;
+    
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (e) {
+    console.error('[폴더 보기] 오류:', e);
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
+// ==================== OAuth 인증 ====================
+
+// OAuth 인증 시작
+app.get('/api/auth/:provider', (req, res) => {
+  const { provider } = req.params;
+  const config = getOAuthConfig();
+  const pageState = req.query.state || 'index'; // 프론트엔드에서 전달한 state
+  const version = req.query.version || 'v1.0.7'; // 프론트엔드에서 전달한 version
+  
+  let authUrl = '';
+  
+  // state에 버전과 페이지 정보 포함
+  const state = `${version}_${pageState}_${Math.random().toString(36).substring(7)}`;
+  
+  if (provider === 'google') {
+    const { clientId, redirectUri } = config.google || {};
+    if (!clientId) {
+      return res.status(400).json({ ok: false, error: 'Google OAuth Client ID가 설정되지 않았습니다.' });
+    }
+    const scope = 'openid email profile';
+    authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+  } else if (provider === 'naver') {
+    const { clientId, redirectUri } = config.naver || {};
+    if (!clientId) {
+      return res.status(400).json({ ok: false, error: 'Naver OAuth Client ID가 설정되지 않았습니다.' });
+    }
+    // 네이버는 scope 파라미터로 이메일, 닉네임 등 정보 요청
+    const scope = 'name,email,nickname';
+    authUrl = `https://nid.naver.com/oauth2.0/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}`;
+  } else if (provider === 'kakao') {
+    const { clientId, redirectUri } = config.kakao || {};
+    if (!clientId) {
+      return res.status(400).json({ ok: false, error: 'Kakao REST API Key가 설정되지 않았습니다.' });
+    }
+    authUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${encodeURIComponent(state)}`;
+  } else {
+    return res.status(400).json({ ok: false, error: '지원하지 않는 OAuth 제공자입니다.' });
+  }
+  
+  res.redirect(authUrl);
+});
+
+// OAuth 콜백 처리
+app.get('/api/auth/:provider/callback', async (req, res) => {
+  const { provider } = req.params;
+  const { code, error } = req.query;
+  const config = getOAuthConfig();
+  
+  if (error) {
+    return res.redirect(`/?error=${encodeURIComponent(error)}`);
+  }
+  
+  if (!code) {
+    return res.redirect(`/?error=${encodeURIComponent('인증 코드가 없습니다.')}`);
+  }
+  
+  try {
+    let userInfo = null;
+    
+    if (provider === 'google') {
+      // Google OAuth 토큰 교환 및 사용자 정보 가져오기
+      const { clientId, clientSecret, redirectUri } = config.google || {};
+      if (!clientId || !clientSecret) {
+        return res.redirect(`/?error=${encodeURIComponent('Google OAuth 설정이 완료되지 않았습니다.')}`);
+      }
+      
+      // 토큰 교환
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error('토큰 교환 실패');
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const accessToken = tokenData.access_token;
+      
+      // 사용자 정보 가져오기
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        userInfo = {
+          provider: 'google',
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          picture: userData.picture
+        };
+      }
+    } else if (provider === 'naver') {
+      // Naver OAuth 토큰 교환 및 사용자 정보 가져오기
+      const { clientId, clientSecret, redirectUri } = config.naver || {};
+      if (!clientId || !clientSecret) {
+        return res.redirect(`/?error=${encodeURIComponent('Naver OAuth 설정이 완료되지 않았습니다.')}`);
+      }
+      
+      const tokenResponse = await fetch('https://nid.naver.com/oauth2.0/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+          state: req.query.state || ''
+        })
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error('토큰 교환 실패');
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const accessToken = tokenData.access_token;
+      
+      const userResponse = await fetch('https://openapi.naver.com/v1/nid/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        console.log('[OAuth] 네이버 API 응답:', JSON.stringify(userData, null, 2));
+        if (userData.response) {
+          userInfo = {
+            provider: 'naver',
+            id: userData.response.id,
+            name: userData.response.name || '',
+            email: userData.response.email || '',
+            nickname: userData.response.nickname || userData.response.name || '',
+            profile_image: userData.response.profile_image || ''
+          };
+          console.log('[OAuth] 처리된 사용자 정보:', JSON.stringify(userInfo, null, 2));
+        }
+      }
+    } else if (provider === 'kakao') {
+      // Kakao OAuth 토큰 교환 및 사용자 정보 가져오기
+      const { clientId, clientSecret, redirectUri } = config.kakao || {};
+      if (!clientId || !clientSecret) {
+        return res.redirect(`/?error=${encodeURIComponent('Kakao OAuth 설정이 완료되지 않았습니다.')}`);
+      }
+      
+      const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          code
+        })
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error('토큰 교환 실패');
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const accessToken = tokenData.access_token;
+      
+      const userResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (userResponse.ok) {
+        const userData = await userResponse.json();
+        userInfo = {
+          provider: 'kakao',
+          id: userData.id.toString(),
+          name: userData.kakao_account?.profile?.nickname || '',
+          email: userData.kakao_account?.email || '',
+          nickname: userData.kakao_account?.profile?.nickname || '',
+          profile_image: userData.kakao_account?.profile?.profile_image_url || ''
+        };
+      }
+    }
+    
+    if (userInfo) {
+      // OAuth 사용자를 시스템에 등록/조회하고 JWT 토큰 발급
+      const db = readUsersDB();
+      const oauthId = `${provider}_${userInfo.id}`;
+      // 실제 이메일이 있으면 사용, 없으면 기본값
+      const email = (userInfo.email && userInfo.email.trim() && !userInfo.email.includes('@oauth.local')) 
+        ? userInfo.email 
+        : `${oauthId}@oauth.local`;
+      // 닉네임 우선순위: nickname > name > 기본값
+      const nickname = (userInfo.nickname && userInfo.nickname.trim()) 
+        ? userInfo.nickname 
+        : ((userInfo.name && userInfo.name.trim()) 
+          ? userInfo.name 
+          : `User_${userInfo.id.substring(0, 8)}`);
+      
+      console.log('[OAuth] 최종 사용자 정보:', { email, nickname, oauthId });
+      
+      // 기존 사용자 찾기 (OAuth ID 또는 이메일로)
+      let user = db.users.find(u => 
+        u.oauthId === oauthId || 
+        (u.email === email && u.provider === provider)
+      );
+      
+      if (!user) {
+        // 새 사용자 생성
+        const userBit = calculateUserBit(nickname || email);
+        const userPaths = getUserDataPath(userBit.max, userBit.min);
+        
+        user = {
+          id: Date.now().toString(),
+          email,
+          nickname,
+          oauthId,
+          provider,
+          userBitMax: userBit.max,
+          userBitMin: userBit.min,
+          profileLv: 1,
+          createdAt: new Date().toISOString()
+        };
+        
+        console.log('[OAuth] 새 사용자 생성:', JSON.stringify(user, null, 2));
+        db.users.push(user);
+        writeUsersDB(db);
+      } else {
+        // 기존 사용자 정보 업데이트 (닉네임, 이메일 등)
+        let updated = false;
+        if (nickname && nickname !== user.nickname) {
+          user.nickname = nickname;
+          updated = true;
+        }
+        if (email && email !== user.email && !email.includes('@oauth.local')) {
+          user.email = email;
+          updated = true;
+        }
+        if (updated) {
+          console.log('[OAuth] 사용자 정보 업데이트:', JSON.stringify(user, null, 2));
+          writeUsersDB(db);
+        }
+      }
+      
+      // JWT 토큰 생성
+      console.log('[OAuth] JWT 토큰 생성 전 사용자 정보:', JSON.stringify(user, null, 2));
+      const token = generateToken(user);
+      
+      // state 파라미터에서 원래 페이지 확인 (형식: "novel_manager_랜덤" 또는 "structure_랜덤" 또는 "v1.0.7_novel_manager")
+      const state = req.query.state || '';
+      const stateParts = state.split('_');
+      let pageState = stateParts[0] || 'index';
+      let version = 'v1.0.7'; // 기본값
+      
+      // state에서 버전 정보 추출 (v1.0.7 형식)
+      const versionMatch = state.match(/v\d+\.\d+\.\d+/);
+      if (versionMatch) {
+        version = versionMatch[0];
+        // 버전 이후의 페이지 정보 추출
+        const versionIndex = state.indexOf(version);
+        if (versionIndex !== -1) {
+          const afterVersion = state.substring(versionIndex + version.length + 1);
+          if (afterVersion) {
+            pageState = afterVersion.split('_')[0] || 'index';
+          }
+        }
+      }
+      
+      // 리다이렉트 페이지 결정
+      let redirectPage = 'index.html';
+      if (pageState === 'structure') {
+        redirectPage = 'structure.html';
+      } else if (pageState === 'novel_manager') {
+        redirectPage = 'novel_manager.html';
+      }
+      
+      // 토큰을 쿼리 파라미터로 전달하여 리다이렉트
+      return res.redirect(`/novel_ai/${version}/${redirectPage}?token=${token}`);
+    } else {
+      const state = req.query.state || '';
+      const stateParts = state.split('_');
+      let pageState = stateParts[0] || 'index';
+      let version = 'v1.0.7';
+      const versionMatch = state.match(/v\d+\.\d+\.\d+/);
+      if (versionMatch) {
+        version = versionMatch[0];
+      }
+      const redirectPage = pageState === 'structure' ? 'structure.html' : 'index.html';
+      return res.redirect(`/novel_ai/${version}/${redirectPage}?error=${encodeURIComponent('사용자 정보를 가져올 수 없습니다.')}`);
+    }
+  } catch (error) {
+    console.error(`[OAuth] ${provider} 콜백 처리 오류:`, error);
+    const state = req.query.state || '';
+    let version = 'v1.0.7';
+    const versionMatch = state.match(/v\d+\.\d+\.\d+/);
+    if (versionMatch) {
+      version = versionMatch[0];
+    }
+    return res.redirect(`/novel_ai/${version}/index.html?error=${encodeURIComponent(error.message || 'OAuth 처리 중 오류가 발생했습니다.')}`);
+  }
+});
+
+// NDJSON 파일을 JSON으로 변환하여 제공 (브라우저에서 읽을 수 있도록)
+// 정적 파일 서빙보다 먼저 처리되어야 함
+app.get(/^\/novel_ai\/v1\.0\.7\/data\/.*\.ndjson$/, (req, res) => {
+  try {
+    const filePath = path.join(PROJECT_ROOT, req.path);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ ok: false, error: 'File not found' });
+    }
+    
+    // NDJSON 파일 읽기
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/).filter(Boolean);
+    
+    // 각 라인을 JSON 객체로 파싱하여 배열로 변환
+    const jsonArray = [];
+    for (const line of lines) {
+      try {
+        jsonArray.push(JSON.parse(line));
+      } catch (e) {
+        // 파싱 실패한 라인은 무시
+        console.warn(`[NDJSON] 파싱 실패한 라인 무시: ${line.substring(0, 50)}...`);
+      }
+    }
+    
+    // HTML 페이지로 JSON을 보기 좋게 표시
+    const jsonString = JSON.stringify(jsonArray, null, 2);
+    const escapedJsonString = jsonString.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    const escapedPath = req.path.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escapedBasename = path.basename(filePath).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    
+    const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Viewer - ${escapedBasename}</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .header {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #444;
+    }
+    .header h1 {
+      font-size: 1.5rem;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+    .header .path {
+      color: #888;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+    .json-container {
+      background: #252526;
+      border: 1px solid #3e3e42;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .json-key {
+      color: #9cdcfe;
+    }
+    .json-string {
+      color: #ce9178;
+    }
+    .json-number {
+      color: #b5cea8;
+    }
+    .json-boolean {
+      color: #569cd6;
+    }
+    .json-null {
+      color: #569cd6;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📄 JSON Viewer</h1>
+    <div class="path">${escapedPath}</div>
+  </div>
+  <div class="json-container">
+    <pre id="json-content"></pre>
+  </div>
+  <script>
+    // JSON 데이터를 안전하게 로드 (문자열로 이스케이프)
+    const jsonString = ${JSON.stringify(jsonString)};
+    const jsonData = JSON.parse(jsonString);
+    const formatted = JSON.stringify(jsonData, null, 2);
+    
+    // HTML 이스케이프 후 구문 강조
+    const escaped = formatted.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    let highlighted = escaped
+      .replace(/("(?:[^"\\\\]|\\\\.)*")\\s*:/g, '<span class="json-key">$1</span>:')
+      .replace(/:\\s*("(?:[^"\\\\]|\\\\.)*")/g, ': <span class="json-string">$1</span>')
+      .replace(/:\\s*(\\d+\\.?\\d*)/g, ': <span class="json-number">$1</span>')
+      .replace(/:\\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
+      .replace(/:\\s*(null)/g, ': <span class="json-null">$1</span>');
+    
+    document.getElementById('json-content').innerHTML = highlighted;
+  </script>
+</body>
+</html>`;
+    
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (e) {
+    console.error('[NDJSON] 오류:', e);
+    res.status(500).json({ ok: false, error: String(e.message || e) });
+  }
+});
+
 // Serve current folder statically, defaulting to database/index.html
 app.use('/', express.static(PUBLIC_ROOT, { index: 'database/index.html' }));
 
 app.listen(PORT, HOST, () => {
   console.log(`Server listening on http://${HOST}:${PORT}`);
   console.log(`Serving static from: ${PUBLIC_ROOT}`);
+  console.log('[Routes] /api/attributes/files/by-novel 등록됨');
 });

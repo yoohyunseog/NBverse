@@ -1,0 +1,18 @@
+{
+  "watch": [
+    "server.js",
+    "../novel_ai/v1.0.7/assets/js"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules/**",
+    "data/**",
+    "*.log"
+  ],
+  "exec": "node server.js",
+  "env": {
+    "PORT": "8123"
+  },
+  "delay": 1000
+}
+
