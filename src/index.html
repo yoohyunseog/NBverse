@@ -1,0 +1,3817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV 감시 시스템</title>
+    <!-- HLS.js 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- OpenCV.js 라이브러리 -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+    <!-- BIT 계산 스크립트 -->
+    <script src="https://xn--9l4b4xi9r.com/_8%EB%B9%84%ED%8A%B8/js/bitCalculation.js"></script>
+    <!-- Masonry.js 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+      margin: 0;
+            padding: 0;
+      display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #252525;
+            border-right: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+
+        .sidebar-header h2 {
+      margin: 0;
+            color: #4CAF50;
+            font-size: 1.3em;
+        }
+
+        .sidebar-analysis {
+            padding: 15px 0;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .sidebar-analysis-item {
+            padding: 15px;
+            margin: 10px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            border-left: 3px solid #4CAF50;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .sidebar-analysis-item:hover {
+            background: #333;
+            transform: translateX(3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar-analysis-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .sidebar-analysis-item-title {
+            font-weight: bold;
+            color: #4CAF50;
+            font-size: 14px;
+        }
+
+        .sidebar-analysis-item-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        .sidebar-analysis-item-status.error {
+            background: #f44336;
+            animation: pulse-error 1s infinite;
+        }
+
+        .sidebar-analysis-item-content {
+            font-size: 11px;
+            color: #ccc;
+            line-height: 1.6;
+        }
+
+        .sidebar-analysis-item-content .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 3px 0;
+        }
+
+        .sidebar-analysis-item-content .info-label {
+            color: #888;
+        }
+
+        .sidebar-analysis-item-content .info-value {
+            color: #4CAF50;
+            font-weight: bold;
+            font-family: monospace;
+        }
+
+        .sidebar-analysis-item-content .bit-value {
+            color: #2196F3;
+            font-size: 12px;
+        }
+
+        .camera-list-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .camera-list-item::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            background: #4CAF50;
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .camera-list-item:hover {
+            background: #333;
+            transform: translateX(3px);
+        }
+
+        .camera-list-item:hover::after {
+            transform: scaleY(1);
+        }
+
+        .camera-list-item.active {
+            background: #2a2a2a;
+            animation: listItemActive 0.3s ease;
+        }
+
+        .camera-list-item.active::after {
+            transform: scaleY(1);
+        }
+
+        @keyframes listItemActive {
+            0% {
+                transform: translateX(-5px);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .camera-list-item-name {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .camera-list-item-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+        }
+
+        .camera-list-item-status.error {
+            background: #f44336;
+        }
+
+        .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 20px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin: 0 0 5px 0;
+            color: #4CAF50;
+        }
+
+        .header p {
+            margin: 0;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: flex-start;
+            gap: 10px;
+            padding: 15px 20px;
+            background: #1f1f1f;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+        }
+
+        .timer-controls {
+            display: flex;
+            justify-content: flex-start;
+            gap: 20px;
+            padding: 15px 20px;
+            background: #1f1f1f;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .timer-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .timer-input-group label {
+            color: #ccc;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        .timer-input-group input {
+            width: 120px;
+            padding: 8px 12px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .timer-input-group input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+
+        .timer-progress-container {
+            width: 150px;
+            height: 10px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .timer-progress-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.05s linear;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+            position: relative;
+        }
+
+        .timer-progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-danger {
+            background: #f44336;
+        }
+
+        .btn-danger:hover {
+            background: #da190b;
+        }
+
+        .btn-active {
+            background: #2196F3 !important;
+            animation: pulse-active 2s infinite;
+        }
+
+        .btn-active:hover {
+            background: #1976D2 !important;
+        }
+
+        @keyframes pulse-active {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .camera-grid {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            transition: all 0.5s ease;
+        }
+
+        .camera-grid::after {
+            content: '';
+            display: block;
+            clear: both;
+        }
+
+        .camera-grid.sorting {
+            pointer-events: none;
+        }
+
+        .camera-card.sorting {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .camera-card.sorting-complete {
+            animation: sortComplete 0.5s ease;
+        }
+
+        @keyframes sortComplete {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 6px 12px rgba(76, 175, 80, 0.5);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            }
+        }
+
+        /* Masonry 아이템 스타일 */
+        .camera-grid .camera-card {
+            width: calc(50% - 10px);
+            margin-bottom: 20px;
+            opacity: 1 !important;
+            visibility: visible !important;
+            transition: transform 1.2s ease, opacity 0s, visibility 0s;
+        }
+
+        .camera-grid .camera-card.masonry-item {
+            transition: transform 1.2s ease, opacity 0s, visibility 0s;
+        }
+
+        /* Masonry가 적용된 카드는 절대 위치 사용 */
+        .camera-grid .camera-card.masonry-item-positioned {
+            position: absolute;
+            transition: transform 1.2s ease, opacity 0s, visibility 0s;
+        }
+
+        .camera-grid .camera-card.masonry-dummy {
+            width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            position: absolute !important;
+            pointer-events: none !important;
+            overflow: hidden !important;
+        }
+
+        .camera-card {
+            background: #2a2a2a;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 1.2s ease, box-shadow 0.3s ease, opacity 0s, visibility 0s;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(20px);
+            animation: cardFadeIn 0.6s ease forwards;
+        }
+
+        @keyframes cardFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .camera-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.6);
+        }
+
+        .camera-card.sorting {
+            animation: cardShuffle 0.5s ease;
+        }
+
+        @keyframes cardShuffle {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(0.98);
+            }
+        }
+
+        .camera-header {
+            background: #333;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .camera-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .camera-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite, glow 2s infinite;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+        }
+
+        .status-dot.error {
+            background: #f44336;
+            animation: pulse-error 1s infinite, glow-error 1s infinite;
+            box-shadow: 0 0 5px rgba(244, 67, 54, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.7;
+                transform: scale(1.1);
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 10px rgba(76, 175, 80, 0.8);
+            }
+        }
+
+        @keyframes pulse-error {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.6;
+                transform: scale(1.2);
+            }
+        }
+
+        @keyframes glow-error {
+            0%, 100% {
+                box-shadow: 0 0 5px rgba(244, 67, 54, 0.5);
+            }
+            50% {
+                box-shadow: 0 0 15px rgba(244, 67, 54, 1);
+            }
+        }
+
+        .camera-video {
+            width: 100%;
+            height: 100%;
+            min-height: 240px;
+            background: #000;
+            object-fit: contain;
+            display: block;
+            flex-shrink: 0;
+            flex: 1;
+            position: relative;
+        }
+
+        .camera-video video,
+        .camera-video iframe,
+        .camera-video img {
+            width: auto;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .camera-overlay canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .camera-analysis {
+            padding: 10px 15px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            min-height: 60px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .camera-analysis-title {
+            font-size: 12px;
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .camera-analysis-text {
+            font-size: 11px;
+            color: #ccc;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .camera-analysis-text .status-item {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+
+        .camera-analysis-text .motion-detected {
+            color: #ff9800;
+        }
+
+        .camera-analysis-text .object-tracked {
+            color: #2196F3;
+        }
+
+        .camera-bit-info {
+            padding: 10px 15px;
+            background: #1a1a1a;
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .camera-bit-info-title {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .camera-bit-info-content {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .camera-bit-info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .camera-bit-info-label {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .camera-bit-info-value {
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 16px;
+            font-family: monospace;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .camera-bit-info-value.updating {
+            animation: numberUpdate 0.5s ease;
+        }
+
+        @keyframes numberUpdate {
+            0%, 100% {
+                transform: scale(1);
+                color: #4CAF50;
+            }
+            50% {
+                transform: scale(1.1);
+                color: #66BB6A;
+            }
+        }
+
+        .camera-bit-array {
+            font-family: monospace;
+            font-size: 12px;
+            color: #aaa;
+            max-height: 80px;
+            overflow-y: auto;
+            margin-top: 8px;
+            padding: 8px;
+            background: #0a0a0a;
+            border-radius: 3px;
+            line-height: 1.4;
+        }
+
+        .camera-controls {
+            padding: 10px 15px;
+            background: #333;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+            background: #555;
+        }
+
+        .btn-small:hover {
+            background: #666;
+        }
+
+        .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+            top: 0;
+      width: 100%;
+      height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #4CAF50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+
+        .form-group input,
+        .form-group textarea {
+      width: 100%;
+            padding: 10px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 999;
+            background: #000;
+            display: none;
+        }
+
+        .fullscreen.active {
+      display: flex;
+            justify-content: center;
+      align-items: center;
+        }
+
+        .fullscreen video {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .fullscreen-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+      cursor: pointer;
+            font-size: 16px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* 로딩 애니메이션 */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(76, 175, 80, 0.3);
+            border-top-color: #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+  </style>
+</head>
+<body>
+    <!-- 좌측 사이드바 -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>📊 분석 결과</h2>
+            <div style="font-size: 12px; color: #888; margin-top: 5px;">
+                CCTV: <span id="sidebarCameraCount">0</span>대
+            </div>
+        </div>
+        <div class="sidebar-analysis" id="sidebarAnalysis">
+            <!-- 분석 결과가 동적으로 추가됩니다 -->
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 영역 -->
+    <div class="main-content">
+        <div class="header">
+            <h1>실시간 카메라 모니터링</h1>
+            <p>연결된 카메라: <span id="cameraCount">0</span>대</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn" onclick="openAddCameraModal()">➕ 카메라 추가</button>
+            <button class="btn" onclick="refreshAllCameras()">🔄 전체 새로고침</button>
+            <button class="btn" onclick="sortByBitMax()">📊 MAX 높은 순</button>
+            <button class="btn" onclick="sortByBitMin()">📉 MIN 높은 순</button>
+            <button class="btn" id="realtimeSortBtn10" onclick="toggleRealtimeSort(10)">⚡ 실시간 MAX 정렬 (10초)</button>
+            <button class="btn" id="realtimeSortBtn30" onclick="toggleRealtimeSort(30)">⚡ 실시간 MAX 정렬 (30초)</button>
+            <button class="btn" id="realtimeSortBtn60" onclick="toggleRealtimeSort(60)">⚡ 실시간 MAX 정렬 (60초)</button>
+            <button class="btn" onclick="reorderMasonry()">🔲 Masonry 정렬</button>
+            <button class="btn btn-danger" onclick="clearAllCameras()">🗑️ 전체 삭제</button>
+        </div>
+
+        <div class="timer-controls">
+            <div class="timer-input-group">
+                <label for="repeatSeconds">반복 초 (Repeat Seconds):</label>
+                <input type="number" id="repeatSeconds" min="1" value="2" placeholder="초 단위">
+                <div class="timer-progress-container">
+                    <div class="timer-progress-bar" id="repeatSecondsProgress" style="background: linear-gradient(90deg, #4CAF50, #45a049);"></div>
+                </div>
+            </div>
+            <div class="timer-input-group">
+                <label for="masonryReorderTimer">Masonry 재정렬 반복 타이머 (Masonry Reorder Timer):</label>
+                <input type="number" id="masonryReorderTimer" min="1" value="5" placeholder="초 단위">
+                <div class="timer-progress-container">
+                    <div class="timer-progress-bar" id="masonryReorderProgress" style="background: linear-gradient(90deg, #2196F3, #1976D2);"></div>
+                </div>
+            </div>
+            <div class="timer-input-group">
+                <label for="boundingBoxResetTimer">영상 객체 박스 초기화 타이머 (Bounding Box Reset Timer):</label>
+                <input type="number" id="boundingBoxResetTimer" min="1" value="10" placeholder="초 단위">
+                <div class="timer-progress-container">
+                    <div class="timer-progress-bar" id="boundingBoxResetProgress" style="background: linear-gradient(90deg, #FF9800, #F57C00);"></div>
+                </div>
+            </div>
+            <div class="timer-input-group">
+                <button class="btn" id="allTimersToggleBtn" onclick="toggleAllTimers()">타이머 시작</button>
+            </div>
+        </div>
+
+        <div class="camera-grid" id="cameraGrid">
+            <!-- 카메라 카드들이 여기에 동적으로 추가됩니다 -->
+        </div>
+    </div>
+          
+    <!-- 카메라 추가/수정 모달 -->
+    <div class="modal" id="cameraModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">카메라 추가</h2>
+            <div class="form-group">
+                <label>카메라 이름</label>
+                <input type="text" id="cameraName" placeholder="예: 현관 카메라">
+            </div>
+            <div class="form-group">
+                <label>스트림 URL 또는 웹사이트 주소</label>
+                <input type="text" id="cameraUrl" placeholder="http://ip:port/video 또는 https://www.utic.go.kr/map/map.do">
+                <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">
+                    지원 형식: HTTP/MJPEG, HLS (.m3u8), 비디오 파일, 공공 CCTV 웹사이트 (iframe)
+                </small>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-danger" onclick="closeModal()">취소</button>
+                <button class="btn" onclick="saveCamera()">저장</button>
+            </div>
+            </div>
+          </div>
+          
+    <!-- 여러 URL 가져오기 모달 -->
+    <div class="modal" id="bulkImportModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>여러 URL 한 번에 추가</h2>
+            <div class="form-group">
+                <label>URL 목록 (한 줄에 하나씩)</label>
+                <textarea id="bulkUrls" rows="15" style="width: 100%; padding: 10px; background: #333; border: 1px solid #555; border-radius: 5px; color: #fff; font-family: monospace; font-size: 12px;" placeholder="https://its.gumi.go.kr:9443/live/video59.stream/chunklist_w78320174.m3u8&#10;https://its.gumi.go.kr:9443/live/video27.stream/chunklist_w1544791522.m3u8&#10;..."></textarea>
+                <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">
+                    • 한 줄에 하나씩 URL을 입력하세요<br>
+                    • JSON 배열 형식도 지원합니다: ["url1", "url2", ...]<br>
+                    • 카메라 이름은 자동으로 생성됩니다 (또는 URL에서 추출)
+                </small>
+            </div>
+            <div class="form-group">
+                <label>이름 접두사 (선택사항)</label>
+                <input type="text" id="bulkNamePrefix" placeholder="예: N/B CCTV" style="width: 100%; padding: 10px; background: #333; border: 1px solid #555; border-radius: 5px; color: #fff;">
+                <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">
+                    각 카메라 이름 앞에 붙일 접두사 (예: "N/B CCTV 1", "N/B CCTV 2")
+                </small>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-danger" onclick="closeBulkImportModal()">취소</button>
+                <button class="btn" onclick="importBulkUrls()">추가하기</button>
+            </div>
+            <div id="bulkResult" style="margin-top: 20px; padding: 10px; background: #333; border-radius: 5px; display: none;">
+                <div style="color: #4CAF50; font-weight: bold; margin-bottom: 10px;">추가 결과</div>
+                <div id="bulkResultText" style="color: #ccc; font-size: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- XML 가져오기 모달 -->
+    <div class="modal" id="xmlModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>XML CCTV 데이터 가져오기</h2>
+            <div class="form-group">
+                <label>방식 선택</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button class="btn" onclick="switchXmlMode('api')" id="xmlModeApi">API URL</button>
+                    <button class="btn" onclick="switchXmlMode('text')" id="xmlModeText">XML 텍스트</button>
+                </div>
+            </div>
+            <div class="form-group" id="xmlApiGroup">
+                <label>API URL</label>
+                <input type="text" id="xmlApiUrl" placeholder="https://api.example.com/cctv/list">
+                <small style="color: #888; font-size: 12px; margin-top: 5px; display: block;">
+                    CCTV API 엔드포인트 URL을 입력하세요
+                </small>
+            </div>
+            <div class="form-group" id="xmlTextGroup" style="display: none;">
+                <label>XML 데이터</label>
+                <textarea id="xmlText" rows="15" style="width: 100%; padding: 10px; background: #333; border: 1px solid #555; border-radius: 5px; color: #fff; font-family: monospace; font-size: 12px;" placeholder="XML 데이터를 붙여넣으세요..."></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-danger" onclick="closeXmlModal()">취소</button>
+                <button class="btn" onclick="importXml()">가져오기</button>
+            </div>
+            <div id="xmlResult" style="margin-top: 20px; padding: 10px; background: #333; border-radius: 5px; display: none;">
+                <div style="color: #4CAF50; font-weight: bold; margin-bottom: 10px;">파싱 결과</div>
+                <div id="xmlResultText" style="color: #ccc; font-size: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 전체화면 모달 -->
+    <div class="fullscreen" id="fullscreen">
+        <button class="fullscreen-close" onclick="closeFullscreen()">✕ 닫기</button>
+        <video id="fullscreenVideo" controls autoplay></video>
+          </div>
+
+  <script>
+        let cameras = [];
+        let editingIndex = -1;
+        let masonryInstance = null; // Masonry 인스턴스
+
+        // 기본 카메라 추가 (N/B CCTV)
+        function initDefaultCameras() {
+            const urls = [
+                "https://its.gumi.go.kr:9443/live/video59.stream/chunklist_w78320174.m3u8",
+                "https://its.gumi.go.kr:9443/live/video27.stream/chunklist_w1544791522.m3u8",
+                "https://its.gumi.go.kr:9443/live/video29.stream/chunklist_w61936289.m3u8",
+                "https://its.gumi.go.kr:9443/live/video28.stream/chunklist_w1531508167.m3u8",
+                "https://its.gumi.go.kr:9443/live/video50.stream/chunklist_w194564642.m3u8",
+                "https://its.gumi.go.kr:9443/live/video9.stream/chunklist_w1954125290.m3u8",
+                "https://its.gumi.go.kr:9443/live/video92.stream/chunklist_w2046121575.m3u8",
+                "https://its.gumi.go.kr:9443/live/video47.stream/chunklist_w1457521598.m3u8",
+                "https://its.gumi.go.kr:9443/live/video24.stream/chunklist_w1322625794.m3u8",
+                "https://its.gumi.go.kr:9443/live/video47.stream/chunklist_w26989886.m3u8",
+                "https://its.gumi.go.kr:9443/live/video55.stream/chunklist_w4108831.m3u8",
+                "https://its.gumi.go.kr:9443/live/video13.stream/chunklist_w331440974.m3u8",
+                "https://its.gumi.go.kr:9443/live/video40.stream/chunklist_w408885452.m3u8"
+            ];
+
+            cameras = urls.map((url, index) => {
+                // URL에서 카메라 번호 추출
+                const videoMatch = url.match(/video(\d+)\.stream/);
+                const cameraNum = videoMatch ? videoMatch[1] : (index + 1);
+                return {
+                    name: `N/B CCTV ${cameraNum}`,
+                    url: url
+                };
+            });
+            
+            renderCameras();
+            renderCameraList();
+        }
+
+        // 카메라 로드 (로컬 스토리지 사용 안 함)
+        function loadCameras() {
+            initDefaultCameras();
+        }
+
+        // 카메라 저장 (로컬 스토리지 사용 안 함)
+        function saveCameras() {
+            // 로컬 스토리지 사용하지 않음
+        }
+
+        // BIT MAX 값 기준 순위별 색상 계산 (빨간색 ~ 흰색)
+        function getBitRankColor(bitMaxValue, rank, totalCount) {
+            if (bitMaxValue === '계산 중...' || bitMaxValue === '오류' || isNaN(parseFloat(bitMaxValue))) {
+                return '#888'; // 기본 회색
+            }
+            
+            if (totalCount <= 1) {
+                return '#ff0000'; // 빨간색 (1위)
+            }
+            
+            // 순위를 0~1 사이의 비율로 변환 (1위가 0, 마지막이 1)
+            const ratio = (rank - 1) / (totalCount - 1);
+            
+            // 빨간색(#ff0000)에서 흰색(#ffffff)으로 그라데이션
+            // 1위(ratio=0): 빨간색 rgb(255, 0, 0)
+            // 마지막(ratio=1): 흰색 rgb(255, 255, 255)
+            const r = 255; // 빨강은 항상 최대
+            const g = Math.floor(255 * ratio); // 0에서 255로 증가
+            const b = Math.floor(255 * ratio); // 0에서 255로 증가
+            
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // 사이드바 분석 결과 렌더링
+        function renderCameraList() {
+            const sidebarContainer = document.getElementById('sidebarAnalysis');
+            const sidebarCount = document.getElementById('sidebarCameraCount');
+            
+            if (sidebarCount) {
+                sidebarCount.textContent = cameras.length;
+            }
+            
+            if (cameras.length === 0) {
+                if (sidebarContainer) {
+                    sidebarContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 12px;">카메라가 없습니다</div>';
+                }
+                return;
+            }
+
+            if (!sidebarContainer) return;
+
+            // 모든 카메라의 BIT MAX 값을 수집하여 순위 계산
+            const bitMaxValues = cameras.map((camera, index) => {
+                const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                let bitMax = '계산 중...';
+                if (bitMaxElement && bitMaxElement.textContent !== '계산 중...' && bitMaxElement.textContent !== '오류') {
+                    bitMax = bitMaxElement.textContent;
+                }
+                return { index, value: bitMax, numValue: parseFloat(bitMax) || 0 };
+            });
+
+            // BIT MAX 값 기준으로 정렬하여 순위 계산
+            const sorted = [...bitMaxValues].sort((a, b) => b.numValue - a.numValue);
+            const rankMap = new Map();
+            sorted.forEach((item, rank) => {
+                rankMap.set(item.index, rank + 1);
+            });
+
+            sidebarContainer.innerHTML = cameras.map((camera, index) => {
+                const data = analysisData[index] || {};
+                const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                const bitMinElement = document.getElementById(`bit-min-${index}`);
+                const bitAvg10Element = document.getElementById(`bit-avg-10-${index}`);
+                const bitAvg30Element = document.getElementById(`bit-avg-30-${index}`);
+                const bitAvg60Element = document.getElementById(`bit-avg-60-${index}`);
+                
+                let bitMax = '계산 중...';
+                let bitMin = '계산 중...';
+                let bitAvg10 = '-';
+                let bitAvg30 = '-';
+                let bitAvg60 = '-';
+                
+                if (bitMaxElement && bitMaxElement.textContent !== '계산 중...' && bitMaxElement.textContent !== '오류') {
+                    bitMax = bitMaxElement.textContent;
+                }
+                if (bitMinElement && bitMinElement.textContent !== '계산 중...' && bitMinElement.textContent !== '오류') {
+                    bitMin = bitMinElement.textContent;
+                }
+                if (bitAvg10Element && bitAvg10Element.textContent !== '-' && bitAvg10Element.textContent !== '계산 중...') {
+                    bitAvg10 = bitAvg10Element.textContent;
+                }
+                if (bitAvg30Element && bitAvg30Element.textContent !== '-' && bitAvg30Element.textContent !== '계산 중...') {
+                    bitAvg30 = bitAvg30Element.textContent;
+                }
+                if (bitAvg60Element && bitAvg60Element.textContent !== '-' && bitAvg60Element.textContent !== '계산 중...') {
+                    bitAvg60 = bitAvg60Element.textContent;
+                }
+
+                // 순위별 색상 계산
+                const rank = rankMap.get(index) || cameras.length;
+                const bitMaxColor = getBitRankColor(bitMax, rank, cameras.length);
+
+                const motionCount = data.motionCount || 0;
+                const objectCount = (data.objects && data.objects.length) || 0;
+                const background = data.background || {};
+                const brightness = background.averageBrightness || 0;
+                const stability = background.stability || 0;
+
+                return `
+                    <div class="sidebar-analysis-item" onclick="focusCamera(${index})">
+                        <div class="sidebar-analysis-item-header">
+                            <div class="sidebar-analysis-item-title">${camera.name || `카메라 ${index + 1}`}</div>
+                            <div class="sidebar-analysis-item-status" id="sidebar-status-${index}"></div>
+                        </div>
+                        <div class="sidebar-analysis-item-content">
+                            <div class="info-row">
+                                <span class="info-label">BIT MAX:</span>
+                                <span class="info-value bit-value" style="color: ${bitMaxColor};">${bitMax}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">BIT MIN:</span>
+                                <span class="info-value bit-value">${bitMin}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">평균 (10초):</span>
+                                <span class="info-value bit-value">${bitAvg10}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">평균 (30초):</span>
+                                <span class="info-value bit-value">${bitAvg30}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">평균 (60초):</span>
+                                <span class="info-value bit-value">${bitAvg60}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">움직임:</span>
+                                <span class="info-value">${motionCount}개</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">객체:</span>
+                                <span class="info-value">${objectCount}개</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">밝기:</span>
+                                <span class="info-value">${brightness}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">안정성:</span>
+                                <span class="info-value">${stability}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 상태 표시 업데이트
+            cameras.forEach((camera, index) => {
+                const statusElement = document.getElementById(`sidebar-status-${index}`);
+                const mainStatusElement = document.getElementById(`status-${index}`);
+                if (statusElement && mainStatusElement) {
+                    if (mainStatusElement.classList.contains('error')) {
+                        statusElement.classList.add('error');
+                    } else {
+                        statusElement.classList.remove('error');
+                    }
+                }
+            });
+
+            // 카메라 개수 업데이트
+            document.getElementById('cameraCount').textContent = cameras.length;
+        }
+
+        // 카메라 렌더링
+        function renderCameras() {
+            const grid = document.getElementById('cameraGrid');
+            
+            if (cameras.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><p>카메라가 없습니다. 카메라를 추가해주세요.</p></div>';
+                renderCameraList();
+                return;
+            }
+
+            // Masonry 버그 해결을 위한 첫 번째 더미 요소
+            const dummyElement = '<div class="camera-card masonry-dummy" style="width: 0; height: 0; margin: 0; padding: 0; border: none; opacity: 0; visibility: hidden; position: absolute; pointer-events: none;"></div>';
+            
+            grid.innerHTML = dummyElement + cameras.map((camera, index) => `
+                <div class="camera-card" id="card-${index}" style="animation-delay: ${index * 0.05}s;">
+                    <div class="camera-header">
+                        <div class="camera-title">${camera.name || `카메라 ${index + 1}`}</div>
+                        <div class="camera-status">
+                            <div class="status-dot" id="status-${index}"></div>
+                            <span>연결됨</span>
+                        </div>
+                    </div>
+                    ${getVideoElement(camera.url, index)}
+                    <div class="camera-analysis" id="analysis-${index}">
+                        <div class="camera-analysis-title">📊 분석 결과</div>
+                        <div class="camera-analysis-text" id="analysis-text-${index}">분석 중...</div>
+                    </div>
+                    <div class="camera-bit-info" id="bit-info-${index}">
+                        <div class="camera-bit-info-title">🔢 BIT 계산 정보</div>
+                        <div class="camera-bit-info-content">
+                            <div class="camera-bit-info-row">
+                                <span class="camera-bit-info-label">BIT MAX:</span>
+                                <span class="camera-bit-info-value" id="bit-max-${index}">계산 중...</span>
+                            </div>
+                            <div class="camera-bit-info-row">
+                                <span class="camera-bit-info-label">BIT MIN:</span>
+                                <span class="camera-bit-info-value" id="bit-min-${index}">계산 중...</span>
+                            </div>
+                            <div class="camera-bit-info-row">
+                                <span class="camera-bit-info-label">평균 (10초):</span>
+                                <span class="camera-bit-info-value" id="bit-avg-10-${index}">-</span>
+                            </div>
+                            <div class="camera-bit-info-row">
+                                <span class="camera-bit-info-label">평균 (30초):</span>
+                                <span class="camera-bit-info-value" id="bit-avg-30-${index}">-</span>
+                            </div>
+                            <div class="camera-bit-info-row">
+                                <span class="camera-bit-info-label">평균 (60초):</span>
+                                <span class="camera-bit-info-value" id="bit-avg-60-${index}">-</span>
+                            </div>
+                            <div class="camera-bit-array" id="bit-array-${index}">배열 로딩 중...</div>
+                        </div>
+                    </div>
+                    <div class="camera-controls">
+                        <button class="btn btn-small" onclick="editCamera(${index})">✏️ 수정</button>
+                        <button class="btn btn-small" onclick="openFullscreen(${index})">🔍 확대</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteCamera(${index})">🗑️ 삭제</button>
+                    </div>
+                </div>
+            `).join('');
+
+            // 비디오 로드 이벤트 리스너 추가
+            cameras.forEach((camera, index) => {
+                const element = document.getElementById(`video-${index}`);
+                const video = element && element.tagName === 'VIDEO' ? element : null;
+                const img = element && element.tagName === 'IMG' ? element : null;
+                const iframe = element && element.tagName === 'IFRAME' ? element : null;
+                
+                if (element) {
+                    // iframe의 경우 로드 이벤트 처리
+                    if (iframe) {
+                        iframe.addEventListener('load', () => {
+                            const statusDot = document.getElementById(`status-${index}`);
+                            const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                            if (statusDot) statusDot.classList.remove('error');
+                            if (sidebarStatus) sidebarStatus.classList.remove('error');
+                        });
+                        iframe.addEventListener('error', () => {
+                            const statusDot = document.getElementById(`status-${index}`);
+                            const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                            if (statusDot) statusDot.classList.add('error');
+                            if (sidebarStatus) sidebarStatus.classList.add('error');
+                        });
+                    } else {
+                        element.addEventListener('error', () => {
+                            const statusDot = document.getElementById(`status-${index}`);
+                            const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                            if (statusDot) statusDot.classList.add('error');
+                            if (sidebarStatus) sidebarStatus.classList.add('error');
+                        });
+                        
+                        if (video) {
+                            // HLS 스트림인지 확인
+                            const camera = cameras[index];
+                            if (camera && (camera.url.includes('.m3u8') || camera.url.includes('chunklist'))) {
+                                // HLS.js로 재생
+                                if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                                    const hls = new Hls({
+                                        enableWorker: true,
+                                        lowLatencyMode: true,
+                                        backBufferLength: 90
+                                    });
+                                    hls.loadSource(camera.url);
+                                    hls.attachMedia(video);
+                                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                                        video.play().catch(e => {
+                                            console.log('자동 재생 실패:', e);
+                                        });
+                                        const statusDot = document.getElementById(`status-${index}`);
+                                        const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                                        if (statusDot) statusDot.classList.remove('error');
+                                        if (sidebarStatus) sidebarStatus.classList.remove('error');
+                                        // 분석 시작
+                                        setTimeout(() => initAnalysis(index, video), 2000);
+                                    });
+                                    hls.on(Hls.Events.ERROR, (event, data) => {
+                                        // fatal 오류만 로그 (403 Forbidden 같은 일시적 오류는 조용히 처리)
+                                        if (data.fatal) {
+                                            console.error(`HLS 치명적 오류 (카메라 ${index}):`, data);
+                                            const statusDot = document.getElementById(`status-${index}`);
+                                            const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                                            if (statusDot) statusDot.classList.add('error');
+                                            if (sidebarStatus) sidebarStatus.classList.add('error');
+                                        } else if (data.details === 'fragLoadError' && data.response && data.response.code === 403) {
+                                            // 403 Forbidden은 서버 측 문제이므로 조용히 처리
+                                            // 상태 표시만 업데이트
+                                            const statusDot = document.getElementById(`status-${index}`);
+                                            if (statusDot && !statusDot.classList.contains('error')) {
+                                                statusDot.classList.add('error');
+                                            }
+                                        }
+                                    });
+                                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                                    // Safari 네이티브 HLS 지원
+                                    video.src = camera.url;
+                                    video.addEventListener('loadedmetadata', () => {
+                                        video.play().catch(e => {
+                                            console.log('자동 재생 실패:', e);
+                                        });
+                                        const statusDot = document.getElementById(`status-${index}`);
+                                        const sidebarStatus = document.getElementById(`sidebar-status-${index}`);
+                                        if (statusDot) statusDot.classList.remove('error');
+                                        if (sidebarStatus) sidebarStatus.classList.remove('error');
+                                        // 분석 시작
+                                        setTimeout(() => initAnalysis(index, video), 2000);
+                                    });
+                                } else {
+                                    const statusDot = document.getElementById(`status-${index}`);
+                                    const listStatus = document.getElementById(`list-status-${index}`);
+                                    if (statusDot) statusDot.classList.add('error');
+                                    if (listStatus) listStatus.classList.add('error');
+                                }
+                            } else {
+                                // 일반 비디오
+                                video.addEventListener('loadeddata', () => {
+                                    const statusDot = document.getElementById(`status-${index}`);
+                                    const listStatus = document.getElementById(`list-status-${index}`);
+                                    if (statusDot) statusDot.classList.remove('error');
+                                    if (listStatus) listStatus.classList.remove('error');
+                                    // 분석 시작
+                                    setTimeout(() => initAnalysis(index, video), 1000);
+                                });
+                            }
+                        } else if (img) {
+                            img.addEventListener('load', () => {
+                                const statusDot = document.getElementById(`status-${index}`);
+                                const listStatus = document.getElementById(`list-status-${index}`);
+                                if (statusDot) statusDot.classList.remove('error');
+                                if (listStatus) listStatus.classList.remove('error');
+                            });
+                        }
+                    }
+                }
+            });
+
+            renderCameraList();
+            
+            // Masonry 초기화 또는 업데이트
+            initMasonry();
+        }
+
+        // Masonry 레이아웃 초기화
+        function initMasonry() {
+            const grid = document.getElementById('cameraGrid');
+            if (!grid) return;
+
+            // Masonry.js가 로드되었는지 확인
+            if (typeof Masonry === 'undefined') {
+                // Masonry.js가 아직 로드되지 않았으면 재시도
+                setTimeout(initMasonry, 100);
+                return;
+            }
+
+            // 기존 인스턴스가 있으면 제거
+            if (masonryInstance) {
+                masonryInstance.destroy();
+                masonryInstance = null;
+            }
+
+            // 컨테이너 너비 계산 (패딩 제외)
+            const containerWidth = grid.offsetWidth - 40; // 좌우 패딩 20px씩
+            const columnWidth = (containerWidth - 20) / 2; // 2열, 간격 20px
+
+            // 새로운 Masonry 인스턴스 생성 (더미 요소 제외)
+            masonryInstance = new Masonry(grid, {
+                itemSelector: '.camera-card:not(.masonry-dummy)',
+                columnWidth: columnWidth,
+                percentPosition: false,
+                gutter: 20,
+                transitionDuration: '1.2s',
+                stagger: 0,
+                resize: true
+            });
+
+            // 이미지 로드 후 레이아웃 재조정
+            const images = grid.querySelectorAll('img, video');
+            let imagesLoaded = 0;
+            const totalImages = images.length;
+
+            if (totalImages === 0) {
+                masonryInstance.layout();
+                return;
+            }
+
+            images.forEach(img => {
+                if (img.complete) {
+                    imagesLoaded++;
+                    if (imagesLoaded === totalImages) {
+                        masonryInstance.layout();
+                    }
+                } else {
+                    img.addEventListener('load', () => {
+                        imagesLoaded++;
+                        if (imagesLoaded === totalImages) {
+                            masonryInstance.layout();
+                        }
+                    });
+                    img.addEventListener('error', () => {
+                        imagesLoaded++;
+                        if (imagesLoaded === totalImages) {
+                            masonryInstance.layout();
+                        }
+                    });
+                }
+            });
+        }
+
+        // 카메라 포커스 (사이드바에서 클릭 시)
+        function focusCamera(index) {
+            const card = document.getElementById(`card-${index}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.style.border = '2px solid #4CAF50';
+                setTimeout(() => {
+                    card.style.border = '';
+                }, 2000);
+            }
+        }
+
+        // 전체 보기
+        function showAllCameras() {
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.menu-item').classList.add('active');
+        }
+
+        // 설정 보기
+        function showSettings() {
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.menu-item').classList.add('active');
+            alert('설정 기능은 추후 추가 예정입니다.');
+        }
+
+        // 비디오 요소 생성 (URL 타입에 따라)
+        function getVideoElement(url, index) {
+            if (!url) {
+                return '<div class="camera-video" style="display: flex; align-items: center; justify-content: center; color: #888;">URL 없음</div>';
+            }
+
+            // HLS 스트림 먼저 체크 (chunklist 포함)
+            if (url.includes('.m3u8') || url.includes('chunklist')) {
+                return `
+                    <div class="camera-video">
+                        <video id="video-${index}" autoplay muted loop playsinline controls style="width: auto; height: 100%; object-fit: contain; display: block; margin: 0 auto;">
+                            브라우저가 HLS를 지원하지 않습니다.
+                        </video>
+                        <div class="camera-overlay">
+                            <canvas id="overlay-${index}"></canvas>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 웹사이트 URL (공공 CCTV 등) - iframe으로 임베드
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                // .m3u8, .mp4, .jpg 등 비디오/이미지 파일이 아닌 경우 웹사이트로 간주
+                const isMediaFile = url.match(/\.(m3u8|mp4|avi|mov|webm|jpg|jpeg|png|gif|mjpeg|video)(\?|$)/i);
+                if (!isMediaFile && !url.includes('/video') && !url.includes('/stream') && !url.includes('/mjpeg') && !url.includes('chunklist')) {
+                    return `
+                        <iframe 
+                            class="camera-video" 
+                            id="video-${index}" 
+                            src="${url}" 
+                            frameborder="0" 
+                            allowfullscreen
+                            style="width: 100%; height: 100%; border: none;"
+                            onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'height: 240px; display: flex; align-items: center; justify-content: center; color: #f44336; flex-direction: column; gap: 10px;\\'><div>웹사이트 로드 실패</div><div style=\\'font-size: 12px; color: #888;\\'>X-Frame-Options로 인해 임베드가 차단되었을 수 있습니다.</div></div>';"
+                        ></iframe>
+                    `;
+                }
+            }
+
+            // RTSP는 직접 재생 불가, 안내 메시지
+            if (url.startsWith('rtsp://')) {
+                return `
+                    <div class="camera-video" style="display: flex; align-items: center; justify-content: center; color: #f44336; flex-direction: column; gap: 10px;">
+                        <div>RTSP 스트림</div>
+                        <div style="font-size: 12px; color: #888;">웹 브라우저에서 직접 재생 불가</div>
+                        <div style="font-size: 12px; color: #888;">변환 서버 필요</div>
+          </div>
+        `;
+            }
+
+            // MJPEG 또는 일반 비디오
+            if (url.includes('.jpg') || url.includes('.jpeg') || url.includes('mjpeg') || url.includes('video')) {
+                return `
+                    <div class="camera-video">
+                        <img id="video-${index}" src="${url}" alt="Camera ${index + 1}" style="width: auto; height: 100%; object-fit: contain; display: block; margin: 0 auto;" onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'height: 240px; display: flex; align-items: center; justify-content: center; color: #f44336;\\'>연결 실패</div>';">
+                        <div class="camera-overlay">
+                            <canvas id="overlay-${index}"></canvas>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 일반 비디오
+            return `
+                <div class="camera-video">
+                    <video id="video-${index}" autoplay muted loop playsinline controls style="width: auto; height: 100%; object-fit: contain; display: block; margin: 0 auto;">
+                        <source src="${url}" type="video/mp4">
+                        브라우저가 비디오 태그를 지원하지 않습니다.
+                    </video>
+                    <div class="camera-overlay">
+                        <canvas id="overlay-${index}"></canvas>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 모달 열기
+        function openAddCameraModal() {
+            editingIndex = -1;
+            document.getElementById('modalTitle').textContent = '카메라 추가';
+            document.getElementById('cameraName').value = '';
+            document.getElementById('cameraUrl').value = '';
+            document.getElementById('cameraModal').classList.add('active');
+        }
+
+        // 카메라 수정
+        function editCamera(index) {
+            editingIndex = index;
+            const camera = cameras[index];
+            document.getElementById('modalTitle').textContent = '카메라 수정';
+            document.getElementById('cameraName').value = camera.name || '';
+            document.getElementById('cameraUrl').value = camera.url || '';
+            document.getElementById('cameraModal').classList.add('active');
+        }
+
+        // 모달 닫기
+        function closeModal() {
+            document.getElementById('cameraModal').classList.remove('active');
+        }
+
+        // 카메라 저장
+        function saveCamera() {
+            const name = document.getElementById('cameraName').value.trim();
+            const url = document.getElementById('cameraUrl').value.trim();
+
+            if (!url) {
+                alert('스트림 URL을 입력해주세요.');
+            return;
+          }
+
+            const camera = {
+                name: name || `카메라 ${cameras.length + 1}`,
+                url: url
+            };
+
+            if (editingIndex >= 0) {
+                cameras[editingIndex] = camera;
+            } else {
+                cameras.push(camera);
+            }
+
+            saveCameras();
+            renderCameras();
+            renderCameraList();
+            closeModal();
+        }
+
+        // 카메라 삭제
+        function deleteCamera(index) {
+            if (confirm('이 카메라를 삭제하시겠습니까?')) {
+                cameras.splice(index, 1);
+                saveCameras();
+                renderCameras();
+                renderCameraList();
+            }
+        }
+
+        // 전체 새로고침
+        function refreshAllCameras() {
+            renderCameras();
+            renderCameraList();
+        }
+
+        // BIT MAX 높은 순으로 정렬
+        function sortByBitMax() {
+            const grid = document.getElementById('cameraGrid');
+            if (!grid) return;
+
+            // 정렬 시작 표시
+            grid.classList.add('sorting');
+            let allCards = grid.querySelectorAll('.camera-card');
+            allCards.forEach(card => {
+                card.classList.add('sorting');
+            });
+
+            // 각 카메라의 BIT MAX 값을 가져와서 정렬
+            const camerasWithBit = cameras.map((camera, index) => {
+                const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                let bitMax = 0;
+                if (bitMaxElement && bitMaxElement.textContent !== '계산 중...' && bitMaxElement.textContent !== '오류') {
+                    const value = parseFloat(bitMaxElement.textContent);
+                    if (!isNaN(value)) {
+                        bitMax = value;
+                    }
+                }
+                return { 
+                    camera, 
+                    index, 
+                    bitMax, 
+                    cardElement: document.getElementById(`card-${index}`),
+                    analysisData: analysisData[index] || {}
+                };
+            });
+
+            // BIT MAX 값이 높은 순으로 정렬
+            camerasWithBit.sort((a, b) => b.bitMax - a.bitMax);
+
+            // 정렬된 순서로 cameras 배열 재구성
+            const newCameras = [];
+            const newAnalysisData = {};
+            
+            camerasWithBit.forEach((item, newIndex) => {
+                newCameras.push(item.camera);
+                newAnalysisData[newIndex] = item.analysisData;
+            });
+            
+            cameras = newCameras;
+            analysisData = newAnalysisData;
+
+            // DOM 순서만 변경 (재렌더링 없이)
+            // 깜빡임 방지를 위해 모든 카드의 opacity 유지 (더미 요소 제외)
+            allCards = grid.querySelectorAll('.camera-card:not(.masonry-dummy)');
+            allCards.forEach(card => {
+                card.style.opacity = '1';
+                card.style.visibility = 'visible';
+                card.style.transition = 'transform 1.2s ease, opacity 0.3s ease';
+            });
+
+            // 애니메이션을 위해 현재 위치 저장
+            const cardPositions = new Map();
+            allCards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                cardPositions.set(card, {
+                    x: rect.left,
+                    y: rect.top
+                });
+            });
+
+            // 정렬된 순서대로 카드를 올바른 위치에 배치
+            camerasWithBit.forEach((item, newIndex) => {
+                if (item.cardElement && item.cardElement.parentNode === grid) {
+                    // 카드의 opacity와 visibility 유지
+                    item.cardElement.style.opacity = '1';
+                    item.cardElement.style.visibility = 'visible';
+                    
+                    // 현재 DOM에서의 위치 확인 (더미 요소 제외)
+                    const children = Array.from(grid.children).filter(child => !child.classList.contains('masonry-dummy'));
+                    const currentIndex = children.indexOf(item.cardElement);
+                    
+                    // 새 위치가 현재 위치와 다를 때만 이동
+                    if (currentIndex !== newIndex) {
+                        const allChildren = Array.from(grid.children);
+                        const dummyElement = allChildren.find(child => child.classList.contains('masonry-dummy'));
+                        const realChildren = allChildren.filter(child => !child.classList.contains('masonry-dummy'));
+                        
+                        if (newIndex === 0) {
+                            // 첫 번째 위치: 더미 요소 다음에 삽입
+                            if (dummyElement) {
+                                if (dummyElement.nextSibling && dummyElement.nextSibling !== item.cardElement) {
+                                    grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                                } else {
+                                    grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                                }
+                            } else {
+                                grid.insertBefore(item.cardElement, grid.firstChild);
+                            }
+                        } else if (newIndex < realChildren.length) {
+                            // 중간 위치: 해당 위치의 실제 요소 앞에 삽입
+                            const targetIndex = newIndex + (dummyElement ? 1 : 0);
+                            const nextSibling = allChildren[targetIndex];
+                            if (nextSibling && nextSibling !== item.cardElement && !nextSibling.classList.contains('masonry-dummy')) {
+                                grid.insertBefore(item.cardElement, nextSibling);
+                            } else {
+                                grid.appendChild(item.cardElement);
+                            }
+                        } else {
+                            // 마지막 위치
+                            grid.appendChild(item.cardElement);
+                        }
+                    }
+                    
+                    // 카드 ID 업데이트
+                    item.cardElement.id = `card-${newIndex}`;
+                    
+                    // 내부 요소들의 ID도 업데이트 (querySelector는 ID가 변경되기 전에 찾아야 함)
+                    const oldIndex = item.index;
+                    
+                    // 모든 ID를 찾아서 업데이트
+                    const updateElementId = (selector, newId) => {
+                        const element = item.cardElement.querySelector(selector);
+                        if (element) {
+                            element.id = newId;
+                        }
+                    };
+                    
+                    updateElementId(`#video-${oldIndex}`, `video-${newIndex}`);
+                    updateElementId(`#overlay-${oldIndex}`, `overlay-${newIndex}`);
+                    updateElementId(`#analysis-${oldIndex}`, `analysis-${newIndex}`);
+                    updateElementId(`#analysis-text-${oldIndex}`, `analysis-text-${newIndex}`);
+                    updateElementId(`#bit-info-${oldIndex}`, `bit-info-${newIndex}`);
+                    updateElementId(`#bit-max-${oldIndex}`, `bit-max-${newIndex}`);
+                    updateElementId(`#bit-min-${oldIndex}`, `bit-min-${newIndex}`);
+                    updateElementId(`#bit-avg-10-${oldIndex}`, `bit-avg-10-${newIndex}`);
+                    updateElementId(`#bit-avg-30-${oldIndex}`, `bit-avg-30-${newIndex}`);
+                    updateElementId(`#bit-avg-60-${oldIndex}`, `bit-avg-60-${newIndex}`);
+                    updateElementId(`#bit-array-${oldIndex}`, `bit-array-${newIndex}`);
+                    updateElementId(`#status-${oldIndex}`, `status-${newIndex}`);
+                    
+                    // 버튼의 onclick 이벤트 업데이트
+                    const editBtn = item.cardElement.querySelector(`button[onclick*="editCamera(${oldIndex})"]`);
+                    if (editBtn) {
+                        editBtn.setAttribute('onclick', `editCamera(${newIndex})`);
+                    }
+                    
+                    const fullscreenBtn = item.cardElement.querySelector(`button[onclick*="openFullscreen(${oldIndex})"]`);
+                    if (fullscreenBtn) {
+                        fullscreenBtn.setAttribute('onclick', `openFullscreen(${newIndex})`);
+                    }
+                    
+                    const deleteBtn = item.cardElement.querySelector(`button[onclick*="deleteCamera(${oldIndex})"]`);
+                    if (deleteBtn) {
+                        deleteBtn.setAttribute('onclick', `deleteCamera(${newIndex})`);
+                    }
+                }
+            });
+
+            // 사이드바 목록 업데이트
+            renderCameraList();
+
+            // Masonry 레이아웃 업데이트 (애니메이션 포함)
+            if (masonryInstance) {
+                // 짧은 지연 후 레이아웃 업데이트 (DOM 변경이 완료된 후)
+                setTimeout(() => {
+                    masonryInstance.reloadItems();
+                    masonryInstance.layout();
+                    
+                    // 정렬 완료 애니메이션
+                    setTimeout(() => {
+                        grid.classList.remove('sorting');
+                        allCards.forEach(card => {
+                            card.classList.remove('sorting');
+                            card.classList.add('sorting-complete');
+                            setTimeout(() => {
+                                card.classList.remove('sorting-complete');
+                            }, 500);
+                        });
+                    }, 100);
+                }, 50);
+            } else {
+                // Masonry가 없는 경우에도 정렬 완료 처리
+                setTimeout(() => {
+                    grid.classList.remove('sorting');
+                    allCards.forEach(card => {
+                        card.classList.remove('sorting');
+                        card.classList.add('sorting-complete');
+                        setTimeout(() => {
+                            card.classList.remove('sorting-complete');
+                        }, 500);
+                    });
+                }, 100);
+            }
+
+            // 정렬 완료 메시지
+            console.log('BIT MAX 높은 순으로 정렬 완료');
+        }
+
+        // 실시간 정렬 토글 (시간별 평균) - 버튼만 활성화, 실제 타이머는 시작 버튼으로 제어
+        function toggleRealtimeSort(seconds) {
+            const btnId = `realtimeSortBtn${seconds}`;
+            const btn = document.getElementById(btnId);
+            const isActive = btn && btn.classList.contains('btn-active');
+            
+            // 다른 버튼들 비활성화
+            [10, 30, 60].forEach(s => {
+                const otherBtn = document.getElementById(`realtimeSortBtn${s}`);
+                if (otherBtn && s !== seconds) {
+                    otherBtn.classList.remove('btn-active');
+                    otherBtn.textContent = `⚡ 실시간 MAX 정렬 (${s}초)`;
+                }
+            });
+            
+            if (!isActive) {
+                // 버튼만 활성화 (타이머는 시작하지 않음)
+                btn.classList.add('btn-active');
+                btn.textContent = `⚡ 실시간 MAX 정렬 (${seconds}초) (ON)`;
+                console.log(`실시간 정렬 버튼 활성화 (${seconds}초) - 시작 버튼을 눌러야 작동합니다`);
+            } else {
+                // 버튼 비활성화
+                btn.classList.remove('btn-active');
+                btn.textContent = `⚡ 실시간 MAX 정렬 (${seconds}초)`;
+                
+                // 타이머가 실행 중이면 중지
+                if (realtimeSortInterval) {
+                    clearInterval(realtimeSortInterval);
+                    realtimeSortInterval = null;
+                }
+                
+                console.log('실시간 정렬 버튼 비활성화');
+            }
+        }
+
+        // 게이지 업데이트 함수
+        function updateProgressBar(progressBarId, progress) {
+            const progressBar = document.getElementById(progressBarId);
+            if (progressBar) {
+                progressBar.style.width = Math.min(100, Math.max(0, progress)) + '%';
+            }
+        }
+
+        // 타이머 게이지 애니메이션 (각 타이머별로 관리)
+        const progressAnimations = {};
+        
+        function startProgressAnimation(progressBarId, durationMs) {
+            const progressBar = document.getElementById(progressBarId);
+            if (!progressBar) return;
+            
+            // 기존 애니메이션 정리
+            if (progressAnimations[progressBarId]) {
+                clearInterval(progressAnimations[progressBarId].intervalId);
+            }
+            
+            let startTime = Date.now();
+            const updateInterval = 50; // 50ms마다 업데이트
+            
+            const updateProgress = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = (elapsed / durationMs) * 100;
+                
+                if (progress >= 100) {
+                    updateProgressBar(progressBarId, 100);
+                    // 완료 후 잠시 대기 후 리셋
+                    setTimeout(() => {
+                        updateProgressBar(progressBarId, 0);
+                        if (progressAnimations[progressBarId]) {
+                            clearInterval(progressAnimations[progressBarId].intervalId);
+                            delete progressAnimations[progressBarId];
+                        }
+                    }, 100);
+                } else {
+                    updateProgressBar(progressBarId, progress);
+                }
+            };
+            
+            updateProgressBar(progressBarId, 0);
+            const intervalId = setInterval(updateProgress, updateInterval);
+            progressAnimations[progressBarId] = { intervalId, startTime };
+        }
+        
+        function stopProgressAnimation(progressBarId) {
+            if (progressAnimations[progressBarId]) {
+                clearInterval(progressAnimations[progressBarId].intervalId);
+                delete progressAnimations[progressBarId];
+            }
+            updateProgressBar(progressBarId, 0);
+        }
+
+        // 모든 타이머 시작/중지 (통합 버튼)
+        function toggleAllTimers() {
+            const btn = document.getElementById('allTimersToggleBtn');
+            if (!btn) return;
+            
+            const isActive = btn.textContent.includes('중지');
+            
+            if (isActive) {
+                // 모든 타이머 중지
+                if (realtimeSortInterval) {
+                    clearInterval(realtimeSortInterval);
+                    realtimeSortInterval = null;
+                }
+                if (masonryReorderInterval) {
+                    clearInterval(masonryReorderInterval);
+                    masonryReorderInterval = null;
+                }
+                if (boundingBoxResetInterval) {
+                    clearInterval(boundingBoxResetInterval);
+                    boundingBoxResetInterval = null;
+                }
+                
+                // 게이지 애니메이션 정리 및 리셋
+                stopProgressAnimation('repeatSecondsProgress');
+                stopProgressAnimation('masonryReorderProgress');
+                stopProgressAnimation('boundingBoxResetProgress');
+                
+                // 실시간 정렬 버튼들 비활성화
+                [10, 30, 60].forEach(s => {
+                    const sortBtn = document.getElementById(`realtimeSortBtn${s}`);
+                    if (sortBtn) {
+                        sortBtn.classList.remove('btn-active');
+                        sortBtn.textContent = `⚡ 실시간 MAX 정렬 (${s}초)`;
+                    }
+                });
+                
+                btn.textContent = '타이머 시작';
+                console.log('모든 타이머 중지');
+            } else {
+                // 모든 타이머 시작
+                const repeatSecondsInput = document.getElementById('repeatSeconds');
+                const masonryReorderTimerInput = document.getElementById('masonryReorderTimer');
+                const boundingBoxResetTimerInput = document.getElementById('boundingBoxResetTimer');
+                
+                // 실시간 정렬 타이머는 활성화된 버튼이 있을 때만 시작
+                const activeSortBtn = document.querySelector('.btn-active[id^="realtimeSortBtn"]');
+                if (activeSortBtn) {
+                    const btnId = activeSortBtn.id;
+                    const seconds = parseInt(btnId.replace('realtimeSortBtn', ''));
+                    const repeatSeconds = repeatSecondsInput ? parseInt(repeatSecondsInput.value) || 2 : 2;
+                    const intervalMs = repeatSeconds * 1000;
+                    
+                    if (realtimeSortInterval) {
+                        clearInterval(realtimeSortInterval);
+                    }
+                    
+                    // 게이지 애니메이션 시작
+                    startProgressAnimation('repeatSecondsProgress', intervalMs);
+                    
+                    realtimeSortInterval = setInterval(() => {
+                        sortByBitMaxAverage(seconds);
+                        // 게이지 다시 시작
+                        startProgressAnimation('repeatSecondsProgress', intervalMs);
+                    }, intervalMs);
+                    console.log(`실시간 정렬 타이머 시작 (${repeatSeconds}초 간격)`);
+                }
+                
+                // Masonry 재정렬 타이머
+                if (masonryReorderTimerInput) {
+                    const masonrySeconds = parseInt(masonryReorderTimerInput.value) || 5;
+                    const masonryIntervalMs = masonrySeconds * 1000;
+                    if (masonryReorderInterval) {
+                        clearInterval(masonryReorderInterval);
+                    }
+                    
+                    // 게이지 애니메이션 시작
+                    startProgressAnimation('masonryReorderProgress', masonryIntervalMs);
+                    
+                    masonryReorderInterval = setInterval(() => {
+                        if (masonryInstance) {
+                            masonryInstance.reloadItems();
+                            masonryInstance.layout();
+                            console.log('Masonry 재정렬 실행');
+                        }
+                        // 게이지 다시 시작
+                        startProgressAnimation('masonryReorderProgress', masonryIntervalMs);
+                    }, masonryIntervalMs);
+                    console.log(`Masonry 재정렬 타이머 시작 (${masonrySeconds}초 간격)`);
+                }
+                
+                // 바운딩 박스 초기화 타이머
+                if (boundingBoxResetTimerInput) {
+                    const boundingBoxSeconds = parseInt(boundingBoxResetTimerInput.value) || 10;
+                    const boundingBoxIntervalMs = boundingBoxSeconds * 1000;
+                    if (boundingBoxResetInterval) {
+                        clearInterval(boundingBoxResetInterval);
+                    }
+                    
+                    // 게이지 애니메이션 시작
+                    startProgressAnimation('boundingBoxResetProgress', boundingBoxIntervalMs);
+                    
+                    boundingBoxResetInterval = setInterval(() => {
+                        resetBoundingBoxes();
+                        // 게이지 다시 시작
+                        startProgressAnimation('boundingBoxResetProgress', boundingBoxIntervalMs);
+                    }, boundingBoxIntervalMs);
+                    console.log(`바운딩 박스 초기화 타이머 시작 (${boundingBoxSeconds}초 간격)`);
+                }
+                
+                btn.textContent = '타이머 중지';
+                console.log('모든 타이머 시작');
+            }
+        }
+
+        // Masonry 수동 정렬
+        function reorderMasonry() {
+            if (!masonryInstance) {
+                // Masonry 인스턴스가 없으면 초기화
+                initMasonry();
+                console.log('Masonry 초기화 완료');
+            } else {
+                // Masonry 재정렬 실행
+                masonryInstance.reloadItems();
+                masonryInstance.layout();
+                console.log('Masonry 수동 정렬 완료');
+            }
+        }
+
+        // 바운딩 박스 초기화
+        function resetBoundingBoxes() {
+            cameras.forEach((camera, index) => {
+                if (analysisData[index]) {
+                    // 바운딩 박스 초기화
+                    analysisData[index].boundingBoxes = [];
+                    analysisData[index].trackedObjects = [];
+                    
+                    // 오버레이 캔버스 클리어
+                    const overlayCanvas = document.getElementById(`overlay-${index}`);
+                    if (overlayCanvas) {
+                        const ctx = overlayCanvas.getContext('2d');
+                        ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+                    }
+                }
+            });
+            console.log('모든 바운딩 박스 초기화 완료');
+        }
+
+
+        // BIT MAX 평균값으로 정렬
+        function sortByBitMaxAverage(seconds) {
+            const grid = document.getElementById('cameraGrid');
+            if (!grid) return;
+
+            // 정렬 시작 표시
+            grid.classList.add('sorting');
+            let allCards = grid.querySelectorAll('.camera-card');
+            allCards.forEach(card => {
+                card.classList.add('sorting');
+            });
+
+            // 각 카메라의 BIT MAX 평균값을 가져와서 정렬
+            const camerasWithBit = cameras.map((camera, index) => {
+                const avg = calculateBitAverage(index, seconds);
+                let bitAvg = 0;
+                if (avg !== null && !isNaN(avg)) {
+                    bitAvg = avg;
+                } else {
+                    // 평균값이 없으면 현재 BIT MAX 값 사용
+                    const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                    if (bitMaxElement && bitMaxElement.textContent !== '계산 중...' && bitMaxElement.textContent !== '오류') {
+                        const value = parseFloat(bitMaxElement.textContent);
+                        if (!isNaN(value)) {
+                            bitAvg = value;
+                        }
+                    }
+                }
+                return { 
+                    camera, 
+                    index, 
+                    bitAvg, 
+                    cardElement: document.getElementById(`card-${index}`),
+                    analysisData: analysisData[index] || {}
+                };
+            });
+
+            // BIT MAX 평균값이 높은 순으로 정렬
+            camerasWithBit.sort((a, b) => b.bitAvg - a.bitAvg);
+
+            // 정렬된 순서로 cameras 배열 재구성
+            const newCameras = [];
+            const newAnalysisData = {};
+            
+            camerasWithBit.forEach((item, newIndex) => {
+                newCameras.push(item.camera);
+                newAnalysisData[newIndex] = item.analysisData;
+            });
+            
+            cameras = newCameras;
+            analysisData = newAnalysisData;
+
+            // DOM 순서만 변경 (재렌더링 없이)
+            allCards = grid.querySelectorAll('.camera-card');
+            allCards.forEach(card => {
+                card.style.opacity = '1';
+                card.style.visibility = 'visible';
+                card.style.transition = 'transform 1.2s ease, opacity 0.3s ease';
+            });
+
+            // 정렬된 순서대로 카드를 올바른 위치에 배치
+            camerasWithBit.forEach((item, newIndex) => {
+                if (item.cardElement && item.cardElement.parentNode === grid) {
+                    item.cardElement.style.opacity = '1';
+                    item.cardElement.style.visibility = 'visible';
+                    
+                    // 현재 DOM에서의 위치 확인 (더미 요소 제외)
+                    const children = Array.from(grid.children).filter(child => !child.classList.contains('masonry-dummy'));
+                    const currentIndex = children.indexOf(item.cardElement);
+                    
+                    // 새 위치가 현재 위치와 다를 때만 이동 (더미 요소 고려)
+                    if (currentIndex !== newIndex) {
+                        const allChildren = Array.from(grid.children);
+                        const realChildren = allChildren.filter(child => !child.classList.contains('masonry-dummy'));
+                        const dummyElement = allChildren.find(child => child.classList.contains('masonry-dummy'));
+                        
+                        // 더미 요소 다음 위치에 삽입
+                        if (newIndex === 0 && dummyElement) {
+                            // 첫 번째 위치: 더미 요소 다음에 삽입
+                            if (dummyElement.nextSibling && dummyElement.nextSibling !== item.cardElement) {
+                                grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                            } else {
+                                grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                            }
+                        } else if (newIndex < realChildren.length) {
+                            // 중간 위치: 해당 위치의 실제 요소 앞에 삽입
+                            const targetIndex = newIndex + (dummyElement ? 1 : 0);
+                            const nextSibling = allChildren[targetIndex];
+                            if (nextSibling && nextSibling !== item.cardElement && !nextSibling.classList.contains('masonry-dummy')) {
+                                grid.insertBefore(item.cardElement, nextSibling);
+                            } else {
+                                grid.appendChild(item.cardElement);
+                            }
+                        } else {
+                            // 마지막 위치
+                            grid.appendChild(item.cardElement);
+                        }
+                    }
+                    
+                    // 카드 ID 업데이트
+                    item.cardElement.id = `card-${newIndex}`;
+                    
+                    // 내부 요소들의 ID도 업데이트
+                    const oldIndex = item.index;
+                    const updateElementId = (selector, newId) => {
+                        const element = item.cardElement.querySelector(selector);
+                        if (element) {
+                            element.id = newId;
+                        }
+                    };
+                    
+                    updateElementId(`#video-${oldIndex}`, `video-${newIndex}`);
+                    updateElementId(`#overlay-${oldIndex}`, `overlay-${newIndex}`);
+                    updateElementId(`#analysis-${oldIndex}`, `analysis-${newIndex}`);
+                    updateElementId(`#analysis-text-${oldIndex}`, `analysis-text-${newIndex}`);
+                    updateElementId(`#bit-info-${oldIndex}`, `bit-info-${newIndex}`);
+                    updateElementId(`#bit-max-${oldIndex}`, `bit-max-${newIndex}`);
+                    updateElementId(`#bit-min-${oldIndex}`, `bit-min-${newIndex}`);
+                    updateElementId(`#bit-avg-10-${oldIndex}`, `bit-avg-10-${newIndex}`);
+                    updateElementId(`#bit-avg-30-${oldIndex}`, `bit-avg-30-${newIndex}`);
+                    updateElementId(`#bit-avg-60-${oldIndex}`, `bit-avg-60-${newIndex}`);
+                    updateElementId(`#bit-array-${oldIndex}`, `bit-array-${newIndex}`);
+                    updateElementId(`#status-${oldIndex}`, `status-${newIndex}`);
+                    
+                    // 버튼의 onclick 이벤트 업데이트
+                    const editBtn = item.cardElement.querySelector(`button[onclick*="editCamera(${oldIndex})"]`);
+                    if (editBtn) editBtn.setAttribute('onclick', `editCamera(${newIndex})`);
+                    
+                    const fullscreenBtn = item.cardElement.querySelector(`button[onclick*="openFullscreen(${oldIndex})"]`);
+                    if (fullscreenBtn) fullscreenBtn.setAttribute('onclick', `openFullscreen(${newIndex})`);
+                    
+                    const deleteBtn = item.cardElement.querySelector(`button[onclick*="deleteCamera(${oldIndex})"]`);
+                    if (deleteBtn) deleteBtn.setAttribute('onclick', `deleteCamera(${newIndex})`);
+                }
+            });
+
+            // 사이드바 목록 업데이트
+            renderCameraList();
+
+            // Masonry 레이아웃 업데이트 (애니메이션 포함)
+            if (masonryInstance) {
+                setTimeout(() => {
+                    masonryInstance.reloadItems();
+                    masonryInstance.layout();
+                    
+                    // 정렬 완료 애니메이션
+                    setTimeout(() => {
+                        grid.classList.remove('sorting');
+                        allCards.forEach(card => {
+                            card.classList.remove('sorting');
+                            card.classList.add('sorting-complete');
+                            setTimeout(() => {
+                                card.classList.remove('sorting-complete');
+                            }, 500);
+                        });
+                    }, 100);
+                }, 50);
+            } else {
+                setTimeout(() => {
+                    grid.classList.remove('sorting');
+                    allCards.forEach(card => {
+                        card.classList.remove('sorting');
+                        card.classList.add('sorting-complete');
+                        setTimeout(() => {
+                            card.classList.remove('sorting-complete');
+                        }, 500);
+                    });
+                }, 100);
+            }
+
+            console.log(`BIT MAX 평균 (${seconds}초) 높은 순으로 정렬 완료`);
+        }
+
+        // BIT MIN 높은 순으로 정렬
+        function sortByBitMin() {
+            const grid = document.getElementById('cameraGrid');
+            if (!grid) return;
+
+            // 정렬 시작 표시
+            grid.classList.add('sorting');
+            let allCards = grid.querySelectorAll('.camera-card');
+            allCards.forEach(card => {
+                card.classList.add('sorting');
+            });
+
+            // 각 카메라의 BIT MIN 값을 가져와서 정렬
+            const camerasWithBit = cameras.map((camera, index) => {
+                const bitMinElement = document.getElementById(`bit-min-${index}`);
+                let bitMin = 0;
+                if (bitMinElement && bitMinElement.textContent !== '계산 중...' && bitMinElement.textContent !== '오류') {
+                    const value = parseFloat(bitMinElement.textContent);
+                    if (!isNaN(value)) {
+                        bitMin = value;
+                    }
+                }
+                return { 
+                    camera, 
+                    index, 
+                    bitMin, 
+                    cardElement: document.getElementById(`card-${index}`),
+                    analysisData: analysisData[index] || {}
+                };
+            });
+
+            // BIT MIN 값이 높은 순으로 정렬
+            camerasWithBit.sort((a, b) => b.bitMin - a.bitMin);
+
+            // 정렬된 순서로 cameras 배열 재구성
+            const newCameras = [];
+            const newAnalysisData = {};
+            
+            camerasWithBit.forEach((item, newIndex) => {
+                newCameras.push(item.camera);
+                newAnalysisData[newIndex] = item.analysisData;
+            });
+            
+            cameras = newCameras;
+            analysisData = newAnalysisData;
+
+            // DOM 순서만 변경 (재렌더링 없이)
+            allCards = grid.querySelectorAll('.camera-card');
+            allCards.forEach(card => {
+                card.style.opacity = '1';
+                card.style.visibility = 'visible';
+                card.style.transition = 'transform 1.2s ease, opacity 0.3s ease';
+            });
+
+            camerasWithBit.forEach((item, newIndex) => {
+                if (item.cardElement && item.cardElement.parentNode === grid) {
+                    item.cardElement.style.opacity = '1';
+                    item.cardElement.style.visibility = 'visible';
+                    
+                    // 현재 DOM에서의 위치 확인 (더미 요소 제외)
+                    const children = Array.from(grid.children).filter(child => !child.classList.contains('masonry-dummy'));
+                    const currentIndex = children.indexOf(item.cardElement);
+                    
+                    // 새 위치가 현재 위치와 다를 때만 이동
+                    if (currentIndex !== newIndex) {
+                        const allChildren = Array.from(grid.children);
+                        const dummyElement = allChildren.find(child => child.classList.contains('masonry-dummy'));
+                        const realChildren = allChildren.filter(child => !child.classList.contains('masonry-dummy'));
+                        
+                        if (newIndex === 0) {
+                            // 첫 번째 위치: 더미 요소 다음에 삽입
+                            if (dummyElement) {
+                                if (dummyElement.nextSibling && dummyElement.nextSibling !== item.cardElement) {
+                                    grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                                } else {
+                                    grid.insertBefore(item.cardElement, dummyElement.nextSibling);
+                                }
+                            } else {
+                                grid.insertBefore(item.cardElement, grid.firstChild);
+                            }
+                        } else if (newIndex < realChildren.length) {
+                            // 중간 위치: 해당 위치의 실제 요소 앞에 삽입
+                            const targetIndex = newIndex + (dummyElement ? 1 : 0);
+                            const nextSibling = allChildren[targetIndex];
+                            if (nextSibling && nextSibling !== item.cardElement && !nextSibling.classList.contains('masonry-dummy')) {
+                                grid.insertBefore(item.cardElement, nextSibling);
+                            } else {
+                                grid.appendChild(item.cardElement);
+                            }
+                        } else {
+                            // 마지막 위치
+                            grid.appendChild(item.cardElement);
+                        }
+                    }
+                    
+                    // 카드 ID 업데이트
+                    item.cardElement.id = `card-${newIndex}`;
+                    
+                    // 내부 요소들의 ID도 업데이트
+                    const videoElement = item.cardElement.querySelector(`#video-${item.index}`);
+                    if (videoElement) videoElement.id = `video-${newIndex}`;
+                    
+                    const overlayElement = item.cardElement.querySelector(`#overlay-${item.index}`);
+                    if (overlayElement) overlayElement.id = `overlay-${newIndex}`;
+                    
+                    const analysisElement = item.cardElement.querySelector(`#analysis-${item.index}`);
+                    if (analysisElement) analysisElement.id = `analysis-${newIndex}`;
+                    
+                    const analysisTextElement = item.cardElement.querySelector(`#analysis-text-${item.index}`);
+                    if (analysisTextElement) analysisTextElement.id = `analysis-text-${newIndex}`;
+                    
+                    const bitInfoElement = item.cardElement.querySelector(`#bit-info-${item.index}`);
+                    if (bitInfoElement) bitInfoElement.id = `bit-info-${newIndex}`;
+                    
+                    const bitMaxElement = item.cardElement.querySelector(`#bit-max-${item.index}`);
+                    if (bitMaxElement) bitMaxElement.id = `bit-max-${newIndex}`;
+                    
+                    const bitMinElement = item.cardElement.querySelector(`#bit-min-${item.index}`);
+                    if (bitMinElement) bitMinElement.id = `bit-min-${newIndex}`;
+                    
+                    const bitArrayElement = item.cardElement.querySelector(`#bit-array-${item.index}`);
+                    if (bitArrayElement) bitArrayElement.id = `bit-array-${newIndex}`;
+                    
+                    const statusElement = item.cardElement.querySelector(`#status-${item.index}`);
+                    if (statusElement) statusElement.id = `status-${newIndex}`;
+                    
+                    // 버튼의 onclick 이벤트 업데이트
+                    const editBtn = item.cardElement.querySelector(`button[onclick*="editCamera(${item.index})"]`);
+                    if (editBtn) editBtn.setAttribute('onclick', `editCamera(${newIndex})`);
+                    
+                    const fullscreenBtn = item.cardElement.querySelector(`button[onclick*="openFullscreen(${item.index})"]`);
+                    if (fullscreenBtn) fullscreenBtn.setAttribute('onclick', `openFullscreen(${newIndex})`);
+                    
+                    const deleteBtn = item.cardElement.querySelector(`button[onclick*="deleteCamera(${item.index})"]`);
+                    if (deleteBtn) deleteBtn.setAttribute('onclick', `deleteCamera(${newIndex})`);
+                }
+            });
+
+            // 사이드바 목록 업데이트
+            renderCameraList();
+
+            // Masonry 레이아웃 업데이트 (애니메이션 포함)
+            if (masonryInstance) {
+                setTimeout(() => {
+                    masonryInstance.reloadItems();
+                    masonryInstance.layout();
+                    
+                    // 정렬 완료 애니메이션
+                    setTimeout(() => {
+                        grid.classList.remove('sorting');
+                        allCards.forEach(card => {
+                            card.classList.remove('sorting');
+                            card.classList.add('sorting-complete');
+                            setTimeout(() => {
+                                card.classList.remove('sorting-complete');
+                            }, 500);
+                        });
+                    }, 100);
+                }, 50);
+            } else {
+                // Masonry가 없는 경우에도 정렬 완료 처리
+                setTimeout(() => {
+                    grid.classList.remove('sorting');
+                    allCards.forEach(card => {
+                        card.classList.remove('sorting');
+                        card.classList.add('sorting-complete');
+                        setTimeout(() => {
+                            card.classList.remove('sorting-complete');
+                        }, 500);
+                    });
+                }, 100);
+            }
+
+            // 정렬 완료 메시지
+            console.log('BIT MIN 높은 순으로 정렬 완료');
+        }
+
+        // 전체 삭제
+        function clearAllCameras() {
+            if (confirm('모든 카메라를 삭제하시겠습니까?')) {
+                cameras = [];
+                saveCameras();
+                renderCameras();
+                renderCameraList();
+            }
+        }
+
+        // 전체화면 보기
+        function openFullscreen(index) {
+            const camera = cameras[index];
+            const fullscreen = document.getElementById('fullscreen');
+            const video = document.getElementById('fullscreenVideo');
+            
+            if (camera.url.startsWith('rtsp://')) {
+                alert('RTSP 스트림은 전체화면 재생이 지원되지 않습니다.');
+                return;
+            }
+
+            // 웹사이트 URL인 경우 iframe으로 표시
+            if ((camera.url.startsWith('http://') || camera.url.startsWith('https://')) && 
+                !camera.url.match(/\.(m3u8|mp4|avi|mov|webm|jpg|jpeg|png|gif|mjpeg|video)(\?|$)/i) &&
+                !camera.url.includes('/video') && !camera.url.includes('/stream') && !camera.url.includes('/mjpeg')) {
+                video.innerHTML = '';
+                video.style.display = 'none';
+                const iframe = document.createElement('iframe');
+                iframe.src = camera.url;
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.border = 'none';
+                iframe.allowFullscreen = true;
+                fullscreen.appendChild(iframe);
+            } else             if (camera.url.includes('.m3u8') || camera.url.includes('chunklist')) {
+                // HLS 스트림
+                if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                    const hls = new Hls({
+                        enableWorker: true,
+                        lowLatencyMode: true
+                    });
+                    hls.loadSource(camera.url);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        video.play();
+                    });
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = camera.url;
+                    video.play();
+                } else {
+                    alert('HLS 스트림을 재생할 수 없습니다. HLS.js가 필요합니다.');
+                    return;
+                }
+            } else if (camera.url.includes('.jpg') || camera.url.includes('.jpeg')) {
+                video.innerHTML = '';
+                video.style.display = 'none';
+                const img = document.createElement('img');
+                img.src = camera.url;
+                img.style.maxWidth = '100%';
+                img.style.maxHeight = '100%';
+                fullscreen.appendChild(img);
+            } else {
+                video.innerHTML = `<source src="${camera.url}" type="video/mp4">`;
+            }
+
+            fullscreen.classList.add('active');
+            if (video && video.innerHTML) {
+                video.load();
+                video.play();
+            }
+        }
+
+        // 전체화면 닫기
+        function closeFullscreen() {
+            const fullscreen = document.getElementById('fullscreen');
+            const video = document.getElementById('fullscreenVideo');
+            fullscreen.classList.remove('active');
+            if (video) {
+                video.pause();
+                video.innerHTML = '';
+                video.style.display = 'block';
+            }
+            // 이미지 제거
+            const img = fullscreen.querySelector('img');
+            if (img) img.remove();
+            // iframe 제거
+            const iframe = fullscreen.querySelector('iframe');
+            if (iframe) iframe.remove();
+        }
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                closeFullscreen();
+            }
+        });
+
+        // 모달 외부 클릭 시 닫기
+        document.getElementById('cameraModal').addEventListener('click', (e) => {
+            if (e.target.id === 'cameraModal') {
+                closeModal();
+            }
+        });
+
+        // XML 가져오기 모달
+        let xmlMode = 'api';
+
+        function openXmlImportModal() {
+            document.getElementById('xmlModal').classList.add('active');
+            document.getElementById('xmlApiUrl').value = '';
+            document.getElementById('xmlText').value = '';
+            document.getElementById('xmlResult').style.display = 'none';
+            switchXmlMode('api');
+        }
+
+        function closeXmlModal() {
+            document.getElementById('xmlModal').classList.remove('active');
+        }
+
+        function switchXmlMode(mode) {
+            xmlMode = mode;
+            const apiGroup = document.getElementById('xmlApiGroup');
+            const textGroup = document.getElementById('xmlTextGroup');
+            const apiBtn = document.getElementById('xmlModeApi');
+            const textBtn = document.getElementById('xmlModeText');
+
+            if (mode === 'api') {
+                apiGroup.style.display = 'block';
+                textGroup.style.display = 'none';
+                apiBtn.style.background = '#4CAF50';
+                textBtn.style.background = '#555';
+            } else {
+                apiGroup.style.display = 'none';
+                textGroup.style.display = 'block';
+                apiBtn.style.background = '#555';
+                textBtn.style.background = '#4CAF50';
+            }
+        }
+
+        // XML 파싱 함수
+        function parseXmlData(xmlString) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+                
+                // 에러 체크
+                const parserError = xmlDoc.querySelector('parsererror');
+                if (parserError) {
+                    throw new Error('XML 파싱 오류: ' + parserError.textContent);
+                }
+
+                const dataElements = xmlDoc.querySelectorAll('data');
+                const cameras = [];
+
+                dataElements.forEach((data, index) => {
+                    const name = data.querySelector('cctvname')?.textContent?.trim() || `CCTV ${index + 1}`;
+                    const url = data.querySelector('cctvurl')?.textContent?.trim();
+                    const format = data.querySelector('cctvformat')?.textContent?.trim() || '';
+                    const coordx = data.querySelector('coordx')?.textContent?.trim() || '';
+                    const coordy = data.querySelector('coordy')?.textContent?.trim() || '';
+
+                    if (url) {
+                        // HLS 형식인 경우 .m3u8 추가 (없는 경우)
+                        let finalUrl = url;
+                        if (format === 'HLS' && !url.includes('.m3u8')) {
+                            finalUrl = url + (url.endsWith('/') ? '' : '/') + 'playlist.m3u8';
+                        }
+
+                        cameras.push({
+                            name: name,
+                            url: finalUrl,
+                            format: format,
+                            coordx: coordx,
+                            coordy: coordy
+                        });
+                    }
+                });
+
+                return cameras;
+            } catch (error) {
+                throw new Error('XML 파싱 실패: ' + error.message);
+            }
+        }
+
+        // XML 가져오기 실행
+        async function importXml() {
+            const resultDiv = document.getElementById('xmlResult');
+            const resultText = document.getElementById('xmlResultText');
+            resultDiv.style.display = 'block';
+            resultText.textContent = '처리 중...';
+            resultText.style.color = '#4CAF50';
+
+            try {
+                let xmlData = '';
+
+                if (xmlMode === 'api') {
+                    const apiUrl = document.getElementById('xmlApiUrl').value.trim();
+                    if (!apiUrl) {
+                        throw new Error('API URL을 입력해주세요.');
+                    }
+
+                    // CORS 프록시 필요할 수 있음
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) {
+                        throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
+                    }
+                    xmlData = await response.text();
+                } else {
+                    xmlData = document.getElementById('xmlText').value.trim();
+                    if (!xmlData) {
+                        throw new Error('XML 데이터를 입력해주세요.');
+                    }
+                }
+
+                const parsedCameras = parseXmlData(xmlData);
+
+                if (parsedCameras.length === 0) {
+                    throw new Error('파싱된 카메라가 없습니다.');
+                }
+
+                // 기존 카메라에 추가
+                cameras.push(...parsedCameras);
+                saveCameras();
+                renderCameras();
+                renderCameraList();
+
+                resultText.innerHTML = `
+                    <div style="color: #4CAF50;">✅ 성공적으로 ${parsedCameras.length}개의 카메라를 추가했습니다!</div>
+                    <div style="margin-top: 10px; color: #888;">
+                        ${parsedCameras.slice(0, 5).map(c => `• ${c.name}`).join('<br>')}
+                        ${parsedCameras.length > 5 ? `<br>... 외 ${parsedCameras.length - 5}개` : ''}
+                    </div>
+                `;
+                resultText.style.color = '#4CAF50';
+
+                // 3초 후 모달 닫기
+                setTimeout(() => {
+                    closeXmlModal();
+                }, 3000);
+
+            } catch (error) {
+                resultText.textContent = '❌ 오류: ' + error.message;
+                resultText.style.color = '#f44336';
+            }
+        }
+
+        // 여러 URL 가져오기 모달
+        function openBulkImportModal() {
+            document.getElementById('bulkImportModal').classList.add('active');
+            document.getElementById('bulkUrls').value = '';
+            document.getElementById('bulkNamePrefix').value = '';
+            document.getElementById('bulkResult').style.display = 'none';
+        }
+
+        function closeBulkImportModal() {
+            document.getElementById('bulkImportModal').classList.remove('active');
+        }
+
+        function importBulkUrls() {
+            const resultDiv = document.getElementById('bulkResult');
+            const resultText = document.getElementById('bulkResultText');
+            resultDiv.style.display = 'block';
+            resultText.textContent = '처리 중...';
+            resultText.style.color = '#4CAF50';
+
+            try {
+                const inputText = document.getElementById('bulkUrls').value.trim();
+                const namePrefix = document.getElementById('bulkNamePrefix').value.trim();
+                
+                if (!inputText) {
+                    throw new Error('URL을 입력해주세요.');
+                }
+
+                let urls = [];
+
+                // JSON 배열 형식인지 확인
+                if (inputText.trim().startsWith('[') && inputText.trim().endsWith(']')) {
+                    try {
+                        urls = JSON.parse(inputText);
+                        if (!Array.isArray(urls)) {
+                            throw new Error('JSON 배열 형식이 아닙니다.');
+                        }
+                    } catch (e) {
+                        throw new Error('JSON 파싱 실패: ' + e.message);
+                    }
+                } else {
+                    // 줄바꿈으로 구분된 URL 목록
+                    urls = inputText.split('\n')
+                        .map(line => line.trim())
+                        .filter(line => line.length > 0 && (line.startsWith('http://') || line.startsWith('https://')));
+                }
+
+                if (urls.length === 0) {
+                    throw new Error('유효한 URL을 찾을 수 없습니다.');
+                }
+
+                const newCameras = urls.map((url, index) => {
+                    // URL에서 카메라 이름 추출 시도
+                    let name = '';
+                    
+                    // videoXX.stream 패턴에서 번호 추출
+                    const videoMatch = url.match(/video(\d+)\.stream/);
+                    if (videoMatch) {
+                        name = `카메라 ${videoMatch[1]}`;
+                    } else {
+                        // URL의 마지막 부분에서 이름 추출
+                        const urlParts = url.split('/');
+                        const lastPart = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+                        if (lastPart && lastPart.includes('video')) {
+                            name = lastPart.replace(/\.(m3u8|stream)$/i, '');
+                        } else {
+                            name = `카메라 ${index + 1}`;
+                        }
+                    }
+
+                    // 접두사 추가
+                    if (namePrefix) {
+                        name = `${namePrefix} ${name}`;
+                    }
+
+                    return {
+                        name: name,
+                        url: url
+                    };
+                });
+
+                // 기존 카메라에 추가
+                cameras.push(...newCameras);
+                saveCameras();
+                renderCameras();
+                renderCameraList();
+
+                resultText.innerHTML = `
+                    <div style="color: #4CAF50;">✅ 성공적으로 ${newCameras.length}개의 카메라를 추가했습니다!</div>
+                    <div style="margin-top: 10px; color: #888; max-height: 200px; overflow-y: auto;">
+                        ${newCameras.slice(0, 10).map(c => `• ${c.name}`).join('<br>')}
+                        ${newCameras.length > 10 ? `<br>... 외 ${newCameras.length - 10}개` : ''}
+                    </div>
+                `;
+                resultText.style.color = '#4CAF50';
+
+                // 3초 후 모달 닫기
+                setTimeout(() => {
+                    closeBulkImportModal();
+                }, 3000);
+
+            } catch (error) {
+                resultText.textContent = '❌ 오류: ' + error.message;
+                resultText.style.color = '#f44336';
+            }
+        }
+
+        // 모달 외부 클릭 시 닫기 (XML 모달)
+        document.getElementById('xmlModal').addEventListener('click', (e) => {
+            if (e.target.id === 'xmlModal') {
+                closeXmlModal();
+            }
+        });
+
+        // 모달 외부 클릭 시 닫기 (Bulk Import 모달)
+        document.getElementById('bulkImportModal').addEventListener('click', (e) => {
+            if (e.target.id === 'bulkImportModal') {
+                closeBulkImportModal();
+            }
+        });
+
+        // 타이머 입력란 값 저장
+        function saveTimerSettings() {
+            const repeatSeconds = document.getElementById('repeatSeconds')?.value || '2';
+            const masonryReorderTimer = document.getElementById('masonryReorderTimer')?.value || '5';
+            const boundingBoxResetTimer = document.getElementById('boundingBoxResetTimer')?.value || '10';
+            
+            localStorage.setItem('timerRepeatSeconds', repeatSeconds);
+            localStorage.setItem('timerMasonryReorder', masonryReorderTimer);
+            localStorage.setItem('timerBoundingBoxReset', boundingBoxResetTimer);
+        }
+
+        // 타이머 입력란 값 로드
+        function loadTimerSettings() {
+            const repeatSecondsInput = document.getElementById('repeatSeconds');
+            const masonryReorderTimerInput = document.getElementById('masonryReorderTimer');
+            const boundingBoxResetTimerInput = document.getElementById('boundingBoxResetTimer');
+            
+            if (repeatSecondsInput) {
+                const saved = localStorage.getItem('timerRepeatSeconds');
+                if (saved) {
+                    repeatSecondsInput.value = saved;
+                }
+            }
+            
+            if (masonryReorderTimerInput) {
+                const saved = localStorage.getItem('timerMasonryReorder');
+                if (saved) {
+                    masonryReorderTimerInput.value = saved;
+                }
+            }
+            
+            if (boundingBoxResetTimerInput) {
+                const saved = localStorage.getItem('timerBoundingBoxReset');
+                if (saved) {
+                    boundingBoxResetTimerInput.value = saved;
+                }
+            }
+        }
+
+        // 반복 초 입력란 이벤트 리스너 (자동 저장)
+        const repeatSecondsInput = document.getElementById('repeatSeconds');
+        if (repeatSecondsInput) {
+            // 값 변경 시 자동 저장
+            repeatSecondsInput.addEventListener('input', () => {
+                saveTimerSettings();
+            });
+            repeatSecondsInput.addEventListener('change', () => {
+                saveTimerSettings();
+            });
+        }
+
+        // Masonry 재정렬 타이머 입력란 이벤트 리스너 (자동 저장)
+        const masonryReorderTimerInput = document.getElementById('masonryReorderTimer');
+        if (masonryReorderTimerInput) {
+            masonryReorderTimerInput.addEventListener('input', () => {
+                saveTimerSettings();
+            });
+            masonryReorderTimerInput.addEventListener('change', () => {
+                saveTimerSettings();
+            });
+        }
+
+        // 바운딩 박스 초기화 타이머 입력란 이벤트 리스너 (자동 저장)
+        const boundingBoxResetTimerInput = document.getElementById('boundingBoxResetTimer');
+        if (boundingBoxResetTimerInput) {
+            boundingBoxResetTimerInput.addEventListener('input', () => {
+                saveTimerSettings();
+            });
+            boundingBoxResetTimerInput.addEventListener('change', () => {
+                saveTimerSettings();
+            });
+        }
+
+        // Motion Detection & Object Tracking 변수
+        let cvReady = false;
+        let analysisData = {}; // 각 카메라의 분석 데이터 저장
+        const trackers = {}; // 객체 추적기 저장
+        const previousFrames = {}; // 이전 프레임 저장
+        let realtimeSortActive = false; // 실시간 정렬 활성화 상태
+        let realtimeSortInterval = null; // 실시간 정렬 인터벌
+        let masonryReorderInterval = null; // Masonry 재정렬 인터벌
+        let boundingBoxResetInterval = null; // 바운딩 박스 초기화 인터벌
+        const bitMaxHistory = {}; // 각 카메라의 BIT MAX 값 시간별 기록 {index: [{value, timestamp}, ...]}
+
+        // OpenCV.js 로드 확인
+        function checkOpenCV() {
+            if (typeof cv !== 'undefined') {
+                cvReady = true;
+                console.log('OpenCV.js 로드 완료');
+                startAnalysis();
+            } else {
+                setTimeout(checkOpenCV, 100);
+            }
+        }
+
+        // 분석 시작
+        function startAnalysis() {
+            if (!cvReady) {
+                checkOpenCV();
+                return;
+            }
+
+            cameras.forEach((camera, index) => {
+                const video = document.getElementById(`video-${index}`);
+                if (video && video.tagName === 'VIDEO') {
+                    // 비디오가 로드되면 분석 시작
+                    video.addEventListener('loadedmetadata', () => {
+                        initAnalysis(index, video);
+                    });
+                    
+                    // 이미 로드된 경우
+                    if (video.readyState >= 2) {
+                        initAnalysis(index, video);
+                    }
+                }
+            });
+        }
+
+        // 분석 초기화
+        function initAnalysis(index, video) {
+            if (!analysisData[index]) {
+                analysisData[index] = {
+                    motionCount: 0,
+                    objects: [], // 객체 배열
+                    background: { // 배경 속성
+                        averageBrightness: 0,
+                        contrast: 0,
+                        stability: 0,
+                        dominantColor: null,
+                        lastUpdate: Date.now()
+                    },
+                    trackedObjects: [],
+                    boundingBoxes: [],
+                    lastUpdate: Date.now()
+                };
+            }
+
+            // 분석 루프 시작
+            analyzeFrame(index, video);
+        }
+
+        // 프레임 분석
+        function analyzeFrame(index, video) {
+            if (!video || video.readyState !== 4) {
+                setTimeout(() => analyzeFrame(index, video), 100);
+                return;
+            }
+
+            try {
+                // Canvas 생성
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // OpenCV Mat 생성
+                const src = cv.imread(canvas);
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+                // 배경 분석
+                analyzeBackground(index, src);
+
+                // Motion Detection (색상 계산을 위해 src도 전달)
+                detectMotion(index, gray, src);
+
+                // Object Tracking
+                trackObjects(index, gray);
+
+                // 바운딩 박스 그리기
+                drawBoundingBoxes(index, video);
+
+                // 분석 결과 업데이트
+                updateAnalysisText(index);
+
+                // BIT 계산 및 표시
+                updateBitCalculation(index);
+
+                // 메모리 정리
+                src.delete();
+                gray.delete();
+                canvas.remove();
+
+                // 다음 프레임 분석 (약 1초마다)
+                setTimeout(() => analyzeFrame(index, video), 1000);
+
+            } catch (error) {
+                console.error(`카메라 ${index} 분석 오류:`, error);
+                setTimeout(() => analyzeFrame(index, video), 2000);
+            }
+        }
+
+        // 배경 분석
+        function analyzeBackground(index, frame) {
+            let mean = null;
+            let stddev = null;
+            let diff = null;
+            let diffMean = null;
+            let diffStddev = null;
+            
+            try {
+                if (!frame || frame.isDeleted() || frame.empty()) {
+                    return;
+                }
+
+                if (!analysisData[index]) {
+                    analysisData[index] = {
+                        objects: [],
+                        background: {}
+                    };
+                }
+
+                // 평균 밝기 계산
+                mean = new cv.Mat();
+                stddev = new cv.Mat();
+                cv.meanStdDev(frame, mean, stddev);
+                
+                if (!mean || mean.empty() || !stddev || stddev.empty()) {
+                    return;
+                }
+                
+                const brightness = mean.data64F ? mean.data64F[0] : 0;
+                const contrast = stddev.data64F ? stddev.data64F[0] : 0;
+
+                // 배경 안정성 계산 (이전 프레임과 비교)
+                let stability = 100;
+                if (previousFrames[index] && !previousFrames[index].isDeleted() && !previousFrames[index].empty()) {
+                    try {
+                        diff = new cv.Mat();
+                        cv.absdiff(frame, previousFrames[index], diff);
+                        
+                        if (!diff || diff.empty()) {
+                            stability = 100;
+                        } else {
+                            diffMean = new cv.Mat();
+                            diffStddev = new cv.Mat();
+                            cv.meanStdDev(diff, diffMean, diffStddev);
+                            
+                            if (diffMean && diffMean.data64F) {
+                                const change = diffMean.data64F[0];
+                                stability = Math.max(0, 100 - (change * 10)); // 변화가 적을수록 안정성 높음
+                            }
+                        }
+                    } catch (e) {
+                        // 안정성 계산 실패 시 기본값 사용
+                        stability = 100;
+                    }
+                }
+
+                // 배경 속성 업데이트
+                analysisData[index].background = {
+                    averageBrightness: Math.round(brightness),
+                    contrast: Math.round(contrast),
+                    stability: Math.round(stability),
+                    dominantColor: null, // 추후 구현 가능
+                    lastUpdate: Date.now()
+                };
+
+            } catch (error) {
+                // OpenCV.js 메모리 오류는 조용히 처리 (너무 많은 로그 방지)
+                // 숫자만 있는 오류는 메모리 주소이므로 무시
+                const errorStr = String(error);
+                if (errorStr && !/^\d+$/.test(errorStr) && errorStr.length > 5) {
+                    // 실제 에러 메시지가 있는 경우에만 로그
+                    if (error.message && !error.message.includes('Cannot access') && !error.message.includes('Invalid')) {
+                        console.warn(`배경 분석 경고 (카메라 ${index}):`, error.message);
+                    }
+                }
+                // 오류 발생 시 기본값 설정
+                if (!analysisData[index]) {
+                    analysisData[index] = {};
+                }
+                if (!analysisData[index].background) {
+                    analysisData[index].background = {
+                        averageBrightness: 0,
+                        contrast: 0,
+                        stability: 0,
+                        lastUpdate: Date.now()
+                    };
+                }
+            } finally {
+                // 메모리 정리 보장
+                try {
+                    if (mean && !mean.isDeleted()) mean.delete();
+                } catch (e) {}
+                try {
+                    if (stddev && !stddev.isDeleted()) stddev.delete();
+                } catch (e) {}
+                try {
+                    if (diff && !diff.isDeleted()) diff.delete();
+                } catch (e) {}
+                try {
+                    if (diffMean && !diffMean.isDeleted()) diffMean.delete();
+                } catch (e) {}
+                try {
+                    if (diffStddev && !diffStddev.isDeleted()) diffStddev.delete();
+                } catch (e) {}
+            }
+        }
+
+        // 객체 영역의 평균 색상 계산
+        function calculateObjectColor(srcFrame, x, y, width, height) {
+            try {
+                // ROI (Region of Interest) 추출
+                const rect = new cv.Rect(x, y, width, height);
+                const roi = srcFrame.roi(rect);
+                
+                // 평균 색상 계산
+                const mean = new cv.Mat();
+                const stddev = new cv.Mat();
+                cv.meanStdDev(roi, mean, stddev);
+                
+                // BGR 순서 (OpenCV는 BGR 사용)
+                const b = Math.round(mean.data64F[0] || 0);
+                const g = Math.round(mean.data64F[1] || 0);
+                const r = Math.round(mean.data64F[2] || 0);
+                
+                // 메모리 정리
+                mean.delete();
+                stddev.delete();
+                roi.delete();
+                
+                return { r, g, b };
+            } catch (error) {
+                console.error('색상 계산 오류:', error);
+                return { r: 0, g: 0, b: 0 };
+            }
+        }
+
+        // RGB를 색상 이름으로 변환 (간단한 분류)
+        function getColorName(r, g, b) {
+            // 밝기 계산
+            const brightness = (r + g + b) / 3;
+            
+            // 채도 계산
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const saturation = max === 0 ? 0 : (max - min) / max;
+            
+            if (brightness < 30) return '검정';
+            if (brightness > 220) return '흰색';
+            if (saturation < 0.2) return '회색';
+            
+            // 주요 색상 판별
+            if (r > g + 30 && r > b + 30) return '빨강';
+            if (g > r + 30 && g > b + 30) return '초록';
+            if (b > r + 30 && b > g + 30) return '파랑';
+            if (r > 150 && g > 150 && b < 100) return '노랑';
+            if (r > 100 && g < 100 && b > 150) return '보라';
+            if (r > 150 && g < 100 && b < 100) return '주황';
+            if (r < 100 && g > 150 && b > 150) return '청록';
+            
+            return '혼합';
+        }
+
+        // Motion Detection
+        function detectMotion(index, currentFrame, srcFrame) {
+            if (!previousFrames[index]) {
+                previousFrames[index] = currentFrame.clone();
+                return;
+            }
+
+            try {
+                // 프레임 차이 계산
+                const diff = new cv.Mat();
+                cv.absdiff(previousFrames[index], currentFrame, diff);
+
+                // 이진화
+                const thresh = new cv.Mat();
+                cv.threshold(diff, thresh, 30, 255, cv.THRESH_BINARY);
+
+                // 모폴로지 연산 (노이즈 제거)
+                const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5));
+                const cleaned = new cv.Mat();
+                cv.morphologyEx(thresh, cleaned, cv.MORPH_OPEN, kernel);
+                cv.morphologyEx(cleaned, cleaned, cv.MORPH_CLOSE, kernel);
+
+                // 움직임 영역 찾기
+                const contours = new cv.MatVector();
+                const hierarchy = new cv.Mat();
+                cv.findContours(cleaned, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                let motionCount = 0;
+                const objects = []; // 객체 배열
+                const boundingBoxes = [];
+                
+                for (let i = 0; i < contours.size(); i++) {
+                    const contour = contours.get(i);
+                    const area = cv.contourArea(contour);
+                    if (area > 500) { // 최소 영역 크기
+                        motionCount++;
+                        
+                        // 바운딩 박스 계산
+                        const rect = cv.boundingRect(contour);
+                        const centerX = rect.x + rect.width / 2;
+                        const centerY = rect.y + rect.height / 2;
+                        
+                        // 객체 색상 계산
+                        let color = { r: 0, g: 0, b: 0, name: '알 수 없음' };
+                        if (srcFrame) {
+                            color = calculateObjectColor(srcFrame, rect.x, rect.y, rect.width, rect.height);
+                            color.name = getColorName(color.r, color.g, color.b);
+                        }
+                        
+                        // 객체 속성 배열에 추가
+                        const objectId = objects.length + 1;
+                        const object = {
+                            id: objectId,
+                            type: 'unknown', // 객체 타입 (차량, 사람, 기타 등)
+                            position: {
+                                x: rect.x,
+                                y: rect.y,
+                                centerX: centerX,
+                                centerY: centerY
+                            },
+                            size: {
+                                width: rect.width,
+                                height: rect.height,
+                                area: area
+                            },
+                            velocity: {
+                                x: 0, // 속도 (이전 위치와 비교하여 계산)
+                                y: 0,
+                                speed: 0
+                            },
+                            color: color, // 색상 정보 추가
+                            status: 'active', // active, stationary, lost
+                            confidence: 0.8, // 감지 신뢰도
+                            timestamp: Date.now(),
+                            lastSeen: Date.now()
+                        };
+
+                        // 이전 객체와 매칭하여 속도 계산
+                        if (analysisData[index] && analysisData[index].objects && analysisData[index].objects.length > 0) {
+                            const prevObjects = analysisData[index].objects;
+                            const matched = prevObjects.find(prev => {
+                                const distance = Math.sqrt(
+                                    Math.pow(prev.position.centerX - centerX, 2) + 
+                                    Math.pow(prev.position.centerY - centerY, 2)
+                                );
+                                return distance < 100; // 100픽셀 이내면 같은 객체로 간주
+                            });
+                            
+                            if (matched) {
+                                object.id = matched.id;
+                                object.velocity = {
+                                    x: centerX - matched.position.centerX,
+                                    y: centerY - matched.position.centerY,
+                                    speed: Math.sqrt(
+                                        Math.pow(centerX - matched.position.centerX, 2) + 
+                                        Math.pow(centerY - matched.position.centerY, 2)
+                                    )
+                                };
+                                object.type = matched.type; // 타입 유지
+                                // 색상은 새로 계산 (객체가 움직이면서 색상이 변할 수 있음)
+                            }
+                        }
+
+                        objects.push(object);
+                        boundingBoxes.push({
+                            x: rect.x,
+                            y: rect.y,
+                            width: rect.width,
+                            height: rect.height,
+                            area: area,
+                            objectId: object.id
+                        });
+                    }
+                    contour.delete();
+                }
+
+                // 데이터 업데이트
+                if (!analysisData[index]) {
+                    analysisData[index] = { 
+                        motionCount: 0, 
+                        objects: [],
+                        trackedObjects: [], 
+                        boundingBoxes: [],
+                        background: {}
+                    };
+                }
+                analysisData[index].motionCount = motionCount;
+                analysisData[index].objects = objects; // 객체 배열 저장
+                analysisData[index].boundingBoxes = boundingBoxes;
+                analysisData[index].lastMotionUpdate = Date.now();
+
+                // 이전 프레임 업데이트
+                previousFrames[index].delete();
+                previousFrames[index] = currentFrame.clone();
+
+                // 메모리 정리
+                diff.delete();
+                thresh.delete();
+                cleaned.delete();
+                kernel.delete();
+                contours.delete();
+                hierarchy.delete();
+
+            } catch (error) {
+                console.error(`Motion Detection 오류 (카메라 ${index}):`, error);
+            }
+        }
+
+        // Object Tracking (KCF 추적기)
+        function trackObjects(index, frame) {
+            if (!analysisData[index]) {
+                analysisData[index] = { motionCount: 0, trackedObjects: [] };
+            }
+
+            // 움직임이 감지되면 추적 시작
+            if (analysisData[index].motionCount > 0) {
+                if (!trackers[index]) {
+                    trackers[index] = [];
+                }
+
+                // 간단한 객체 추적 (실제로는 KCF, CSRT 등 사용)
+                // 여기서는 움직임 영역을 객체로 간주
+                const trackedCount = Math.min(analysisData[index].motionCount, 5);
+                
+                if (!analysisData[index].trackedObjects) {
+                    analysisData[index].trackedObjects = [];
+                }
+
+                // 추적 중인 객체 업데이트
+                analysisData[index].trackedObjects = Array(trackedCount).fill(0).map((_, i) => ({
+                    id: i + 1,
+                    status: '추적 중',
+                    lastSeen: Date.now()
+                }));
+
+                analysisData[index].lastTrackingUpdate = Date.now();
+            } else {
+                // 움직임이 없으면 추적 객체 초기화
+                if (analysisData[index].trackedObjects) {
+                    const timeSinceLastMotion = Date.now() - (analysisData[index].lastMotionUpdate || 0);
+                    if (timeSinceLastMotion > 5000) { // 5초 이상 움직임 없으면
+                        analysisData[index].trackedObjects = [];
+                    }
+                }
+            }
+        }
+
+        // 바운딩 박스 그리기
+        function drawBoundingBoxes(index, video) {
+            const overlayCanvas = document.getElementById(`overlay-${index}`);
+            if (!overlayCanvas || !analysisData[index] || !analysisData[index].boundingBoxes) {
+                return;
+            }
+
+            const videoElement = video;
+            if (!videoElement || videoElement.readyState !== 4) {
+                return;
+            }
+
+            // 비디오 크기와 표시 크기 계산
+            const videoWidth = videoElement.videoWidth || 640;
+            const videoHeight = videoElement.videoHeight || 480;
+            
+            // 비디오 컨테이너 크기
+            const container = overlayCanvas.parentElement.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            const containerWidth = containerRect.width;
+            const containerHeight = containerRect.height;
+
+            // 비디오가 컨테이너에 맞춰 표시되는 실제 크기 계산
+            const videoAspect = videoWidth / videoHeight;
+            const containerAspect = containerWidth / containerHeight;
+            
+            let displayWidth, displayHeight, offsetX, offsetY;
+            
+            if (videoAspect > containerAspect) {
+                // 비디오가 더 넓음 (좌우 여백)
+                displayWidth = containerWidth;
+                displayHeight = containerWidth / videoAspect;
+                offsetX = 0;
+                offsetY = (containerHeight - displayHeight) / 2;
+            } else {
+                // 비디오가 더 높음 (상하 여백)
+                displayWidth = containerHeight * videoAspect;
+                displayHeight = containerHeight;
+                offsetX = (containerWidth - displayWidth) / 2;
+                offsetY = 0;
+            }
+
+            // Canvas 크기 설정
+            overlayCanvas.width = containerWidth;
+            overlayCanvas.height = containerHeight;
+            
+            const ctx = overlayCanvas.getContext('2d');
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            // 바운딩 박스 그리기
+            const boxes = analysisData[index].boundingBoxes;
+            const scaleX = displayWidth / videoWidth;
+            const scaleY = displayHeight / videoHeight;
+
+            boxes.forEach((box, i) => {
+                const x = offsetX + (box.x * scaleX);
+                const y = offsetY + (box.y * scaleY);
+                const width = box.width * scaleX;
+                const height = box.height * scaleY;
+
+                // 사각형 그리기
+                ctx.strokeStyle = '#00FF00'; // 초록색
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+
+                // 객체 ID 표시
+                ctx.fillStyle = '#00FF00';
+                ctx.font = '12px Arial';
+                ctx.fillText(`객체 ${i + 1}`, x + 5, y - 5);
+            });
+        }
+
+        // 분석 결과 텍스트 업데이트
+        function updateAnalysisText(index) {
+            const textElement = document.getElementById(`analysis-text-${index}`);
+            if (!textElement || !analysisData[index]) return;
+
+            const data = analysisData[index];
+            let text = '';
+
+            // 배경 속성
+            if (data.background) {
+                text += `🌍 배경: 밝기 ${data.background.averageBrightness}, 안정성 ${data.background.stability}%\n`;
+            }
+
+            // Motion Detection 결과
+            if (data.motionCount > 0) {
+                text += `🔴 움직임 감지: ${data.motionCount}개 영역\n`;
+            } else {
+                text += `🟢 움직임 없음\n`;
+            }
+
+            // 객체 배열 정보
+            if (data.objects && data.objects.length > 0) {
+                text += `👁️ 객체 배열: ${data.objects.length}개\n`;
+                data.objects.forEach((obj, i) => {
+                    if (i < 3) { // 최대 3개만 표시
+                        const speed = Math.round(obj.velocity.speed);
+                        let colorInfo = '';
+                        if (obj.color) {
+                            const colorBox = `<span style="display: inline-block; width: 12px; height: 12px; background-color: rgb(${obj.color.r}, ${obj.color.g}, ${obj.color.b}); border: 1px solid #fff; vertical-align: middle; margin-right: 4px;"></span>`;
+                            colorInfo = ` ${colorBox} 색상: ${obj.color.name} (RGB: ${obj.color.r}, ${obj.color.g}, ${obj.color.b})`;
+                        }
+                        text += `   - 객체 #${obj.id}: 위치(${Math.round(obj.position.x)}, ${Math.round(obj.position.y)}), 속도 ${speed}px/s${colorInfo}\n`;
+                    }
+                });
+            } else {
+                text += `👁️ 객체 배열: 없음\n`;
+            }
+
+            // 상태 요약
+            if (data.motionCount > 0) {
+                text += `📊 상태: 활동 중`;
+            } else {
+                text += `📊 상태: 정지`;
+            }
+
+            // 사이드바 분석 결과 업데이트
+            updateSidebarAnalysis(index);
+
+            // HTML 태그가 포함된 텍스트 처리
+            const lines = text.split('\n');
+            textElement.innerHTML = lines.map(line => {
+                // 이미 HTML 태그가 포함된 경우 (색상 박스 등)
+                if (line.includes('<span')) {
+                    if (line.includes('움직임 감지')) {
+                        return `<span class="status-item motion-detected">${line}</span>`;
+                    } else if (line.includes('객체 배열') || line.includes('객체 #')) {
+                        return `<span class="status-item object-tracked">${line}</span>`;
+                    }
+                    return `<span class="status-item">${line}</span>`;
+                }
+                
+                // 일반 텍스트
+                if (line.includes('움직임 감지')) {
+                    return `<span class="status-item motion-detected">${line}</span>`;
+                } else if (line.includes('객체 배열') || line.includes('객체 #')) {
+                    return `<span class="status-item object-tracked">${line}</span>`;
+                }
+                return `<span class="status-item">${line}</span>`;
+            }).join('<br>');
+        }
+
+        // 객체 배열 가져오기 (외부에서 사용 가능)
+        function getObjectsArray(cameraIndex) {
+            if (analysisData[cameraIndex] && analysisData[cameraIndex].objects) {
+                return analysisData[cameraIndex].objects;
+            }
+            return [];
+        }
+
+        // 배경 속성 가져오기 (외부에서 사용 가능)
+        function getBackgroundProperties(cameraIndex) {
+            if (analysisData[cameraIndex] && analysisData[cameraIndex].background) {
+                return analysisData[cameraIndex].background;
+            }
+            return null;
+        }
+
+        // BIT MAX 평균값 계산 (지정된 시간 범위)
+        function calculateBitAverage(index, seconds) {
+            if (!bitMaxHistory[index] || bitMaxHistory[index].length === 0) {
+                return null;
+            }
+
+            const now = Date.now();
+            const cutoffTime = now - (seconds * 1000);
+            
+            const values = bitMaxHistory[index]
+                .filter(item => item.timestamp >= cutoffTime)
+                .map(item => item.value);
+
+            if (values.length === 0) {
+                return null;
+            }
+
+            const sum = values.reduce((acc, val) => acc + val, 0);
+            return sum / values.length;
+        }
+
+        // 모든 카메라의 객체 배열 가져오기
+        function getAllObjectsArrays() {
+            const result = {};
+            cameras.forEach((camera, index) => {
+                result[index] = {
+                    cameraName: camera.name,
+                    objects: getObjectsArray(index),
+                    background: getBackgroundProperties(index)
+                };
+            });
+            return result;
+        }
+
+        // 객체와 배경 정보를 배열 문자열로 변환
+        function convertToArrayString(index) {
+            if (!analysisData[index]) {
+                return '';
+            }
+
+            const data = analysisData[index];
+            const arrayParts = [];
+
+            // 객체 정보 배열
+            if (data.objects && data.objects.length > 0) {
+                data.objects.forEach((obj, i) => {
+                    const objArray = [
+                        obj.id,
+                        Math.round(obj.position.x),
+                        Math.round(obj.position.y),
+                        Math.round(obj.position.centerX),
+                        Math.round(obj.position.centerY),
+                        Math.round(obj.size.width),
+                        Math.round(obj.size.height),
+                        Math.round(obj.size.area),
+                        Math.round(obj.velocity.x),
+                        Math.round(obj.velocity.y),
+                        Math.round(obj.velocity.speed),
+                        obj.confidence
+                    ];
+                    arrayParts.push(`객체${i + 1}: [${objArray.join(', ')}]`);
+                });
+            }
+
+            // 배경 정보 배열
+            if (data.background) {
+                const bgArray = [
+                    data.background.averageBrightness || 0,
+                    data.background.contrast || 0,
+                    data.background.stability || 0
+                ];
+                arrayParts.push(`배경: [${bgArray.join(', ')}]`);
+            }
+
+            // 움직임 카운트
+            arrayParts.push(`움직임: [${data.motionCount || 0}]`);
+
+            return arrayParts.join(' | ');
+        }
+
+        // BIT 계산 및 표시
+        function updateBitCalculation(index) {
+            if (typeof wordNbUnicodeFormat === 'undefined' || typeof BIT_MAX_NB === 'undefined' || typeof BIT_MIN_NB === 'undefined') {
+                // bitCalculation.js가 아직 로드되지 않음
+                setTimeout(() => updateBitCalculation(index), 500);
+                return;
+            }
+
+            try {
+                const data = analysisData[index];
+                if (!data) {
+                    return;
+                }
+
+                // 객체와 배경 정보를 텍스트로 변환
+                let textData = '';
+                
+                // 객체 정보 추가
+                if (data.objects && data.objects.length > 0) {
+                    data.objects.forEach((obj, i) => {
+                        textData += `객체${obj.id}_x${Math.round(obj.position.x)}_y${Math.round(obj.position.y)}_w${Math.round(obj.size.width)}_h${Math.round(obj.size.height)}_a${Math.round(obj.size.area)}_v${Math.round(obj.velocity.speed)}`;
+                        if (i < data.objects.length - 1) textData += ' ';
+                    });
+                }
+
+                // 배경 정보 추가
+                if (data.background) {
+                    textData += ` 배경_밝기${data.background.averageBrightness || 0}_대비${data.background.contrast || 0}_안정성${data.background.stability || 0}`;
+                }
+
+                // 움직임 정보 추가
+                textData += ` 움직임${data.motionCount || 0}`;
+
+                // 텍스트가 비어있으면 기본값 사용
+                if (!textData.trim()) {
+                    textData = `카메라${index + 1}_대기중`;
+                }
+
+                // 유니코드 배열로 변환
+                const unicodeArray = wordNbUnicodeFormat(textData);
+                
+                // BIT 계산
+                const bitMax = BIT_MAX_NB(unicodeArray);
+                const bitMin = BIT_MIN_NB(unicodeArray);
+
+                // BIT MAX 값 기록 (시간별)
+                const now = Date.now();
+                if (!bitMaxHistory[index]) {
+                    bitMaxHistory[index] = [];
+                }
+                bitMaxHistory[index].push({ value: bitMax, timestamp: now });
+                
+                // 60초 이전 데이터 제거
+                bitMaxHistory[index] = bitMaxHistory[index].filter(
+                    item => now - item.timestamp <= 60000
+                );
+
+                // 평균값 계산
+                const avg10 = calculateBitAverage(index, 10);
+                const avg30 = calculateBitAverage(index, 30);
+                const avg60 = calculateBitAverage(index, 60);
+
+                // 결과 표시
+                const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                const bitMinElement = document.getElementById(`bit-min-${index}`);
+                const bitArrayElement = document.getElementById(`bit-array-${index}`);
+                const bitAvg10Element = document.getElementById(`bit-avg-10-${index}`);
+                const bitAvg30Element = document.getElementById(`bit-avg-30-${index}`);
+                const bitAvg60Element = document.getElementById(`bit-avg-60-${index}`);
+
+                if (bitMaxElement) {
+                    // 애니메이션 효과 추가
+                    bitMaxElement.classList.add('updating');
+                    bitMaxElement.textContent = bitMax.toFixed(15);
+                    setTimeout(() => {
+                        bitMaxElement.classList.remove('updating');
+                    }, 500);
+                }
+                if (bitMinElement) {
+                    // 애니메이션 효과 추가
+                    bitMinElement.classList.add('updating');
+                    bitMinElement.textContent = bitMin.toFixed(15);
+                    setTimeout(() => {
+                        bitMinElement.classList.remove('updating');
+                    }, 500);
+                }
+                if (bitAvg10Element) {
+                    bitAvg10Element.textContent = avg10 !== null ? avg10.toFixed(15) : '-';
+                }
+                if (bitAvg30Element) {
+                    bitAvg30Element.textContent = avg30 !== null ? avg30.toFixed(15) : '-';
+                }
+                if (bitAvg60Element) {
+                    bitAvg60Element.textContent = avg60 !== null ? avg60.toFixed(15) : '-';
+                }
+                if (bitArrayElement) {
+                    const arrayString = convertToArrayString(index);
+                    bitArrayElement.textContent = arrayString || '데이터 없음';
+                }
+
+                // 사이드바 분석 결과 업데이트
+                updateSidebarAnalysis(index);
+
+            } catch (error) {
+                console.error(`BIT 계산 오류 (카메라 ${index}):`, error);
+                const bitMaxElement = document.getElementById(`bit-max-${index}`);
+                const bitMinElement = document.getElementById(`bit-min-${index}`);
+                if (bitMaxElement) bitMaxElement.textContent = '오류';
+                if (bitMinElement) bitMinElement.textContent = '오류';
+            }
+        }
+
+        // 사이드바 분석 결과 업데이트
+        function updateSidebarAnalysis(index) {
+            const sidebarContainer = document.getElementById('sidebarAnalysis');
+            if (!sidebarContainer) return;
+
+            const camera = cameras[index];
+            if (!camera) return;
+
+            const data = analysisData[index] || {};
+            const bitMaxElement = document.getElementById(`bit-max-${index}`);
+            const bitMinElement = document.getElementById(`bit-min-${index}`);
+            const bitAvg10Element = document.getElementById(`bit-avg-10-${index}`);
+            const bitAvg30Element = document.getElementById(`bit-avg-30-${index}`);
+            const bitAvg60Element = document.getElementById(`bit-avg-60-${index}`);
+            
+            let bitMax = '계산 중...';
+            let bitMin = '계산 중...';
+            let bitAvg10 = '-';
+            let bitAvg30 = '-';
+            let bitAvg60 = '-';
+            
+            if (bitMaxElement && bitMaxElement.textContent !== '계산 중...' && bitMaxElement.textContent !== '오류') {
+                bitMax = bitMaxElement.textContent;
+            }
+            if (bitMinElement && bitMinElement.textContent !== '계산 중...' && bitMinElement.textContent !== '오류') {
+                bitMin = bitMinElement.textContent;
+            }
+            if (bitAvg10Element && bitAvg10Element.textContent !== '-' && bitAvg10Element.textContent !== '계산 중...') {
+                bitAvg10 = bitAvg10Element.textContent;
+            }
+            if (bitAvg30Element && bitAvg30Element.textContent !== '-' && bitAvg30Element.textContent !== '계산 중...') {
+                bitAvg30 = bitAvg30Element.textContent;
+            }
+            if (bitAvg60Element && bitAvg60Element.textContent !== '-' && bitAvg60Element.textContent !== '계산 중...') {
+                bitAvg60 = bitAvg60Element.textContent;
+            }
+
+            // 모든 카메라의 BIT MAX 값을 수집하여 순위 계산
+            const bitMaxValues = cameras.map((camera, idx) => {
+                const bitMaxEl = document.getElementById(`bit-max-${idx}`);
+                let bitMaxVal = '계산 중...';
+                if (bitMaxEl && bitMaxEl.textContent !== '계산 중...' && bitMaxEl.textContent !== '오류') {
+                    bitMaxVal = bitMaxEl.textContent;
+                }
+                return { index: idx, value: bitMaxVal, numValue: parseFloat(bitMaxVal) || 0 };
+            });
+
+            // BIT MAX 값 기준으로 정렬하여 순위 계산
+            const sorted = [...bitMaxValues].sort((a, b) => b.numValue - a.numValue);
+            const rankMap = new Map();
+            sorted.forEach((item, rank) => {
+                rankMap.set(item.index, rank + 1);
+            });
+
+            // 순위별 색상 계산
+            const rank = rankMap.get(index) || cameras.length;
+            const bitMaxColor = getBitRankColor(bitMax, rank, cameras.length);
+
+            const motionCount = data.motionCount || 0;
+            const objectCount = (data.objects && data.objects.length) || 0;
+            const background = data.background || {};
+            const brightness = background.averageBrightness || 0;
+            const stability = background.stability || 0;
+
+            // 해당 카메라의 사이드바 아이템 찾기 및 업데이트
+            const sidebarItems = sidebarContainer.querySelectorAll('.sidebar-analysis-item');
+            if (sidebarItems[index]) {
+                const item = sidebarItems[index];
+                const content = item.querySelector('.sidebar-analysis-item-content');
+                if (content) {
+                    content.innerHTML = `
+                        <div class="info-row">
+                            <span class="info-label">BIT MAX:</span>
+                            <span class="info-value bit-value" style="color: ${bitMaxColor};">${bitMax}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">BIT MIN:</span>
+                            <span class="info-value bit-value">${bitMin}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">평균 (10초):</span>
+                            <span class="info-value bit-value">${bitAvg10}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">평균 (30초):</span>
+                            <span class="info-value bit-value">${bitAvg30}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">평균 (60초):</span>
+                            <span class="info-value bit-value">${bitAvg60}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">움직임:</span>
+                            <span class="info-value">${motionCount}개</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">객체:</span>
+                            <span class="info-value">${objectCount}개</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">밝기:</span>
+                            <span class="info-value">${brightness}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">안정성:</span>
+                            <span class="info-value">${stability}%</span>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // 초기화
+        loadCameras();
+        loadTimerSettings(); // 타이머 설정 로드
+        
+        // OpenCV.js 로드 확인
+        checkOpenCV();
+  </script>
+</body>
+</html>
